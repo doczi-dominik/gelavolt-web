@@ -1623,7 +1623,6 @@ var game_boardstates_StandardBoardState = function(opts) {
 	this.beginBorderColor = -1;
 	this.targetBorderColor = -1;
 	this.borderColorT = 15;
-	this.canTriggerAllClear = false;
 	this.canDropGarbage = true;
 	this.beginChainSimulation();
 };
@@ -1659,7 +1658,6 @@ game_boardstates_StandardBoardState.prototype = {
 	,currentDropStep: null
 	,currentPopStep: null
 	,currentEndStep: null
-	,canTriggerAllClear: null
 	,canDropGarbage: null
 	,state: null
 	,copyFromSnapshot: function() {
@@ -1793,6 +1791,7 @@ game_boardstates_StandardBoardState.prototype = {
 			}
 		} catch( _g ) {
 			this.initPopPauseState();
+			return;
 		}
 		this.state = game_boardstates__$StandardBoardState_InnerState.SIM_STEP(game_simulation_SimulationStepType.POP);
 	}
@@ -1869,16 +1868,11 @@ game_boardstates_StandardBoardState.prototype = {
 	}
 	,initEndStepHandling: function() {
 		this.beforeEnd();
-		this.garbageManager.confirmGarbage(this.currentEndStep.chainInfo.totalGarbage);
-		var bottomRow = this.field.totalRows - 1;
-		var noGelos = true;
-		this.field.customForEach(bottomRow,bottomRow - 1,function(_,_1,_2) {
-			noGelos = false;
-		});
-		if(noGelos && this.canTriggerAllClear) {
+		var chainInfo = this.currentEndStep.chainInfo;
+		this.garbageManager.confirmGarbage(chainInfo.totalGarbage);
+		if(chainInfo.endsInAllClear) {
 			this.allClearManager.startAnimation();
 		}
-		this.canTriggerAllClear = true;
 		var _this = this.chainSim;
 		this.field.copyFrom(_this.steps[_this.viewIndex].fieldSnapshot);
 		this.state = game_boardstates__$StandardBoardState_InnerState.SIM_STEP(game_simulation_SimulationStepType.END);
@@ -2068,7 +2062,6 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Standar
 	,afterEnd: function() {
 		this.infoState.saveSplitCategory();
 		if(this.field.get(this.field.centerColumnIndex,this.field.outerRows) != null) {
-			this.canTriggerAllClear = false;
 			this.eraseField();
 			this.garbageManager.clear();
 			this.infoState.resetCurrentSplitStatistics();
@@ -2125,12 +2118,10 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Standar
 		var _this = this.chainSim;
 		this.field.copyFrom(_this.steps[_this.viewIndex].fieldSnapshot);
 		this.geloGroup.isVisible = false;
-		this.canTriggerAllClear = false;
 		this.initSimStepState();
 	}
 	,nextGroup: function() {
 		this.geloGroup.isVisible = false;
-		this.canTriggerAllClear = false;
 		this.lockGroup();
 	}
 	,__class__: game_boardstates_TrainingBoardState
@@ -4080,7 +4071,7 @@ game_gelogroups_GeloGroup.prototype = {
 		var dropSpeed = softDrop ? 32 : this.rule.dropSpeed;
 		var nextY = this.y + dropSpeed;
 		var collisionOccured = false;
-		while(this.y <= nextY) {
+		while(this.y < nextY) {
 			var cellCoords = this.field.screenToCell(this.x,this.y + 32 - 1);
 			if(!this.checkPlacement(cellCoords.x,cellCoords.y,this.rotationID)) {
 				collisionOccured = true;
@@ -6027,7 +6018,7 @@ game_simulation_BeginSimStepOptions.prototype = $extend(game_simulation_Simulati
 	,groupIndex: null
 	,__class__: game_simulation_BeginSimStepOptions
 });
-var game_simulation_ChainInfo = function(links) {
+var game_simulation_ChainInfo = function(links,endsInAllClear) {
 	this.links = links;
 	if(links.length == 0) {
 		this.totalGarbage = 0;
@@ -6038,7 +6029,7 @@ var game_simulation_ChainInfo = function(links) {
 	var lastLink = links[links.length - 1];
 	this.totalGarbage = lastLink.accumulatedGarbage;
 	this.chainLength = lastLink.chain;
-	this.endsInAllClear = false;
+	this.endsInAllClear = endsInAllClear;
 };
 $hxClasses["game.simulation.ChainInfo"] = game_simulation_ChainInfo;
 game_simulation_ChainInfo.__name__ = "game.simulation.ChainInfo";
@@ -6148,9 +6139,14 @@ game_simulation_ChainSimulator.prototype = {
 			});
 		}
 		field.setSpriteVariations();
+		var bottomRow = field.totalRows - 1;
+		var allClear = true;
+		field.customForEach(bottomRow,bottomRow - 1,function(_,_1,_2) {
+			allClear = false;
+		});
 		var _g = this.latestChainCounter;
 		var _g1 = field.copy();
-		var step = new game_simulation_EndSimStep(new game_simulation_EndSimStepOptions(new game_simulation_ChainInfo(links),_g,_g1));
+		var step = new game_simulation_EndSimStep(new game_simulation_EndSimStepOptions(new game_simulation_ChainInfo(links,allClear),_g,_g1));
 		this.steps[this.stepIndex++] = step;
 	}
 	,view: function(delta) {
@@ -6285,6 +6281,8 @@ game_simulation_EndSimStep.prototype = $extend(game_simulation_SimulationStep.pr
 		this.renderTitle(g,y,"End");
 		g.set_fontSize(32);
 		g.drawString("Chain: " + this.chain,12,y + this.cardRow(1));
+		g.drawString("Total Garbage: " + this.chainInfo.totalGarbage,12,y + this.cardRow(2));
+		g.drawString("All Clear: " + Std.string(this.chainInfo.endsInAllClear),12,y + this.cardRow(3));
 	}
 	,__class__: game_simulation_EndSimStep
 });
