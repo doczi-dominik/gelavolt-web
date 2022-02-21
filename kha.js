@@ -1475,16 +1475,27 @@ game_boardstates_EditingBoardState.prototype = {
 		this.chainSim.modify(this.field.copy());
 	}
 	,set: function() {
-		if(this.mode == 0) {
+		switch(this.mode) {
+		case 0:
 			this.field.newGelo(this.cursorX,this.cursorY,game_boardstates_EditingBoardState.COLORS[this.selectedIndex],false);
 			this.field.setSpriteVariations();
-			this.modifyChain();
-			return;
+			break;
+		case 1:
+			this.field.setMarker(this.cursorX,this.cursorY,this.markers[this.selectedIndex]);
+			break;
 		}
+		this.modifyChain();
 	}
 	,clear: function() {
-		this.field.clear(this.cursorX,this.cursorY);
-		this.field.setSpriteVariations();
+		switch(this.mode) {
+		case 0:
+			this.field.clear(this.cursorX,this.cursorY);
+			this.field.setSpriteVariations();
+			break;
+		case 1:
+			this.field.clearMarker(this.cursorX,this.cursorY);
+			break;
+		}
 		this.modifyChain();
 	}
 	,switchMode: function() {
@@ -1495,11 +1506,14 @@ game_boardstates_EditingBoardState.prototype = {
 		var geloDisplay = this.geometries.editGeloDisplay;
 		var displayX = geloDisplay.x;
 		var displayY = geloDisplay.y;
-		if(this.mode == 0) {
+		switch(this.mode) {
+		case 0:
 			game_gelos_Gelo.renderStatic(g,displayX,displayY,game_boardstates_EditingBoardState.COLORS[this.selectedIndex],0);
-			return;
+			break;
+		case 1:
+			this.markers[this.selectedIndex].render(g,displayX,displayY);
+			break;
 		}
-		this.markers[this.selectedIndex].render(g,displayX,displayY);
 	}
 	,clearField: function() {
 		this.field.clearAll();
@@ -2642,12 +2656,19 @@ game_fields_Field.copyTo = function(src,dest) {
 				var gelo = src.get(x,y).copy();
 				dest.data[y][x] = gelo;
 			}
+			if(src.getMarker(x,y) == game_fields_NullFieldMarker.getInstance()) {
+				dest.clearMarker(x,y);
+			} else {
+				var marker = src.getMarker(x,y).copy();
+				dest.markers[y][x] = marker;
+			}
 		}
 	}
 };
 game_fields_Field.prototype = {
 	prefsSave: null
 	,data: null
+	,markers: null
 	,columns: null
 	,playAreaRows: null
 	,garbageRows: null
@@ -2668,12 +2689,17 @@ game_fields_Field.prototype = {
 	,rawSet: function(x,y,gelo) {
 		this.data[y][x] = gelo;
 	}
+	,rawSetMarker: function(x,y,marker) {
+		this.markers[y][x] = marker;
+	}
 	,createData: function() {
 		this.outerRows = this.hiddenRows + this.garbageRows;
 		this.totalRows = this.playAreaRows + this.outerRows;
 		this.centerColumnIndex = (this.columns / 2 | 0) - 1;
 		var this1 = new Array(this.totalRows);
 		this.data = this1;
+		var this1 = new Array(this.totalRows);
+		this.markers = this1;
 		var _g = 0;
 		var _g1 = this.totalRows;
 		while(_g < _g1) {
@@ -2681,6 +2707,16 @@ game_fields_Field.prototype = {
 			var this1 = this.data;
 			var this2 = new Array(this.columns);
 			this1[y] = this2;
+			var this3 = this.markers;
+			var this4 = new Array(this.columns);
+			this3[y] = this4;
+			var _g2 = 0;
+			var _g3 = this.columns;
+			while(_g2 < _g3) {
+				var x = _g2++;
+				var marker = game_fields_NullFieldMarker.getInstance();
+				this.markers[y][x] = marker;
+			}
 		}
 		var garbageVels = [];
 		var _g = 0;
@@ -2714,6 +2750,9 @@ game_fields_Field.prototype = {
 	,get: function(x,y) {
 		return this.data[y][x];
 	}
+	,getMarker: function(x,y) {
+		return this.markers[y][x];
+	}
 	,getAtPoint: function(p) {
 		return this.get(p.x,p.y);
 	}
@@ -2722,6 +2761,10 @@ game_fields_Field.prototype = {
 		gelo.x = screenCoords.x;
 		gelo.y = screenCoords.y;
 		this.data[y][x] = gelo;
+	}
+	,setMarker: function(x,y,marker) {
+		var marker1 = this.getMarker(x,y).onSet(marker.copy());
+		this.markers[y][x] = marker1;
 	}
 	,newGelo: function(x,y,color,lockInGarbage) {
 		var screenCoords = this.cellToScreen(x,y);
@@ -2744,6 +2787,10 @@ game_fields_Field.prototype = {
 	,clear: function(x,y) {
 		this.data[y][x] = null;
 	}
+	,clearMarker: function(x,y) {
+		var marker = game_fields_NullFieldMarker.getInstance();
+		this.markers[y][x] = marker;
+	}
 	,clearAll: function() {
 		var _gthis = this;
 		this.customForEach(0,this.totalRows,function(_,x,y) {
@@ -2752,6 +2799,9 @@ game_fields_Field.prototype = {
 	}
 	,isEmpty: function(x,y) {
 		return this.get(x,y) == null;
+	}
+	,isMarkerEmpty: function(x,y) {
+		return this.getMarker(x,y) == game_fields_NullFieldMarker.getInstance();
 	}
 	,isEmptyAtPoint: function(p) {
 		return this.get(p.x,p.y) == null;
@@ -2967,6 +3017,23 @@ game_fields_Field.prototype = {
 		});
 	}
 	,render: function(g,g4,alpha) {
+		var _g = 0;
+		var _g1 = this.totalRows;
+		while(_g < _g1) {
+			var y = _g++;
+			var _g2 = 0;
+			var _g3 = this.columns;
+			while(_g2 < _g3) {
+				var x = _g2++;
+				if(this.getMarker(x,y) == game_fields_NullFieldMarker.getInstance()) {
+					continue;
+				}
+				var screenCoords = this.cellToScreen(x,y);
+				var screenX = screenCoords.x - 32;
+				var screenY = screenCoords.y - 32;
+				this.getMarker(x,y).render(g,screenX,screenY);
+			}
+		}
 		this.customForEach(0,this.totalRows,function(gelo,x,y) {
 			gelo.render(g,g4,gelo.x,gelo.y,alpha);
 		});
@@ -3090,6 +3157,30 @@ game_fields_ConstructorOptions.prototype = {
 	,spriteCoordinates: null
 	,defaultColor: null
 	,__class__: game_fields_ConstructorOptions
+};
+var game_fields_NullFieldMarker = function() {
+	this.type = 0;
+};
+$hxClasses["game.fields.NullFieldMarker"] = game_fields_NullFieldMarker;
+game_fields_NullFieldMarker.__name__ = "game.fields.NullFieldMarker";
+game_fields_NullFieldMarker.__interfaces__ = [game_fields_IFieldMarker];
+game_fields_NullFieldMarker.getInstance = function() {
+	if(game_fields_NullFieldMarker.instance == null) {
+		game_fields_NullFieldMarker.instance = new game_fields_NullFieldMarker();
+	}
+	return game_fields_NullFieldMarker.instance;
+};
+game_fields_NullFieldMarker.prototype = {
+	type: null
+	,copy: function() {
+		return game_fields_NullFieldMarker.instance;
+	}
+	,onSet: function(value) {
+		return value;
+	}
+	,render: function(g,x,y) {
+	}
+	,__class__: game_fields_NullFieldMarker
 };
 var game_gamestatebuilders_TrainingGameStateBuilder = function(gameScreen) {
 	this.gameScreen = gameScreen;
