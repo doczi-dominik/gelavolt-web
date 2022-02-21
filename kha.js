@@ -589,10 +589,6 @@ game_ChainCounter.prototype = {
 	,totalHalfWidth: null
 	,t: null
 	,state: null
-	,updateNothing: function() {
-	}
-	,renderNothing: function(g,alpha) {
-	}
 	,updateAnimation: function() {
 		if(this.t == 60) {
 			this.state = 0;
@@ -1868,10 +1864,21 @@ game_boardstates_StandardBoardState.prototype = {
 	}
 	,initEndStepHandling: function() {
 		this.beforeEnd();
-		var chainInfo = this.currentEndStep.chainInfo;
-		this.garbageManager.confirmGarbage(chainInfo.totalGarbage);
-		if(chainInfo.endsInAllClear) {
+		this.garbageManager.confirmGarbage(this.currentEndStep.totalGarbage);
+		if(this.currentEndStep.endsInAllClear) {
 			this.allClearManager.startAnimation();
+		}
+		if(this.currentEndStep.isLastLinkPowerful) {
+			var chain = this.currentEndStep.chain;
+			if(chain == 1) {
+				this.scoreManager.displayActionText("THORN",-65281);
+			}
+			if(chain == 2) {
+				this.scoreManager.displayActionText("HELLFIRE",kha_Color._new(-59580));
+			}
+			if(chain == 3) {
+				this.scoreManager.displayActionText("KILLER ICE",-16711681);
+			}
 		}
 		var _this = this.chainSim;
 		this.field.copyFrom(_this.steps[_this.viewIndex].fieldSnapshot);
@@ -3574,39 +3581,6 @@ game_garbage_GarbageManagerOptions.prototype = {
 	,tray: null
 	,target: null
 	,__class__: game_garbage_GarbageManagerOptions
-};
-var game_garbage_NullGarbageManager = function() {
-	this.canReceiveGarbage = false;
-};
-$hxClasses["game.garbage.NullGarbageManager"] = game_garbage_NullGarbageManager;
-game_garbage_NullGarbageManager.__name__ = "game.garbage.NullGarbageManager";
-game_garbage_NullGarbageManager.__interfaces__ = [game_garbage_IGarbageManager];
-game_garbage_NullGarbageManager.getInstance = function() {
-	if(game_garbage_NullGarbageManager.instance == null) {
-		game_garbage_NullGarbageManager.instance = new game_garbage_NullGarbageManager();
-	}
-	return game_garbage_NullGarbageManager.instance;
-};
-game_garbage_NullGarbageManager.prototype = {
-	canReceiveGarbage: null
-	,get_droppableGarbage: function() {
-		return 0;
-	}
-	,init: function() {
-	}
-	,sendGarbage: function(amount,beginners) {
-	}
-	,dropGarbage: function(amount) {
-	}
-	,confirmGarbage: function(amount) {
-	}
-	,clear: function() {
-	}
-	,update: function() {
-	}
-	,render: function(g,x,y,alpha) {
-	}
-	,__class__: game_garbage_NullGarbageManager
 };
 var game_garbage_trays_GarbageTray = function(prefsSave) {
 	this.prefsSave = prefsSave;
@@ -5635,7 +5609,6 @@ var game_score_ScoreManager = function(opts) {
 	this.actionFont = kha_Assets.fonts.ka1;
 	this.actionFontSize = 44;
 	this.actionTextHeight = this.actionFont.height(this.actionFontSize);
-	this.actionTextY = this.formulaTextY;
 	this.scoreScaleY = 1;
 	this.showChainFormula = false;
 	this.showActionText = false;
@@ -5657,7 +5630,7 @@ game_score_ScoreManager.prototype = {
 	,actionFont: null
 	,actionFontSize: null
 	,actionTextHeight: null
-	,actionTextY: null
+	,actionTextColor: null
 	,scoreScaleY: null
 	,formulaText: null
 	,formulaTextWidth: null
@@ -5696,19 +5669,20 @@ game_score_ScoreManager.prototype = {
 			this.scoreScaleY -= 0.166666666666666657;
 		} else if(15 < this.actionTextT && this.actionTextT <= 45) {
 			this.actionTextCharacters = this.actionText.length * ((this.actionTextT - 15) / 20) | 0;
-		} else if(55 < this.actionTextT && this.actionTextT <= 60) {
+		} else if(55 < this.actionTextT && this.actionTextT <= 61) {
 			this.scoreScaleY += 0.166666666666666657;
-		} else {
+		} else if(61 < this.actionTextT) {
 			this.showActionText = false;
 		}
 		this.actionTextT++;
 	}
-	,renderActionText: function(g) {
+	,renderActionText: function(g,x) {
 		g.set_font(this.actionFont);
 		g.set_fontSize(this.actionFontSize);
 		g.pushOpacity(1 - this.scoreScaleY);
-		utils_Utils.shadowDrawString(g,6,-16777216,kha_Color._new(-59580),HxOverrides.substr(this.actionText,0,this.actionTextCharacters),0,this.actionTextY);
+		utils_Utils.shadowDrawString(g,6,-16777216,this.actionTextColor,HxOverrides.substr(this.actionText,0,this.actionTextCharacters),x,-this.scoreTextHeight / 2 + 6);
 		g.popOpacity();
+		g.set_color(-1);
 	}
 	,addScoreFromLink: function(info) {
 		this.score += info.score;
@@ -5724,11 +5698,12 @@ game_score_ScoreManager.prototype = {
 	,resetDropBonus: function() {
 		this.dropBonus = 0;
 	}
-	,displayActionText: function(text) {
+	,displayActionText: function(text,color) {
 		this.actionText = text;
 		this.actionTextT = 0;
 		this.scoreScaleY = 1;
 		this.actionTextCharacters = 0;
+		this.actionTextColor = color;
 		this.showActionText = true;
 	}
 	,update: function() {
@@ -5750,43 +5725,59 @@ game_score_ScoreManager.prototype = {
 			scoreX = 0;
 			break;
 		}
-		var _this__00 = 1;
-		var _this__10 = 0;
-		var _this__20 = scoreX;
-		var _this__01 = 0;
-		var _this__11 = 1;
-		var _this__21 = y;
-		var _this__02 = 0;
-		var _this__12 = 0;
-		var _this__22 = 1;
-		var m__00 = 1;
-		var m__10 = 0;
-		var m__20 = 0;
-		var m__01 = 0;
-		var m__11 = this.scoreScaleY;
-		var m__21 = 0;
-		var m__02 = 0;
-		var m__12 = 0;
-		var m__22 = 1;
-		var transform__00 = _this__00 * m__00 + _this__10 * m__01 + _this__20 * m__02;
-		var transform__10 = _this__00 * m__10 + _this__10 * m__11 + _this__20 * m__12;
-		var transform__20 = _this__00 * m__20 + _this__10 * m__21 + _this__20 * m__22;
-		var transform__01 = _this__01 * m__00 + _this__11 * m__01 + _this__21 * m__02;
-		var transform__11 = _this__01 * m__10 + _this__11 * m__11 + _this__21 * m__12;
-		var transform__21 = _this__01 * m__20 + _this__11 * m__21 + _this__21 * m__22;
-		var transform__02 = _this__02 * m__00 + _this__12 * m__01 + _this__22 * m__02;
-		var transform__12 = _this__02 * m__10 + _this__12 * m__11 + _this__22 * m__12;
-		var transform__22 = _this__02 * m__20 + _this__12 * m__21 + _this__22 * m__22;
+		var transl__00 = 1;
+		var transl__10 = 0;
+		var transl__20 = scoreX;
+		var transl__01 = 0;
+		var transl__11 = 1;
+		var transl__21 = y;
+		var transl__02 = 0;
+		var transl__12 = 0;
+		var transl__22 = 1;
+		var scale__00 = 1;
+		var scale__10 = 0;
+		var scale__20 = 0;
+		var scale__01 = 0;
+		var scale__11 = this.scoreScaleY;
+		var scale__21 = 0;
+		var scale__02 = 0;
+		var scale__12 = 0;
+		var scale__22 = 1;
 		var _this = g.transformations[g.transformationIndex];
-		var trans__00 = _this._00 * transform__00 + _this._10 * transform__01 + _this._20 * transform__02;
-		var trans__10 = _this._00 * transform__10 + _this._10 * transform__11 + _this._20 * transform__12;
-		var trans__20 = _this._00 * transform__20 + _this._10 * transform__21 + _this._20 * transform__22;
-		var trans__01 = _this._01 * transform__00 + _this._11 * transform__01 + _this._21 * transform__02;
-		var trans__11 = _this._01 * transform__10 + _this._11 * transform__11 + _this._21 * transform__12;
-		var trans__21 = _this._01 * transform__20 + _this._11 * transform__21 + _this._21 * transform__22;
-		var trans__02 = _this._02 * transform__00 + _this._12 * transform__01 + _this._22 * transform__02;
-		var trans__12 = _this._02 * transform__10 + _this._12 * transform__11 + _this._22 * transform__12;
-		var trans__22 = _this._02 * transform__20 + _this._12 * transform__21 + _this._22 * transform__22;
+		var trans__00 = _this._00 * transl__00 + _this._10 * transl__01 + _this._20 * transl__02;
+		var trans__10 = _this._00 * transl__10 + _this._10 * transl__11 + _this._20 * transl__12;
+		var trans__20 = _this._00 * transl__20 + _this._10 * transl__21 + _this._20 * transl__22;
+		var trans__01 = _this._01 * transl__00 + _this._11 * transl__01 + _this._21 * transl__02;
+		var trans__11 = _this._01 * transl__10 + _this._11 * transl__11 + _this._21 * transl__12;
+		var trans__21 = _this._01 * transl__20 + _this._11 * transl__21 + _this._21 * transl__22;
+		var trans__02 = _this._02 * transl__00 + _this._12 * transl__01 + _this._22 * transl__02;
+		var trans__12 = _this._02 * transl__10 + _this._12 * transl__11 + _this._22 * transl__12;
+		var trans__22 = _this._02 * transl__20 + _this._12 * transl__21 + _this._22 * transl__22;
+		g.transformationIndex++;
+		if(g.transformationIndex == g.transformations.length) {
+			g.transformations.push(new kha_math_FastMatrix3(1,0,0,0,1,0,0,0,1));
+		}
+		var _this = g.transformations[g.transformationIndex];
+		_this._00 = trans__00;
+		_this._10 = trans__10;
+		_this._20 = trans__20;
+		_this._01 = trans__01;
+		_this._11 = trans__11;
+		_this._21 = trans__21;
+		_this._02 = trans__02;
+		_this._12 = trans__12;
+		_this._22 = trans__22;
+		g.setTransformation(g.transformations[g.transformationIndex]);
+		var _this = g.transformations[g.transformationIndex];
+		var trans__00 = _this._00 * scale__00 + _this._10 * scale__01 + _this._20 * scale__02;
+		var trans__10 = _this._00 * scale__10 + _this._10 * scale__11 + _this._20 * scale__12;
+		var trans__20 = _this._00 * scale__20 + _this._10 * scale__21 + _this._20 * scale__22;
+		var trans__01 = _this._01 * scale__00 + _this._11 * scale__01 + _this._21 * scale__02;
+		var trans__11 = _this._01 * scale__10 + _this._11 * scale__11 + _this._21 * scale__12;
+		var trans__21 = _this._01 * scale__20 + _this._11 * scale__21 + _this._21 * scale__22;
+		var trans__02 = _this._02 * scale__00 + _this._12 * scale__01 + _this._22 * scale__02;
+		var trans__12 = _this._02 * scale__10 + _this._12 * scale__11 + _this._22 * scale__12;
+		var trans__22 = _this._02 * scale__20 + _this._12 * scale__21 + _this._22 * scale__22;
 		g.transformationIndex++;
 		if(g.transformationIndex == g.transformations.length) {
 			g.transformations.push(new kha_math_FastMatrix3(1,0,0,0,1,0,0,0,1));
@@ -5803,20 +5794,21 @@ game_score_ScoreManager.prototype = {
 		_this._22 = trans__22;
 		g.setTransformation(g.transformations[g.transformationIndex]);
 		this.renderScore(g);
+		var formulaX;
+		switch(this.orientation._hx_index) {
+		case 0:
+			formulaX = -scoreX;
+			break;
+		case 1:
+			formulaX = game_geometries_BoardGeometries.WIDTH - this.formulaTextWidth;
+			break;
+		}
 		if(this.showChainFormula) {
-			var formulaX;
-			switch(this.orientation._hx_index) {
-			case 0:
-				formulaX = -scoreX;
-				break;
-			case 1:
-				formulaX = game_geometries_BoardGeometries.WIDTH - this.formulaTextWidth;
-				break;
-			}
 			this.renderChainFormula(g,formulaX,alpha);
 		}
+		g.popTransformation();
 		if(this.showActionText) {
-			this.renderActionText(g);
+			this.renderActionText(g,formulaX);
 		}
 		g.popTransformation();
 	}
@@ -6018,28 +6010,6 @@ game_simulation_BeginSimStepOptions.prototype = $extend(game_simulation_Simulati
 	,groupIndex: null
 	,__class__: game_simulation_BeginSimStepOptions
 });
-var game_simulation_ChainInfo = function(links,endsInAllClear) {
-	this.links = links;
-	if(links.length == 0) {
-		this.totalGarbage = 0;
-		this.chainLength = 0;
-		this.endsInAllClear = false;
-		return;
-	}
-	var lastLink = links[links.length - 1];
-	this.totalGarbage = lastLink.accumulatedGarbage;
-	this.chainLength = lastLink.chain;
-	this.endsInAllClear = endsInAllClear;
-};
-$hxClasses["game.simulation.ChainInfo"] = game_simulation_ChainInfo;
-game_simulation_ChainInfo.__name__ = "game.simulation.ChainInfo";
-game_simulation_ChainInfo.prototype = {
-	links: null
-	,totalGarbage: null
-	,chainLength: null
-	,endsInAllClear: null
-	,__class__: game_simulation_ChainInfo
-};
 var game_simulation_ChainSimulator = function(opts) {
 	this.steps = [];
 	this.rule = opts.rule;
@@ -6144,9 +6114,7 @@ game_simulation_ChainSimulator.prototype = {
 		field.customForEach(bottomRow,bottomRow - 1,function(_,_1,_2) {
 			allClear = false;
 		});
-		var _g = this.latestChainCounter;
-		var _g1 = field.copy();
-		var step = new game_simulation_EndSimStep(new game_simulation_EndSimStepOptions(new game_simulation_ChainInfo(links,allClear),_g,_g1));
+		var step = new game_simulation_EndSimStep(new game_simulation_EndSimStepOptions(links,allClear,this.latestChainCounter,field.copy()));
 		this.steps[this.stepIndex++] = step;
 	}
 	,view: function(delta) {
@@ -6265,13 +6233,26 @@ game_simulation_DropSimStep.prototype = $extend(game_simulation_SimulationStep.p
 });
 var game_simulation_EndSimStep = function(opts) {
 	game_simulation_SimulationStep.call(this,game_simulation_SimulationStepType.END,opts);
-	this.chainInfo = opts.chainInfo;
+	this.links = opts.links;
+	if(this.links.length == 0) {
+		this.totalGarbage = 0;
+		this.endsInAllClear = false;
+		this.isLastLinkPowerful = false;
+		return;
+	}
+	var lastLink = this.links[this.links.length - 1];
+	this.totalGarbage = lastLink.accumulatedGarbage;
+	this.endsInAllClear = opts.endsInAllClear;
+	this.isLastLinkPowerful = lastLink.isPowerful;
 };
 $hxClasses["game.simulation.EndSimStep"] = game_simulation_EndSimStep;
 game_simulation_EndSimStep.__name__ = "game.simulation.EndSimStep";
 game_simulation_EndSimStep.__super__ = game_simulation_SimulationStep;
 game_simulation_EndSimStep.prototype = $extend(game_simulation_SimulationStep.prototype,{
-	chainInfo: null
+	links: null
+	,totalGarbage: null
+	,endsInAllClear: null
+	,isLastLinkPowerful: null
 	,renderLabel: function(g,y,alpha) {
 		this.renderBackground(g,y,-8388480,64);
 		this.renderTitle(g,y,"End");
@@ -6281,20 +6262,22 @@ game_simulation_EndSimStep.prototype = $extend(game_simulation_SimulationStep.pr
 		this.renderTitle(g,y,"End");
 		g.set_fontSize(32);
 		g.drawString("Chain: " + this.chain,12,y + this.cardRow(1));
-		g.drawString("Total Garbage: " + this.chainInfo.totalGarbage,12,y + this.cardRow(2));
-		g.drawString("All Clear: " + Std.string(this.chainInfo.endsInAllClear),12,y + this.cardRow(3));
+		g.drawString("Total Garbage: " + this.totalGarbage,12,y + this.cardRow(2));
+		g.drawString("All Clear: " + Std.string(this.endsInAllClear),12,y + this.cardRow(3));
 	}
 	,__class__: game_simulation_EndSimStep
 });
-var game_simulation_EndSimStepOptions = function(chainInfo,chain,fieldSnapshot) {
+var game_simulation_EndSimStepOptions = function(links,endsInAllClear,chain,fieldSnapshot) {
 	game_simulation_SimulationStepOptions.call(this,chain,fieldSnapshot);
-	this.chainInfo = chainInfo;
+	this.links = links;
+	this.endsInAllClear = endsInAllClear;
 };
 $hxClasses["game.simulation.EndSimStepOptions"] = game_simulation_EndSimStepOptions;
 game_simulation_EndSimStepOptions.__name__ = "game.simulation.EndSimStepOptions";
 game_simulation_EndSimStepOptions.__super__ = game_simulation_SimulationStepOptions;
 game_simulation_EndSimStepOptions.prototype = $extend(game_simulation_SimulationStepOptions.prototype,{
-	chainInfo: null
+	links: null
+	,endsInAllClear: null
 	,__class__: game_simulation_EndSimStepOptions
 });
 var game_simulation_ILinkInfoBuilder = function() { };
