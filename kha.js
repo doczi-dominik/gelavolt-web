@@ -962,7 +962,7 @@ game_all_$clear_AllClearManager.prototype = {
 		var x = game_geometries_BoardGeometries.WIDTH * this.rng.GetFloatIn(-0.75,0.75);
 		var y = game_geometries_BoardGeometries.HEIGHT * this.rng.GetFloatIn(-0.75,0.75);
 		var absPos = this.geometries.absolutePosition.add(game_geometries_BoardGeometries.CENTER.add(new utils_Point(x,y)));
-		this.particleManager.add(game_particles_ParticleLayer.BACK,game_particles_PixelFloatParticle.create(new game_particles_PixelFloatParticleOptions(absPos.x,absPos.y,0,this.rng.GetFloatIn(-12,-5),this.rng.GetIn(20,35),-23296)));
+		this.particleManager.add(game_particles_ParticleLayer.BACK,game_particles_PixelFloatParticle.create(new game_particles_PixelFloatParticleOptions(absPos.x,absPos.y,0,this.rng.GetFloatIn(-12,-5),this.rng.GetIn(20,35),-23296,12)));
 	}
 	,update: function() {
 		if(!this.showAnimation) {
@@ -3243,7 +3243,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.infoTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT,null);
 	}
 	,buildPlayerGarbageManager: function() {
-		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.playerTargetMediator));
+		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.playerTargetMediator));
 	}
 	,buildPlayerScoreManager: function() {
 		this.playerScoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.rule,game_geometries_BoardOrientation.LEFT));
@@ -3274,7 +3274,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
 	}
 	,buildInfoGarbageManager: function() {
-		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
+		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
 	}
 	,buildInfoState: function() {
 		var prefsSave = this.primaryProfile.prefs;
@@ -3330,7 +3330,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
 		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT,null);
 		this.infoTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT,null);
-		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.playerTargetMediator));
+		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.playerTargetMediator));
 		this.playerScoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.rule,game_geometries_BoardOrientation.LEFT));
 		this.playerChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(this.primaryProfile.prefs),game_garbage_trays_GarbageTray.create(this.primaryProfile.prefs)));
 		this.playerChainCounter = new game_ChainCounter();
@@ -3341,7 +3341,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		var prefsSave = this.primaryProfile.prefs;
 		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.getInstance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
 		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
-		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
+		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
 		var prefsSave = this.primaryProfile.prefs;
 		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.RIGHT,this.marginManager,this.rule,this.rng,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),this.primaryProfile.training,game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave),new game_ChainCounter(),this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
 		var _g = this.playerField;
@@ -3416,6 +3416,7 @@ game_garbage_IGarbageManager.prototype = {
 };
 var game_garbage_GarbageManager = function(opts) {
 	this.rule = opts.rule;
+	this.rng = opts.rng;
 	this.prefsSave = opts.prefsSave;
 	this.particleManager = opts.particleManager;
 	this.geometries = opts.geometries;
@@ -3432,6 +3433,7 @@ game_garbage_GarbageManager.__name__ = "game.garbage.GarbageManager";
 game_garbage_GarbageManager.__interfaces__ = [game_garbage_IGarbageManager];
 game_garbage_GarbageManager.prototype = {
 	rule: null
+	,rng: null
 	,prefsSave: null
 	,particleManager: null
 	,geometries: null
@@ -3453,7 +3455,19 @@ game_garbage_GarbageManager.prototype = {
 		this.currentGarbage = Math.max(0,this.currentGarbage - amount) | 0;
 		this.confirmedGarbage = Math.min(this.currentGarbage,Math.max(this.confirmedGarbage,0)) | 0;
 	}
+	,addCollisionParticle: function(absTrayCenter,color) {
+		var _g = 0;
+		while(_g < 64) {
+			var i = _g++;
+			var tmp = this.particleManager;
+			var _g1 = absTrayCenter.x;
+			var _g2 = absTrayCenter.y;
+			var _g3 = this.rng.GetIn(20,30);
+			tmp.add(game_particles_ParticleLayer.FRONT,game_particles_PixelFloatParticle.create(new game_particles_PixelFloatParticleOptions(_g1,_g2,Math.cos(i / 4) * this.rng.GetIn(8,12),Math.sin(i / 4) * this.rng.GetIn(8,12),_g3,color,32 * this.rng.GetFloatIn(0.25,1.75))));
+		}
+	}
 	,sendAttackBullet: function(beginners) {
+		var _gthis = this;
 		var absPos = this.geometries.absolutePosition;
 		var control;
 		switch(this.geometries.orientation._hx_index) {
@@ -3470,21 +3484,35 @@ game_garbage_GarbageManager.prototype = {
 			++_g;
 			var targetGeometries = this.target.geometries;
 			var trayCenter = targetGeometries.garbageTray.add(new utils_Point(game_geometries_BoardGeometries.CENTER.x,32));
-			this.particleManager.add(game_particles_ParticleLayer.FRONT,game_particles_GarbageBulletParticle.create(new game_particles_GarbageBulletParticleOptions(this.particleManager,game_particles_ParticleLayer.FRONT,absPos.add(new utils_Point(b.x,b.y)),absPos.add(control),targetGeometries.absolutePosition.add(trayCenter),1,1,30,this.prefsSave.primaryColors.h[b.color],($_=this.target,$bind($_,$_.startAnimation)))));
+			var absTrayCenter = [targetGeometries.absolutePosition.add(trayCenter)];
+			var primaryColor = [this.prefsSave.primaryColors.h[b.color]];
+			this.particleManager.add(game_particles_ParticleLayer.FRONT,game_particles_GarbageBulletParticle.create(new game_particles_GarbageBulletParticleOptions(this.particleManager,game_particles_ParticleLayer.FRONT,absPos.add(new utils_Point(b.x,b.y)),absPos.add(control),absTrayCenter[0],1,1,30,primaryColor[0],(function(primaryColor,absTrayCenter) {
+				return function() {
+					_gthis.target.startAnimation();
+					_gthis.addCollisionParticle(absTrayCenter[0],primaryColor[0]);
+				};
+			})(primaryColor,absTrayCenter))));
 		}
 	}
 	,sendOffsetBullet: function(beginners) {
+		var _gthis = this;
 		var absPos = this.geometries.absolutePosition;
 		var scale = this.geometries.scale;
 		var absCenter = absPos.add(game_geometries_BoardGeometries.CENTER);
 		var trayCenter = this.geometries.garbageTray.add(new utils_Point(game_geometries_BoardGeometries.CENTER.x,32));
-		var absTarget = absPos.add(trayCenter);
+		var absTrayCenter = absPos.add(trayCenter);
 		var _g = 0;
 		while(_g < beginners.length) {
 			var b = beginners[_g];
 			++_g;
 			var absBegin = absPos.add(new utils_Point(b.x,b.y));
-			this.particleManager.add(game_particles_ParticleLayer.FRONT,game_particles_GarbageBulletParticle.create(new game_particles_GarbageBulletParticleOptions(this.particleManager,game_particles_ParticleLayer.FRONT,absBegin,absCenter,absTarget,scale,scale,30,this.prefsSave.primaryColors.h[b.color],$bind(this,this.startAnimation))));
+			var primaryColor = [this.prefsSave.primaryColors.h[b.color]];
+			this.particleManager.add(game_particles_ParticleLayer.FRONT,game_particles_GarbageBulletParticle.create(new game_particles_GarbageBulletParticleOptions(this.particleManager,game_particles_ParticleLayer.FRONT,absBegin,absCenter,absTrayCenter,scale,scale,30,primaryColor[0],(function(primaryColor) {
+				return function() {
+					_gthis.startAnimation();
+					_gthis.addCollisionParticle(absTrayCenter,primaryColor[0]);
+				};
+			})(primaryColor))));
 		}
 	}
 	,sendCounterBullet: function(beginners) {
@@ -3502,14 +3530,20 @@ game_garbage_GarbageManager.prototype = {
 		while(_g < beginners.length) {
 			var b = beginners[_g];
 			++_g;
-			var color = [this.prefsSave.primaryColors.h[b.color]];
+			var primaryColor = [this.prefsSave.primaryColors.h[b.color]];
 			var absBegin = absPos.add(new utils_Point(b.x,b.y));
-			this.particleManager.add(game_particles_ParticleLayer.FRONT,game_particles_GarbageBulletParticle.create(new game_particles_GarbageBulletParticleOptions(this.particleManager,game_particles_ParticleLayer.FRONT,absBegin,absCenter,absTrayCenter,scale,scale,30,this.prefsSave.primaryColors.h[b.color],(function(color) {
+			this.particleManager.add(game_particles_ParticleLayer.FRONT,game_particles_GarbageBulletParticle.create(new game_particles_GarbageBulletParticleOptions(this.particleManager,game_particles_ParticleLayer.FRONT,absBegin,absCenter,absTrayCenter,scale,scale,30,primaryColor[0],(function(primaryColor) {
 				return function() {
 					_gthis.startAnimation();
-					_gthis.particleManager.add(game_particles_ParticleLayer.FRONT,game_particles_GarbageBulletParticle.create(new game_particles_GarbageBulletParticleOptions(_gthis.particleManager,game_particles_ParticleLayer.FRONT,absTrayCenter,attackControl,absTargetTrayCenter,scale,targetGeometries.scale,20,color[0],($_=_gthis.target,$bind($_,$_.startAnimation)))));
+					_gthis.addCollisionParticle(absTrayCenter,primaryColor[0]);
+					_gthis.particleManager.add(game_particles_ParticleLayer.FRONT,game_particles_GarbageBulletParticle.create(new game_particles_GarbageBulletParticleOptions(_gthis.particleManager,game_particles_ParticleLayer.FRONT,absTrayCenter,attackControl,absTargetTrayCenter,scale,targetGeometries.scale,20,primaryColor[0],(function(primaryColor) {
+						return function() {
+							_gthis.target.startAnimation();
+							_gthis.addCollisionParticle(absTargetTrayCenter,primaryColor[0]);
+						};
+					})(primaryColor))));
 				};
-			})(color))));
+			})(primaryColor))));
 		}
 	}
 	,receiveGarbage: function(amount) {
@@ -3563,8 +3597,9 @@ game_garbage_GarbageManager.prototype = {
 	}
 	,__class__: game_garbage_GarbageManager
 };
-var game_garbage_GarbageManagerOptions = function(rule,prefsSave,particleManager,geometries,tray,target) {
+var game_garbage_GarbageManagerOptions = function(rule,rng,prefsSave,particleManager,geometries,tray,target) {
 	this.rule = rule;
+	this.rng = rng;
 	this.prefsSave = prefsSave;
 	this.particleManager = particleManager;
 	this.geometries = geometries;
@@ -3575,6 +3610,7 @@ $hxClasses["game.garbage.GarbageManagerOptions"] = game_garbage_GarbageManagerOp
 game_garbage_GarbageManagerOptions.__name__ = "game.garbage.GarbageManagerOptions";
 game_garbage_GarbageManagerOptions.prototype = {
 	rule: null
+	,rng: null
 	,prefsSave: null
 	,particleManager: null
 	,geometries: null
@@ -5037,6 +5073,7 @@ var game_particles_PixelFloatParticle = function(opts) {
 	this.dy = opts.dy;
 	this.maxT = opts.maxT;
 	this.color = opts.color;
+	this.size = opts.size;
 };
 $hxClasses["game.particles.PixelFloatParticle"] = game_particles_PixelFloatParticle;
 game_particles_PixelFloatParticle.__name__ = "game.particles.PixelFloatParticle";
@@ -5058,6 +5095,7 @@ game_particles_PixelFloatParticle.prototype = {
 	,dy: null
 	,maxT: null
 	,color: null
+	,size: null
 	,lastX: null
 	,lastY: null
 	,lastT: null
@@ -5087,19 +5125,20 @@ game_particles_PixelFloatParticle.prototype = {
 		var opacity = 1 + -1 * (lerpedT / this.maxT);
 		g.set_color(this.color);
 		g.pushOpacity(opacity);
-		kha_graphics2_GraphicsExtension.fillCircle(g,lerpedX,lerpedY,12,4);
+		kha_graphics2_GraphicsExtension.fillCircle(g,lerpedX,lerpedY,this.size,16);
 		g.popOpacity();
 		g.set_color(-1);
 	}
 	,__class__: game_particles_PixelFloatParticle
 };
-var game_particles_PixelFloatParticleOptions = function(x,y,dx,dy,maxT,color) {
+var game_particles_PixelFloatParticleOptions = function(x,y,dx,dy,maxT,color,size) {
 	this.x = x;
 	this.y = y;
 	this.dx = dx;
 	this.dy = dy;
 	this.maxT = maxT;
 	this.color = color;
+	this.size = size;
 };
 $hxClasses["game.particles.PixelFloatParticleOptions"] = game_particles_PixelFloatParticleOptions;
 game_particles_PixelFloatParticleOptions.__name__ = "game.particles.PixelFloatParticleOptions";
@@ -5110,6 +5149,7 @@ game_particles_PixelFloatParticleOptions.prototype = {
 	,dy: null
 	,maxT: null
 	,color: null
+	,size: null
 	,__class__: game_particles_PixelFloatParticleOptions
 };
 var game_particles_SmallStarParticle = function(opts) {
