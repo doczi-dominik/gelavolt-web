@@ -878,7 +878,6 @@ var game_all_$clear_AllClearManager = function(opts) {
 	this.rng = opts.rng;
 	this.geometries = opts.geometries;
 	this.particleManager = opts.particleManager;
-	this.borderColorMediator = opts.borderColorMediator;
 	this.targetY = game_geometries_BoardGeometries.HEIGHT / 5;
 	this.boardCenterX = game_geometries_BoardGeometries.CENTER.x;
 	this.font = kha_Assets.fonts.ka1;
@@ -894,7 +893,6 @@ game_all_$clear_AllClearManager.prototype = {
 	rng: null
 	,geometries: null
 	,particleManager: null
-	,borderColorMediator: null
 	,targetY: null
 	,boardCenterX: null
 	,font: null
@@ -923,7 +921,6 @@ game_all_$clear_AllClearManager.prototype = {
 		this.scaleX = 1;
 		this.showAnimation = true;
 		this.sendAllClearBonus = true;
-		this.borderColorMediator.boardState.changeBorderColor(-23296);
 		if(this.rng.GetUpTo(Math.max(20 / this.acCounter,1) | 0) == 1) {
 			this.setACText("RINTO","MOMENT");
 		} else {
@@ -935,7 +932,6 @@ game_all_$clear_AllClearManager.prototype = {
 		this.scaleX = 0;
 		this.showAnimation = false;
 		this.sendAllClearBonus = false;
-		this.borderColorMediator.boardState.changeBorderColor(-1);
 	}
 	,updateRisingPhase: function() {
 		var step = this.t / 45;
@@ -1108,11 +1104,10 @@ game_all_$clear_AllClearManager.prototype = {
 	}
 	,__class__: game_all_$clear_AllClearManager
 };
-var game_all_$clear_AllClearManagerOptions = function(rng,geometries,particleManager,borderColorMediator) {
+var game_all_$clear_AllClearManagerOptions = function(rng,geometries,particleManager) {
 	this.rng = rng;
 	this.geometries = geometries;
 	this.particleManager = particleManager;
-	this.borderColorMediator = borderColorMediator;
 };
 $hxClasses["game.all_clear.AllClearManagerOptions"] = game_all_$clear_AllClearManagerOptions;
 game_all_$clear_AllClearManagerOptions.__name__ = "game.all_clear.AllClearManagerOptions";
@@ -1120,8 +1115,80 @@ game_all_$clear_AllClearManagerOptions.prototype = {
 	rng: null
 	,geometries: null
 	,particleManager: null
-	,borderColorMediator: null
 	,__class__: game_all_$clear_AllClearManagerOptions
+};
+var game_backgrounds__$NestBackground_BackgroundParticle = function(rng) {
+	this.rng = rng;
+	this.randomizeData();
+	this.y += ScaleManager.height / 2;
+};
+$hxClasses["game.backgrounds._NestBackground.BackgroundParticle"] = game_backgrounds__$NestBackground_BackgroundParticle;
+game_backgrounds__$NestBackground_BackgroundParticle.__name__ = "game.backgrounds._NestBackground.BackgroundParticle";
+game_backgrounds__$NestBackground_BackgroundParticle.prototype = {
+	rng: null
+	,x: null
+	,y: null
+	,dy: null
+	,t: null
+	,randomizeData: function() {
+		this.x = this.rng.GetFloatIn(0,ScaleManager.width);
+		this.y = ScaleManager.height * this.rng.GetFloatIn(1,1.25);
+		this.dy = this.rng.GetFloatIn(0.5,2);
+		this.t = this.rng.GetIn(0,12);
+	}
+	,update: function() {
+		if(this.y < -64) {
+			this.randomizeData();
+		}
+		this.y -= this.dy;
+		++this.t;
+	}
+	,render: function(g) {
+		var c = Math.sin(this.t / (this.dy * 50));
+		var r = c * 12;
+		g.pushOpacity(Math.max(c,0));
+		g.set_color(-65536);
+		kha_graphics2_GraphicsExtension.fillCircle(g,this.x,this.y,r,8);
+		g.set_color(-16777216);
+		kha_graphics2_GraphicsExtension.fillCircle(g,this.x,this.y,r - 4,8);
+		g.set_color(-1);
+		g.popOpacity();
+	}
+	,__class__: game_backgrounds__$NestBackground_BackgroundParticle
+};
+var game_backgrounds_NestBackground = function(rng) {
+	this.rng = rng;
+	this.particles = [];
+	var _g = 0;
+	while(_g < 128) {
+		var x = _g++;
+		this.particles.push(new game_backgrounds__$NestBackground_BackgroundParticle(rng));
+	}
+};
+$hxClasses["game.backgrounds.NestBackground"] = game_backgrounds_NestBackground;
+game_backgrounds_NestBackground.__name__ = "game.backgrounds.NestBackground";
+game_backgrounds_NestBackground.prototype = {
+	rng: null
+	,particles: null
+	,update: function() {
+		var _g = 0;
+		var _g1 = this.particles;
+		while(_g < _g1.length) {
+			var p = _g1[_g];
+			++_g;
+			p.update();
+		}
+	}
+	,render: function(g) {
+		var _g = 0;
+		var _g1 = this.particles;
+		while(_g < _g1.length) {
+			var p = _g1[_g];
+			++_g;
+			p.render(g);
+		}
+	}
+	,__class__: game_backgrounds_NestBackground
 };
 var game_boardmanagers_IBoardManager = function() { };
 $hxClasses["game.boardmanagers.IBoardManager"] = game_boardmanagers_IBoardManager;
@@ -1849,6 +1916,7 @@ game_boardstates_StandardBoardState.prototype = {
 			}
 		}
 		this.allClearManager.stopAnimation();
+		this.changeBorderColor(-1);
 		var linkInfo = this.currentPopStep.linkInfo;
 		this.scoreManager.addScoreFromLink(linkInfo);
 		this.garbageManager.sendGarbage(linkInfo.garbage,beginnerScreenCoords);
@@ -1867,6 +1935,7 @@ game_boardstates_StandardBoardState.prototype = {
 		this.garbageManager.confirmGarbage(this.currentEndStep.totalGarbage);
 		if(this.currentEndStep.endsInAllClear) {
 			this.allClearManager.startAnimation();
+			this.changeBorderColor(-23296);
 		}
 		if(this.currentEndStep.isLastLinkPowerful) {
 			var chain = this.currentEndStep.chain;
@@ -2288,12 +2357,11 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 		}
 	}
 	,renderSplitPercentage: function(g,x,y,color,value) {
-		g.set_color(color);
-		g.drawString(StringTools.lpad("" + value + "% "," ",5),x,y);
+		utils_Utils.shadowDrawString(g,3,-16777216,color,StringTools.lpad("" + value + "% "," ",5),x,y);
 	}
 	,renderSplitStatistics: function(g,title,y,splitCounter,great,okay,slow) {
 		var titleWidth = this.font.width(40,title);
-		g.drawString(title,0,y);
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,title,0,y);
 		if(splitCounter == 0) {
 			this.renderSplitPercentage(g,titleWidth,y,-16711936,0);
 			this.renderSplitPercentage(g,titleWidth + this.splitPercentageWidth,y,-256,0);
@@ -2307,34 +2375,35 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 	}
 	,renderGameInfo: function(g,alpha) {
 		g.set_fontSize(40);
-		g.drawString("Chain: " + this.chain + " / " + this.chainLength,0,this.gameRow(-3));
-		g.drawString("Remainder: " + this.linkRemainder,0,this.gameRow(0));
-		g.drawString("Damage: " + this.chainDamage + " / " + this.totalDamage,0,this.gameRow(1));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Chain: " + this.chain + " / " + this.chainLength,0,this.gameRow(-3));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Remainder: " + this.linkRemainder,0,this.gameRow(0));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Damage: " + this.chainDamage + " / " + this.totalDamage,0,this.gameRow(1));
 		this.renderSplitStatistics(g,"Splits (ALL):  ",this.gameRow(3),this.overallSplitCounter,this.overallGreatSplits,this.overallOkaySplits,this.overallSlowSplits);
 		this.renderSplitStatistics(g,"Splits (NOW): ",this.gameRow(4),this.currentSplitCounter,this.currentGreatSplits,this.currentOkaySplits,this.currentSlowSplits);
+		var splitColor;
 		switch(this.getSplitCategory()._hx_index) {
 		case 0:
-			g.set_color(-16711936);
+			splitColor = g.set_color(-16711936);
 			break;
 		case 1:
-			g.set_color(-256);
+			splitColor = g.set_color(-256);
 			break;
 		case 2:
-			g.set_color(-65536);
+			splitColor = g.set_color(-65536);
 			break;
 		}
-		g.drawString(StringTools.lpad("" + this.splitT," ",3),0,this.gameRow(5));
+		utils_Utils.shadowDrawString(g,3,-16777216,splitColor,StringTools.lpad("" + this.splitT," ",3),0,this.gameRow(5));
 		g.fillRect(64,this.gameRow(5),this.splitT * 4,32);
 		g.set_color(-1);
-		g.drawString("Chain Standard Advantage: " + this.chainAdvantage,0,this.gameRow(8));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Chain Standard Advantage: " + this.chainAdvantage,0,this.gameRow(8));
 		this.chainAdvantageDisplay.render(g,0,this.gameRow(9),alpha);
-		g.drawString("To Counter: " + this.toCounterChain + " (" + this.counterDifference + " remains)",0,this.gameRow(11));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"To Counter: " + this.toCounterChain + " (" + this.counterDifference + " remains)",0,this.gameRow(11));
 		this.afterCounterDisplay.render(g,0,this.gameRow(12),alpha);
 		var targetPoints = this.marginManager.targetPoints;
-		g.drawString("Target Points: " + targetPoints,0,this.gameRow(14));
-		g.drawString("Margin Time: " + (this.marginManager.marginTime / 60 | 0),0,this.gameRow(15));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Target Points: " + targetPoints,0,this.gameRow(14));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Margin Time: " + (this.marginManager.marginTime / 60 | 0),0,this.gameRow(15));
 		var dropBonus = this.playerScoreManager.dropBonus | 0;
-		g.drawString("Drop bonus: " + dropBonus + " (" + (dropBonus / targetPoints | 0) + " garbo)",0,this.gameRow(16));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Drop bonus: " + dropBonus + " (" + (dropBonus / targetPoints | 0) + " garbo)",0,this.gameRow(16));
 		if(this.trainingSave.autoAttack) {
 			var autoAttackString;
 			switch(this.autoAttackState._hx_index) {
@@ -2345,9 +2414,9 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 				autoAttackString = "Auto-Attack SENDING: " + this.autoAttackMaxChain + "-CHAIN!";
 				break;
 			}
-			g.drawString(autoAttackString,0,this.gameRow(17));
+			utils_Utils.shadowDrawString(g,3,-16777216,-1,autoAttackString,0,this.gameRow(17));
 		} else {
-			g.drawString("Auto-Attack DISABLED",0,this.gameRow(17));
+			utils_Utils.shadowDrawString(g,3,-16777216,-1,"Auto-Attack DISABLED",0,this.gameRow(17));
 		}
 	}
 	,renderEditInfo: function(g,alpha) {
@@ -2371,7 +2440,7 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 			}
 		}
 		g.set_fontSize(32);
-		g.drawString("" + (viewIndex + 1) + " / " + steps.length,0,game_geometries_BoardGeometries.HEIGHT);
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"" + (viewIndex + 1) + " / " + steps.length,0,game_geometries_BoardGeometries.HEIGHT);
 	}
 	,resetAutoAttackWaitingState: function() {
 		this.autoAttackState = game_boardstates_AutoAttackState.WAITING;
@@ -3075,9 +3144,11 @@ game_fields_FieldPopInfo.prototype = {
 	,hasPops: null
 	,addClear: function(color,x,y) {
 		this.clears.push(new game_gelos_GeloPoint(color,x,y));
-		var tmp = color;
-		var v = this.clearsByColor.h[tmp] + 1;
-		this.clearsByColor.h[tmp] = v;
+		if(game_gelos_GeloColor.isColored(color)) {
+			var tmp = color;
+			var v = this.clearsByColor.h[tmp] + 1;
+			this.clearsByColor.h[tmp] = v;
+		}
 	}
 	,__class__: game_fields_FieldPopInfo
 };
@@ -3195,7 +3266,6 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	,particleManager: null
 	,marginManager: null
 	,pauseMediator: null
-	,playerBorderColorMediator: null
 	,playerTargetMediator: null
 	,infoTargetMediator: null
 	,playerGarbageManager: null
@@ -3233,9 +3303,6 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	,buildPauseMediator: function() {
 		this.pauseMediator = new game_mediators_PauseMediator();
 	}
-	,buildPlayerBorderColorMediator: function() {
-		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
-	}
 	,buildPlayerTargetMediator: function() {
 		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT,null);
 	}
@@ -3271,7 +3338,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.getInstance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
 	}
 	,buildPlayerAllClearManager: function() {
-		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
+		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager));
 	}
 	,buildInfoGarbageManager: function() {
 		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
@@ -3303,7 +3370,6 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	}
 	,wireMediators: function() {
 		this.pauseMediator.gameState = this.gameState;
-		this.playerBorderColorMediator.boardState = this.playState;
 		this.playerTargetMediator.garbageManager = this.infoGarbageManager;
 		this.infoTargetMediator.garbageManager = this.playerGarbageManager;
 	}
@@ -3327,7 +3393,6 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.particleManager = new game_particles_ParticleManager();
 		this.marginManager = new game_rules_MarginTimeManager(this.rule);
 		this.pauseMediator = new game_mediators_PauseMediator();
-		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
 		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT,null);
 		this.infoTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT,null);
 		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.playerTargetMediator));
@@ -3340,7 +3405,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.gameScreen,this.playerInputManager));
 		var prefsSave = this.primaryProfile.prefs;
 		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.getInstance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
-		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
+		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager));
 		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
 		var prefsSave = this.primaryProfile.prefs;
 		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.RIGHT,this.marginManager,this.rule,this.rng,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),this.primaryProfile.training,game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave),new game_ChainCounter(),this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
@@ -3354,7 +3419,6 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		var _g = this.marginManager;
 		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.gameScreen,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.gameScreen,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu));
 		this.pauseMediator.gameState = this.gameState;
-		this.playerBorderColorMediator.boardState = this.playState;
 		this.playerTargetMediator.garbageManager = this.infoGarbageManager;
 		this.infoTargetMediator.garbageManager = this.playerGarbageManager;
 		this.gameState.pause(this.playerInputManager);
@@ -4700,17 +4764,6 @@ game_geometries_BoardGeometries.prototype = {
 	,editGeloDisplay: null
 	,__class__: game_geometries_BoardGeometries
 };
-var game_mediators_BorderColorMediator = function() {
-};
-$hxClasses["game.mediators.BorderColorMediator"] = game_mediators_BorderColorMediator;
-game_mediators_BorderColorMediator.__name__ = "game.mediators.BorderColorMediator";
-game_mediators_BorderColorMediator.prototype = {
-	boardState: null
-	,changeColor: function(target) {
-		this.boardState.changeBorderColor(target);
-	}
-	,__class__: game_mediators_BorderColorMediator
-};
 var game_mediators_GarbageTargetMediator = function(geometries,garbageManager) {
 	this.geometries = geometries;
 	this.garbageManager = garbageManager;
@@ -5001,17 +5054,6 @@ game_particles_GeloPopParticleOptions.prototype = {
 	,dy: null
 	,__class__: game_particles_GeloPopParticleOptions
 };
-var game_particles_IParticleManager = function() { };
-$hxClasses["game.particles.IParticleManager"] = game_particles_IParticleManager;
-game_particles_IParticleManager.__name__ = "game.particles.IParticleManager";
-game_particles_IParticleManager.__isInterface__ = true;
-game_particles_IParticleManager.prototype = {
-	add: null
-	,update: null
-	,renderBackground: null
-	,renderForeground: null
-	,__class__: game_particles_IParticleManager
-};
 var game_particles_ParticleLayer = $hxEnums["game.particles.ParticleLayer"] = { __ename__:"game.particles.ParticleLayer",__constructs__:null
 	,BACK: {_hx_name:"BACK",_hx_index:0,__enum__:"game.particles.ParticleLayer",toString:$estr}
 	,FRONT: {_hx_name:"FRONT",_hx_index:1,__enum__:"game.particles.ParticleLayer",toString:$estr}
@@ -5023,7 +5065,6 @@ var game_particles_ParticleManager = function() {
 };
 $hxClasses["game.particles.ParticleManager"] = game_particles_ParticleManager;
 game_particles_ParticleManager.__name__ = "game.particles.ParticleManager";
-game_particles_ParticleManager.__interfaces__ = [game_particles_IParticleManager];
 game_particles_ParticleManager.prototype = {
 	backParticles: null
 	,frontParticles: null
@@ -5866,6 +5907,8 @@ game_score_ScoreManagerOptions.prototype = {
 	,__class__: game_score_ScoreManagerOptions
 };
 var game_screens_GameScreen = function() {
+	var seed = kha_System.get_time() * 1000000 | 0;
+	this.background = new game_backgrounds_NestBackground(new kha_math_Random(seed));
 };
 $hxClasses["game.screens.GameScreen"] = game_screens_GameScreen;
 game_screens_GameScreen.__name__ = "game.screens.GameScreen";
@@ -5878,7 +5921,8 @@ game_screens_GameScreen.create = function(opts) {
 	return v;
 };
 game_screens_GameScreen.prototype = {
-	translationX: null
+	background: null
+	,translationX: null
 	,translationY: null
 	,scale: null
 	,gameState: null
@@ -5898,9 +5942,11 @@ game_screens_GameScreen.prototype = {
 		g.scissor(tx,ty,tw,th);
 	}
 	,update: function() {
+		this.background.update();
 		this.gameState.update();
 	}
 	,render: function(g,g4,alpha) {
+		this.background.render(g);
 		var _this__00 = 1;
 		var _this__10 = 0;
 		var _this__20 = this.translationX;
