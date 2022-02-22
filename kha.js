@@ -4992,7 +4992,6 @@ game_particles_GarbageBulletTrailParticleOptions.prototype = {
 	,__class__: game_particles_GarbageBulletTrailParticleOptions
 };
 var game_particles_GeloPopParticle = function(opts) {
-	this.opts = opts;
 	this.dx = opts.dx;
 	this.dy = opts.dy;
 	this.dyIncrement = opts.dyIncrement;
@@ -5014,8 +5013,7 @@ game_particles_GeloPopParticle.create = function(opts) {
 	return p;
 };
 game_particles_GeloPopParticle.prototype = {
-	opts: null
-	,dx: null
+	dx: null
 	,dyIncrement: null
 	,color: null
 	,maxT: null
@@ -5133,7 +5131,6 @@ game_particles_ParticleManager.prototype = {
 	,__class__: game_particles_ParticleManager
 };
 var game_particles_PixelFloatParticle = function(opts) {
-	this.opts = opts;
 	this.dx = opts.dx;
 	this.dy = opts.dy;
 	this.maxT = opts.maxT;
@@ -5155,8 +5152,7 @@ game_particles_PixelFloatParticle.create = function(opts) {
 	return p;
 };
 game_particles_PixelFloatParticle.prototype = {
-	opts: null
-	,dx: null
+	dx: null
 	,dy: null
 	,maxT: null
 	,color: null
@@ -5218,7 +5214,6 @@ game_particles_PixelFloatParticleOptions.prototype = {
 	,__class__: game_particles_PixelFloatParticleOptions
 };
 var game_particles_SmallStarParticle = function(opts) {
-	this.opts = opts;
 	this.x = opts.x;
 	this.y = opts.y;
 	this.color = opts.color;
@@ -5235,8 +5230,7 @@ game_particles_SmallStarParticle.create = function(opts) {
 	return p;
 };
 game_particles_SmallStarParticle.prototype = {
-	opts: null
-	,x: null
+	x: null
 	,y: null
 	,color: null
 	,t: null
