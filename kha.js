@@ -4182,6 +4182,8 @@ game_gelogroups_GeloGroup.prototype = {
 				return true;
 			}
 			this.graceT++;
+		} else if(softDrop) {
+			this.scoreManager.addDropBonus();
 		}
 		return false;
 	}
