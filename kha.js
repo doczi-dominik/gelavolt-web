@@ -878,6 +878,7 @@ var game_all_$clear_AllClearManager = function(opts) {
 	this.rng = opts.rng;
 	this.geometries = opts.geometries;
 	this.particleManager = opts.particleManager;
+	this.borderColorMediator = opts.borderColorMediator;
 	this.targetY = game_geometries_BoardGeometries.HEIGHT / 5;
 	this.boardCenterX = game_geometries_BoardGeometries.CENTER.x;
 	this.font = kha_Assets.fonts.ka1;
@@ -893,6 +894,7 @@ game_all_$clear_AllClearManager.prototype = {
 	rng: null
 	,geometries: null
 	,particleManager: null
+	,borderColorMediator: null
 	,targetY: null
 	,boardCenterX: null
 	,font: null
@@ -921,6 +923,7 @@ game_all_$clear_AllClearManager.prototype = {
 		this.scaleX = 1;
 		this.showAnimation = true;
 		this.sendAllClearBonus = true;
+		this.borderColorMediator.boardState.changeBorderColor(-23296);
 		if(this.rng.GetUpTo(Math.max(20 / this.acCounter,1) | 0) == 1) {
 			this.setACText("RINTO","MOMENT");
 		} else {
@@ -932,6 +935,7 @@ game_all_$clear_AllClearManager.prototype = {
 		this.scaleX = 0;
 		this.showAnimation = false;
 		this.sendAllClearBonus = false;
+		this.borderColorMediator.boardState.changeBorderColor(-1);
 	}
 	,updateRisingPhase: function() {
 		var step = this.t / 45;
@@ -1104,10 +1108,11 @@ game_all_$clear_AllClearManager.prototype = {
 	}
 	,__class__: game_all_$clear_AllClearManager
 };
-var game_all_$clear_AllClearManagerOptions = function(rng,geometries,particleManager) {
+var game_all_$clear_AllClearManagerOptions = function(rng,geometries,particleManager,borderColorMediator) {
 	this.rng = rng;
 	this.geometries = geometries;
 	this.particleManager = particleManager;
+	this.borderColorMediator = borderColorMediator;
 };
 $hxClasses["game.all_clear.AllClearManagerOptions"] = game_all_$clear_AllClearManagerOptions;
 game_all_$clear_AllClearManagerOptions.__name__ = "game.all_clear.AllClearManagerOptions";
@@ -1115,6 +1120,7 @@ game_all_$clear_AllClearManagerOptions.prototype = {
 	rng: null
 	,geometries: null
 	,particleManager: null
+	,borderColorMediator: null
 	,__class__: game_all_$clear_AllClearManagerOptions
 };
 var game_backgrounds__$NestBackground_BackgroundParticle = function(rng) {
@@ -1916,7 +1922,6 @@ game_boardstates_StandardBoardState.prototype = {
 			}
 		}
 		this.allClearManager.stopAnimation();
-		this.changeBorderColor(-1);
 		var linkInfo = this.currentPopStep.linkInfo;
 		this.scoreManager.addScoreFromLink(linkInfo);
 		this.garbageManager.sendGarbage(linkInfo.garbage,beginnerScreenCoords);
@@ -1935,7 +1940,6 @@ game_boardstates_StandardBoardState.prototype = {
 		this.garbageManager.confirmGarbage(this.currentEndStep.totalGarbage);
 		if(this.currentEndStep.endsInAllClear) {
 			this.allClearManager.startAnimation();
-			this.changeBorderColor(-23296);
 		}
 		if(this.currentEndStep.isLastLinkPowerful) {
 			var chain = this.currentEndStep.chain;
@@ -3266,6 +3270,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	,particleManager: null
 	,marginManager: null
 	,pauseMediator: null
+	,playerBorderColorMediator: null
 	,playerTargetMediator: null
 	,infoTargetMediator: null
 	,playerGarbageManager: null
@@ -3303,6 +3308,9 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	,buildPauseMediator: function() {
 		this.pauseMediator = new game_mediators_PauseMediator();
 	}
+	,buildPlayerBorderColorMediator: function() {
+		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
+	}
 	,buildPlayerTargetMediator: function() {
 		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT,null);
 	}
@@ -3338,7 +3346,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.getInstance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
 	}
 	,buildPlayerAllClearManager: function() {
-		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager));
+		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
 	}
 	,buildInfoGarbageManager: function() {
 		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
@@ -3370,6 +3378,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	}
 	,wireMediators: function() {
 		this.pauseMediator.gameState = this.gameState;
+		this.playerBorderColorMediator.boardState = this.playState;
 		this.playerTargetMediator.garbageManager = this.infoGarbageManager;
 		this.infoTargetMediator.garbageManager = this.playerGarbageManager;
 	}
@@ -3393,6 +3402,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.particleManager = new game_particles_ParticleManager();
 		this.marginManager = new game_rules_MarginTimeManager(this.rule);
 		this.pauseMediator = new game_mediators_PauseMediator();
+		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
 		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT,null);
 		this.infoTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT,null);
 		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.playerTargetMediator));
@@ -3405,7 +3415,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.gameScreen,this.playerInputManager));
 		var prefsSave = this.primaryProfile.prefs;
 		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.getInstance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
-		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager));
+		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
 		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
 		var prefsSave = this.primaryProfile.prefs;
 		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.RIGHT,this.marginManager,this.rule,this.rng,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),this.primaryProfile.training,game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave),new game_ChainCounter(),this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
@@ -3419,6 +3429,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		var _g = this.marginManager;
 		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.gameScreen,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.gameScreen,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu));
 		this.pauseMediator.gameState = this.gameState;
+		this.playerBorderColorMediator.boardState = this.playState;
 		this.playerTargetMediator.garbageManager = this.infoGarbageManager;
 		this.infoTargetMediator.garbageManager = this.playerGarbageManager;
 		this.gameState.pause(this.playerInputManager);
@@ -4763,6 +4774,17 @@ game_geometries_BoardGeometries.prototype = {
 	,garbageTray: null
 	,editGeloDisplay: null
 	,__class__: game_geometries_BoardGeometries
+};
+var game_mediators_BorderColorMediator = function() {
+};
+$hxClasses["game.mediators.BorderColorMediator"] = game_mediators_BorderColorMediator;
+game_mediators_BorderColorMediator.__name__ = "game.mediators.BorderColorMediator";
+game_mediators_BorderColorMediator.prototype = {
+	boardState: null
+	,changeColor: function(target) {
+		this.boardState.changeBorderColor(target);
+	}
+	,__class__: game_mediators_BorderColorMediator
 };
 var game_mediators_GarbageTargetMediator = function(geometries,garbageManager) {
 	this.geometries = geometries;
