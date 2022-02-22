@@ -727,7 +727,7 @@ game_Queue.prototype = {
 		return this.groups[(r < 0 ? r + d : r) | 0];
 	}
 	,setIndex: function(index) {
-		if(index == -1) {
+		if(index == null) {
 			return;
 		}
 		this.currentIndex = index;
@@ -1738,7 +1738,10 @@ game_boardstates_StandardBoardState.prototype = {
 		this.initSimStepState();
 	}
 	,beginChainSimulation: function() {
-		this.chainSim.simulate(this.field.copy(),this.allClearManager.sendAllClearBonus,this.scoreManager.dropBonus,this.queue.currentIndex);
+		var tmp = this.chainSim;
+		var _this = this.queue;
+		var _g = _this.get(_this.currentIndex);
+		tmp.simulate(new game_simulation__$ChainSimulator_SimOptions(this.field.copy(),this.allClearManager.sendAllClearBonus,this.scoreManager.dropBonus,this.queue.currentIndex,_g));
 		var _this = this.chainSim;
 		this.field.copyFrom(_this.steps[_this.viewIndex].fieldSnapshot);
 		this.initSimStepState();
@@ -2150,7 +2153,8 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Standar
 				break;
 			case "NEW":
 				this.regenerateQueue();
-				this.initSimStepState();
+				this.chainSim.clear();
+				this.beginChainSimulation();
 				break;
 			case "RESTART":
 				this.queue.setIndex(0);
@@ -4006,7 +4010,7 @@ game_gelogroups_GeloGroup.prototype = {
 			this.otherShadows.push(new game_gelos_GeloPoint(o.color,o.x | 0,o.y | 0));
 		}
 		this.chainSim.clear();
-		this.chainSim.simulate(workField,false,0,-1);
+		this.chainSim.simulate(new game_simulation__$ChainSimulator_SimOptions(workField,false,0,null,null));
 		var _this = this.field;
 		_this.customForEach(0,_this.totalRows,function(gelo,_,_1) {
 			gelo.willTriggerChain = false;
@@ -6062,6 +6066,7 @@ game_simulation_SimulationStep.prototype = {
 };
 var game_simulation_BeginSimStep = function(opts) {
 	game_simulation_SimulationStep.call(this,game_simulation_SimulationStepType.BEGIN,opts);
+	this.groupData = opts.groupData;
 	this.sendsAllClearBonus = opts.sendsAllClearBonus;
 	this.dropBonus = opts.dropBonus;
 	this.groupIndex = opts.groupIndex;
@@ -6070,7 +6075,8 @@ $hxClasses["game.simulation.BeginSimStep"] = game_simulation_BeginSimStep;
 game_simulation_BeginSimStep.__name__ = "game.simulation.BeginSimStep";
 game_simulation_BeginSimStep.__super__ = game_simulation_SimulationStep;
 game_simulation_BeginSimStep.prototype = $extend(game_simulation_SimulationStep.prototype,{
-	sendsAllClearBonus: null
+	groupData: null
+	,sendsAllClearBonus: null
 	,dropBonus: null
 	,groupIndex: null
 	,renderLabel: function(g,y,alpha) {
@@ -6084,7 +6090,10 @@ game_simulation_BeginSimStep.prototype = $extend(game_simulation_SimulationStep.
 		g.drawString("Chain: " + this.chain,12,y + this.cardRow(1));
 		g.drawString("Drop bonus: " + this.dropBonus,12,y + this.cardRow(2));
 		g.drawString("Sends AC Bonus: " + Std.string(this.sendsAllClearBonus),12,y + this.cardRow(3));
-		g.drawString("Group Index: " + this.groupIndex,12,y + this.cardRow(4));
+		if(this.groupData != null) {
+			g.drawString("Placed Gelo Group:",12,y + this.cardRow(4));
+			this.groupData.render(g,172.,y + this.cardRow(5) + 160.);
+		}
 	}
 	,__class__: game_simulation_BeginSimStep
 });
@@ -6099,8 +6108,12 @@ game_simulation_SimulationStepOptions.prototype = {
 	,fieldSnapshot: null
 	,__class__: game_simulation_SimulationStepOptions
 };
-var game_simulation_BeginSimStepOptions = function(sendsAllClearBonus,dropBonus,groupIndex,chain,fieldSnapshot) {
+var game_simulation_BeginSimStepOptions = function(groupData,sendsAllClearBonus,dropBonus,groupIndex,chain,fieldSnapshot) {
+	this.groupData = null;
 	game_simulation_SimulationStepOptions.call(this,chain,fieldSnapshot);
+	if(groupData != null) {
+		this.groupData = groupData;
+	}
 	this.sendsAllClearBonus = sendsAllClearBonus;
 	this.dropBonus = dropBonus;
 	this.groupIndex = groupIndex;
@@ -6109,11 +6122,29 @@ $hxClasses["game.simulation.BeginSimStepOptions"] = game_simulation_BeginSimStep
 game_simulation_BeginSimStepOptions.__name__ = "game.simulation.BeginSimStepOptions";
 game_simulation_BeginSimStepOptions.__super__ = game_simulation_SimulationStepOptions;
 game_simulation_BeginSimStepOptions.prototype = $extend(game_simulation_SimulationStepOptions.prototype,{
-	sendsAllClearBonus: null
+	groupData: null
+	,sendsAllClearBonus: null
 	,dropBonus: null
 	,groupIndex: null
 	,__class__: game_simulation_BeginSimStepOptions
 });
+var game_simulation__$ChainSimulator_SimOptions = function(field,sendAllClearBonus,dropBonus,groupIndex,groupData) {
+	this.field = field;
+	this.sendAllClearBonus = sendAllClearBonus;
+	this.dropBonus = dropBonus;
+	this.groupIndex = groupIndex;
+	this.groupData = groupData;
+};
+$hxClasses["game.simulation._ChainSimulator.SimOptions"] = game_simulation__$ChainSimulator_SimOptions;
+game_simulation__$ChainSimulator_SimOptions.__name__ = "game.simulation._ChainSimulator.SimOptions";
+game_simulation__$ChainSimulator_SimOptions.prototype = {
+	field: null
+	,sendAllClearBonus: null
+	,dropBonus: null
+	,groupIndex: null
+	,groupData: null
+	,__class__: game_simulation__$ChainSimulator_SimOptions
+};
 var game_simulation_ChainSimulator = function(opts) {
 	this.steps = [];
 	this.rule = opts.rule;
@@ -6175,12 +6206,14 @@ game_simulation_ChainSimulator.prototype = {
 		});
 		return popInfo;
 	}
-	,sim: function(field,sendsAllClearBonus,dropBonus,groupIndex) {
+	,sim: function(opts) {
+		var field = opts.field;
+		var sendsAllClearBonus = opts.sendAllClearBonus;
 		var links = [];
 		var lastRemainder = 0.0;
 		var currentACBonus = sendsAllClearBonus;
-		var currentDropBonus = dropBonus;
-		var step = new game_simulation_BeginSimStep(new game_simulation_BeginSimStepOptions(sendsAllClearBonus,dropBonus,groupIndex,this.latestChainCounter,field.copy()));
+		var currentDropBonus = opts.dropBonus;
+		var step = new game_simulation_BeginSimStep(new game_simulation_BeginSimStepOptions(opts.groupData,sendsAllClearBonus,opts.dropBonus,opts.groupIndex,this.latestChainCounter,field.copy()));
 		this.steps[this.stepIndex++] = step;
 		while(true) {
 			field.drop();
@@ -6224,11 +6257,11 @@ game_simulation_ChainSimulator.prototype = {
 	,view: function(delta) {
 		this.viewIndex = Math.min(this.steps.length - 1,Math.max(this.viewIndex + delta,0)) | 0;
 	}
-	,simulate: function(field,sendsAllClearBonus,dropBonus,groupIndex) {
+	,simulate: function(opts) {
 		this.latestChainCounter = 0;
 		this.latestGarbageCounter = 0;
 		this.viewIndex = this.stepIndex;
-		this.sim(field,sendsAllClearBonus,dropBonus,groupIndex);
+		this.sim(opts);
 	}
 	,clear: function() {
 		this.steps.length = 0;
@@ -6277,9 +6310,9 @@ game_simulation_ChainSimulator.prototype = {
 		} else {
 			sendsAllClearBonus = false;
 			dropBonus = 0;
-			groupIndex = -1;
+			groupIndex = null;
 		}
-		this.sim(field,sendsAllClearBonus,dropBonus,groupIndex);
+		this.sim(new game_simulation__$ChainSimulator_SimOptions(field,sendsAllClearBonus,dropBonus,groupIndex,null));
 	}
 	,getViewedStep: function() {
 		return this.steps[this.viewIndex];
@@ -6298,6 +6331,9 @@ game_simulation_ChainSimulator.prototype = {
 	}
 	,viewLast: function() {
 		this.viewIndex = this.steps.length - 1;
+	}
+	,reset: function() {
+		this.steps.length = 0;
 	}
 	,__class__: game_simulation_ChainSimulator
 };
@@ -7074,7 +7110,7 @@ game_ui_InputWidget.prototype = {
 		var offsetX = x + width;
 		var gpIconSize = 64 * ScaleManager.smallerScale;
 		inputManager.renderGamepadIcon(g,offsetX,y,gpInput,gpIconSize);
-		var kbString = input_InputDeviceManager.keyCodeToString.h[kbInput];
+		var kbString = input_KeyCodeToString_KEY_CODE_TO_STRING.h[kbInput];
 		g.drawString(" / " + kbString,offsetX + gpIconSize,y);
 	}
 	,__class__: game_ui_InputWidget
@@ -7162,7 +7198,7 @@ ui_Menu.prototype = {
 			while(_g2 < _g3.length) {
 				var key = _g3[_g2];
 				++_g2;
-				str += "" + input_InputDeviceManager.keyCodeToString.h[mappings.h[key].keyboardInput] + "/";
+				str += "" + input_KeyCodeToString_KEY_CODE_TO_STRING.h[mappings.h[key].keyboardInput] + "/";
 			}
 			str = str.substring(0,str.length - 1);
 			str += " : " + d.description + "    ";
@@ -41299,7 +41335,8 @@ var input_GamepadSpriteCoordinates_GAMEPAD_SPRITE_COORDINATES = (function($this)
 	return $r;
 }(this));
 input_InputDeviceManager.instances = [];
-input_InputDeviceManager.keyCodeToString = (function($this) {
+input_InputDeviceManager.lastDevice = input_InputDevice.KEYBOARD;
+var input_KeyCodeToString_KEY_CODE_TO_STRING = (function($this) {
 	var $r;
 	var _g = new haxe_ds_IntMap();
 	_g.h[0] = "Unknown";
@@ -41490,7 +41527,6 @@ input_InputDeviceManager.keyCodeToString = (function($this) {
 	$r = _g;
 	return $r;
 }(this));
-input_InputDeviceManager.lastDevice = input_InputDevice.KEYBOARD;
 kha_Assets.images = new kha__$Assets_ImageList();
 kha_Assets.sounds = new kha__$Assets_SoundList();
 kha_Assets.blobs = new kha__$Assets_BlobList();
