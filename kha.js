@@ -7332,7 +7332,9 @@ game_ui_PauseMenu.prototype = $extend(ui_Menu.prototype,{
 					}))];
 				}))];
 			}))];
-		})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Official Discord",function() {
+		})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Download Desktop Version",function() {
+			window.open("https://github.com/doczi-dominik/gelavolt/releases");
+		},["Download GelaVolt's","Desktop Version For","Better Performance","And Offline Play"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Official Discord",function() {
 			window.open("https://discord.gg/wsWArpAFJK");
 		},["Join The Official","Development Server","For GelaVolt!","","https://discord.gg/wsWArpAFJK"]))];
 	}
@@ -41263,6 +41265,7 @@ ui_Menu.WARNING_FONT_SIZE = 24;
 ui_Menu.PADDING = 64;
 ui_Menu.WARNING = ["BEWARE! This Is A Pre-Alpha Build of GelaVolt.","Everything Is Subject To Change. Expect Bugs and Crashes.","Thank You For Trying GelaVolt! Please Consider Leaving","Feedback On The Official Server! :)"];
 game_ui_PauseMenu.DISCORD_INVITE = "https://discord.gg/wsWArpAFJK";
+game_ui_PauseMenu.RELEASES_URL = "https://github.com/doczi-dominik/gelavolt/releases";
 game_ui_QueueEditorPage.FONT_SIZE = 72;
 haxe_Serializer.USE_CACHE = false;
 haxe_Serializer.USE_ENUM_INDEX = false;
