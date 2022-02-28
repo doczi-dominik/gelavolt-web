@@ -7609,13 +7609,15 @@ game_ui_EndlessPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 				save_$data_SaveManager.saveProfiles();
 			})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Save Replay",function() {
 				var data = _gthis.gameMode.copyWithReplay(_gthis.actionBuffer.exportReplayData());
+				var serialized = haxe_Serializer.run(data);
+				var filename = "replay-" + DateTools.format(new Date(),"%Y-%m-%d_%H-%M") + ".gvr";
 				var file = new File([haxe_Serializer.run(data)],"replay.gvr");
 				var uri = URL.createObjectURL(file);
 				var el = window.document.createElement("a");
 				el.href = uri;
-				el.setAttribute("download","replay-" + DateTools.format(new Date(),"%Y-%m-%d_%H-%M") + ".gvr");
+				el.setAttribute("download",filename);
 				el.click();
-			},["Download A Replay File Of This Session.","To View It, Just Drag & Drop The File","On The GelaVolt Window"]))];
+			},["Download A Replay File Of This Session","","To View It, Just Drag & Drop The File","On The GelaVolt Window"]))];
 		}));
 		var pauseMenuOpts = game_ui_PauseMenu.prototype.generateInitalPage.call(this,_);
 		pauseMenuOpts.unshift(endlessOpts);
