@@ -8,6 +8,101 @@ function $extend(from, fields) {
 	if( fields.toString !== Object.prototype.toString ) proto.toString = fields.toString;
 	return proto;
 }
+var DateTools = function() { };
+$hxClasses["DateTools"] = DateTools;
+DateTools.__name__ = "DateTools";
+DateTools.__format_get = function(d,e) {
+	switch(e) {
+	case "%":
+		return "%";
+	case "A":
+		return DateTools.DAY_NAMES[d.getDay()];
+	case "B":
+		return DateTools.MONTH_NAMES[d.getMonth()];
+	case "C":
+		return StringTools.lpad(Std.string(d.getFullYear() / 100 | 0),"0",2);
+	case "D":
+		return DateTools.__format(d,"%m/%d/%y");
+	case "F":
+		return DateTools.__format(d,"%Y-%m-%d");
+	case "I":case "l":
+		var hour = d.getHours() % 12;
+		return StringTools.lpad(Std.string(hour == 0 ? 12 : hour),e == "I" ? "0" : " ",2);
+	case "M":
+		return StringTools.lpad(Std.string(d.getMinutes()),"0",2);
+	case "R":
+		return DateTools.__format(d,"%H:%M");
+	case "S":
+		return StringTools.lpad(Std.string(d.getSeconds()),"0",2);
+	case "T":
+		return DateTools.__format(d,"%H:%M:%S");
+	case "Y":
+		return Std.string(d.getFullYear());
+	case "a":
+		return DateTools.DAY_SHORT_NAMES[d.getDay()];
+	case "b":case "h":
+		return DateTools.MONTH_SHORT_NAMES[d.getMonth()];
+	case "d":
+		return StringTools.lpad(Std.string(d.getDate()),"0",2);
+	case "e":
+		return Std.string(d.getDate());
+	case "H":case "k":
+		return StringTools.lpad(Std.string(d.getHours()),e == "H" ? "0" : " ",2);
+	case "m":
+		return StringTools.lpad(Std.string(d.getMonth() + 1),"0",2);
+	case "n":
+		return "\n";
+	case "p":
+		if(d.getHours() > 11) {
+			return "PM";
+		} else {
+			return "AM";
+		}
+		break;
+	case "r":
+		return DateTools.__format(d,"%I:%M:%S %p");
+	case "s":
+		return Std.string(d.getTime() / 1000 | 0);
+	case "t":
+		return "\t";
+	case "u":
+		var t = d.getDay();
+		if(t == 0) {
+			return "7";
+		} else if(t == null) {
+			return "null";
+		} else {
+			return "" + t;
+		}
+		break;
+	case "w":
+		return Std.string(d.getDay());
+	case "y":
+		return StringTools.lpad(Std.string(d.getFullYear() % 100),"0",2);
+	default:
+		throw new haxe_exceptions_NotImplementedException("Date.format %" + e + "- not implemented yet.",null,{ fileName : "DateTools.hx", lineNumber : 101, className : "DateTools", methodName : "__format_get"});
+	}
+};
+DateTools.__format = function(d,f) {
+	var r_b = "";
+	var p = 0;
+	while(true) {
+		var np = f.indexOf("%",p);
+		if(np < 0) {
+			break;
+		}
+		var len = np - p;
+		r_b += len == null ? HxOverrides.substr(f,p,null) : HxOverrides.substr(f,p,len);
+		r_b += Std.string(DateTools.__format_get(d,HxOverrides.substr(f,np + 1,1)));
+		p = np + 2;
+	}
+	var len = f.length - p;
+	r_b += len == null ? HxOverrides.substr(f,p,null) : HxOverrides.substr(f,p,len);
+	return r_b;
+};
+DateTools.format = function(d,f) {
+	return DateTools.__format(d,f);
+};
 var EReg = function(r,opt) {
 	this.r = new RegExp(r,opt.split("u").join(""));
 };
@@ -139,9 +234,16 @@ Main.main = function() {
 			Pipelines.init();
 			save_$data_SaveManager.loadProfiles();
 			save_$data_SaveManager.loadGraphics();
-			var primaryProfile = save_$data_SaveManager.getProfile(0);
+			save_$data_Profile.primary = save_$data_SaveManager.getProfile(0);
 			ScaleManager.resize(kha_System.windowWidth(),kha_System.windowHeight());
-			GlobalScreenSwitcher.switchScreen(game_screens_GameScreen.create(new game_screens_GameScreenOptions(kha_System.get_time() * 1000000 | 0,new game_rules_Rule(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null),primaryProfile)));
+			GlobalScreenSwitcher.switchScreen(new main_$menu_MainMenuScreen());
+			window.ondrop = function(ev) {
+				var fr = new FileReader();
+				fr.readAsText(ev.dataTransfer.files.item(0));
+				return fr.onload = function() {
+					GlobalScreenSwitcher.switchScreen(new game_screens_GameScreen(haxe_Unserializer.run(fr.result)));
+				};
+			};
 			Main.lastT = kha_Scheduler.realTime();
 			kha_System.notifyOnFrames(function(frames) {
 				var now = kha_Scheduler.realTime();
@@ -174,7 +276,7 @@ var NullScreen = function() {
 $hxClasses["NullScreen"] = NullScreen;
 NullScreen.__name__ = "NullScreen";
 NullScreen.__interfaces__ = [IScreen];
-NullScreen.getInstance = function() {
+NullScreen.get_instance = function() {
 	if(NullScreen.instance == null) {
 		NullScreen.instance = new NullScreen();
 	}
@@ -755,45 +857,29 @@ game_RollbackableRandomExtension.copyFrom = function(r,src) {
 game_RollbackableRandomExtension.copy = function(r) {
 	game_RollbackableRandomExtension.copyFrom(new kha_math_Random(0),r);
 };
-var game_actionbuffers_ActionSnapshot = function() {
+var game_actionbuffers_ActionSnapshot = function(shiftLeft,shiftRight,rotateLeft,rotateRight,softDrop,hardDrop) {
+	this.shiftLeft = shiftLeft;
+	this.shiftRight = shiftRight;
+	this.rotateLeft = rotateLeft;
+	this.rotateRight = rotateRight;
+	this.softDrop = softDrop;
+	this.hardDrop = hardDrop;
 };
 $hxClasses["game.actionbuffers.ActionSnapshot"] = game_actionbuffers_ActionSnapshot;
 game_actionbuffers_ActionSnapshot.__name__ = "game.actionbuffers.ActionSnapshot";
+game_actionbuffers_ActionSnapshot.fromBitField = function(bitField) {
+	var s = new game_actionbuffers_ActionSnapshot((bitField & 32) == 32,(bitField & 16) == 16,(bitField & 8) == 8,(bitField & 4) == 4,(bitField & 2) == 2,(bitField & 1) == 1);
+	return s;
+};
 game_actionbuffers_ActionSnapshot.prototype = {
-	frame: null
-	,shiftLeft: null
+	shiftLeft: null
 	,shiftRight: null
 	,rotateLeft: null
 	,rotateRight: null
 	,softDrop: null
 	,hardDrop: null
-	,setFrame: function(value) {
-		this.frame = value;
-		return this;
-	}
-	,setShiftLeft: function(value) {
-		this.shiftLeft = value;
-		return this;
-	}
-	,setShiftRight: function(value) {
-		this.shiftRight = value;
-		return this;
-	}
-	,setRotateLeft: function(value) {
-		this.rotateLeft = value;
-		return this;
-	}
-	,setRotateRight: function(value) {
-		this.rotateRight = value;
-		return this;
-	}
-	,setSoftDrop: function(value) {
-		this.softDrop = value;
-		return this;
-	}
-	,setHardDrop: function(value) {
-		this.hardDrop = value;
-		return this;
+	,toBitField: function() {
+		return (this.shiftLeft ? 32 : 0) + (this.shiftRight ? 16 : 0) + (this.rotateLeft ? 8 : 0) + (this.rotateRight ? 4 : 0) + (this.softDrop ? 2 : 0) + (this.hardDrop ? 1 : 0);
 	}
 	,isNotEqual: function(other) {
 		if(!(this.softDrop != other.softDrop || this.shiftLeft != other.shiftLeft || this.shiftRight != other.shiftRight || this.rotateLeft != other.rotateLeft || this.rotateRight != other.rotateRight)) {
@@ -811,52 +897,66 @@ game_actionbuffers_IActionBuffer.__isInterface__ = true;
 game_actionbuffers_IActionBuffer.prototype = {
 	latestAction: null
 	,update: null
+	,exportReplayData: null
 	,__class__: game_actionbuffers_IActionBuffer
 };
 var game_actionbuffers_LocalActionBuffer = function(opts) {
-	this.actions = [];
-	this.gameScreen = opts.gameScreen;
+	this.frameCounter = opts.frameCounter;
 	this.inputManager = opts.inputManager;
-	this.currentAction = new game_actionbuffers_ActionSnapshot();
-	this.latestAction = new game_actionbuffers_ActionSnapshot();
+	this.actions = new haxe_ds_IntMap();
+	this.latestAction = new game_actionbuffers_ActionSnapshot(false,false,false,false,false,false);
 };
 $hxClasses["game.actionbuffers.LocalActionBuffer"] = game_actionbuffers_LocalActionBuffer;
 game_actionbuffers_LocalActionBuffer.__name__ = "game.actionbuffers.LocalActionBuffer";
 game_actionbuffers_LocalActionBuffer.__interfaces__ = [game_actionbuffers_IActionBuffer];
 game_actionbuffers_LocalActionBuffer.prototype = {
-	gameScreen: null
+	frameCounter: null
 	,inputManager: null
 	,actions: null
-	,currentAction: null
 	,latestAction: null
 	,update: function() {
-		this.currentAction.setFrame(this.gameScreen.get_currentFrame()).setShiftLeft(this.inputManager.getAction("Shift Group Left")).setShiftRight(this.inputManager.getAction("Shift Group Right")).setRotateLeft(this.inputManager.getAction("Rotate Left")).setRotateRight(this.inputManager.getAction("Rotate Right")).setSoftDrop(this.inputManager.getAction("Soft Drop")).setHardDrop(this.inputManager.getAction("Hard Drop"));
-		if(this.latestAction.isNotEqual(this.currentAction)) {
-			this.actions.push(this.currentAction);
-			this.latestAction = this.currentAction;
-			this.currentAction = new game_actionbuffers_ActionSnapshot();
+		var currentAction = new game_actionbuffers_ActionSnapshot(this.inputManager.getAction("Shift Group Left"),this.inputManager.getAction("Shift Group Right"),this.inputManager.getAction("Rotate Left"),this.inputManager.getAction("Rotate Right"),this.inputManager.getAction("Soft Drop"),this.inputManager.getAction("Hard Drop"));
+		if(this.latestAction.isNotEqual(currentAction)) {
+			this.actions.h[this.frameCounter.value] = currentAction;
+			this.latestAction = currentAction;
 		}
+	}
+	,exportReplayData: function() {
+		var data = new haxe_ds_IntMap();
+		var map = this.actions;
+		var _g_map = map;
+		var _g_keys = map.keys();
+		while(_g_keys.hasNext()) {
+			var key = _g_keys.next();
+			var _g1_value = _g_map.get(key);
+			var _g1_key = key;
+			var k = _g1_key;
+			var v = _g1_value;
+			var v1 = v.toBitField();
+			data.h[k] = v1;
+		}
+		return data;
 	}
 	,__class__: game_actionbuffers_LocalActionBuffer
 };
-var game_actionbuffers_LocalActionBufferOptions = function(gameScreen,inputManager) {
-	this.gameScreen = gameScreen;
+var game_actionbuffers_LocalActionBufferOptions = function(frameCounter,inputManager) {
+	this.frameCounter = frameCounter;
 	this.inputManager = inputManager;
 };
 $hxClasses["game.actionbuffers.LocalActionBufferOptions"] = game_actionbuffers_LocalActionBufferOptions;
 game_actionbuffers_LocalActionBufferOptions.__name__ = "game.actionbuffers.LocalActionBufferOptions";
 game_actionbuffers_LocalActionBufferOptions.prototype = {
-	gameScreen: null
+	frameCounter: null
 	,inputManager: null
 	,__class__: game_actionbuffers_LocalActionBufferOptions
 };
 var game_actionbuffers_NullActionBuffer = function() {
-	this.latestAction = new game_actionbuffers_ActionSnapshot();
+	this.latestAction = game_actionbuffers_ActionSnapshot.fromBitField(0);
 };
 $hxClasses["game.actionbuffers.NullActionBuffer"] = game_actionbuffers_NullActionBuffer;
 game_actionbuffers_NullActionBuffer.__name__ = "game.actionbuffers.NullActionBuffer";
 game_actionbuffers_NullActionBuffer.__interfaces__ = [game_actionbuffers_IActionBuffer];
-game_actionbuffers_NullActionBuffer.getInstance = function() {
+game_actionbuffers_NullActionBuffer.get_instance = function() {
 	if(game_actionbuffers_NullActionBuffer.instance == null) {
 		game_actionbuffers_NullActionBuffer.instance = new game_actionbuffers_NullActionBuffer();
 	}
@@ -866,8 +966,46 @@ game_actionbuffers_NullActionBuffer.prototype = {
 	latestAction: null
 	,update: function() {
 	}
+	,exportReplayData: function() {
+		return new haxe_ds_IntMap();
+	}
 	,__class__: game_actionbuffers_NullActionBuffer
 };
+var game_actionbuffers_ReplayActionBuffer = function(opts) {
+	game_actionbuffers_LocalActionBuffer.call(this,opts);
+	this.replayData = opts.replayData;
+	this.mode = 0;
+};
+$hxClasses["game.actionbuffers.ReplayActionBuffer"] = game_actionbuffers_ReplayActionBuffer;
+game_actionbuffers_ReplayActionBuffer.__name__ = "game.actionbuffers.ReplayActionBuffer";
+game_actionbuffers_ReplayActionBuffer.__super__ = game_actionbuffers_LocalActionBuffer;
+game_actionbuffers_ReplayActionBuffer.prototype = $extend(game_actionbuffers_LocalActionBuffer.prototype,{
+	replayData: null
+	,mode: null
+	,update: function() {
+		if(this.mode == 0) {
+			var current = this.replayData.h[this.frameCounter.value];
+			if(current == null) {
+				return;
+			}
+			this.latestAction = game_actionbuffers_ActionSnapshot.fromBitField(current);
+			return;
+		}
+		game_actionbuffers_LocalActionBuffer.prototype.update.call(this);
+	}
+	,__class__: game_actionbuffers_ReplayActionBuffer
+});
+var game_actionbuffers_ReplayActionBufferOptions = function(replayData,frameCounter,inputManager) {
+	game_actionbuffers_LocalActionBufferOptions.call(this,frameCounter,inputManager);
+	this.replayData = replayData;
+};
+$hxClasses["game.actionbuffers.ReplayActionBufferOptions"] = game_actionbuffers_ReplayActionBufferOptions;
+game_actionbuffers_ReplayActionBufferOptions.__name__ = "game.actionbuffers.ReplayActionBufferOptions";
+game_actionbuffers_ReplayActionBufferOptions.__super__ = game_actionbuffers_LocalActionBufferOptions;
+game_actionbuffers_ReplayActionBufferOptions.prototype = $extend(game_actionbuffers_LocalActionBufferOptions.prototype,{
+	replayData: null
+	,__class__: game_actionbuffers_ReplayActionBufferOptions
+});
 var input_InputType = $hxEnums["input.InputType"] = { __ename__:"input.InputType",__constructs__:null
 	,HOLD: {_hx_name:"HOLD",_hx_index:0,__enum__:"input.InputType",toString:$estr}
 	,PRESS: {_hx_name:"PRESS",_hx_index:1,__enum__:"input.InputType",toString:$estr}
@@ -1126,12 +1264,13 @@ game_all_$clear_AllClearManagerOptions.prototype = {
 var game_backgrounds__$NestBackground_BackgroundParticle = function(rng) {
 	this.rng = rng;
 	this.randomizeData();
-	this.y += ScaleManager.height / 2;
+	this.y += ScaleManager.height / 8;
 };
 $hxClasses["game.backgrounds._NestBackground.BackgroundParticle"] = game_backgrounds__$NestBackground_BackgroundParticle;
 game_backgrounds__$NestBackground_BackgroundParticle.__name__ = "game.backgrounds._NestBackground.BackgroundParticle";
 game_backgrounds__$NestBackground_BackgroundParticle.prototype = {
 	rng: null
+	,lastY: null
 	,x: null
 	,y: null
 	,dy: null
@@ -1141,22 +1280,26 @@ game_backgrounds__$NestBackground_BackgroundParticle.prototype = {
 		this.y = ScaleManager.height * this.rng.GetFloatIn(1,1.25);
 		this.dy = this.rng.GetFloatIn(0.5,2);
 		this.t = this.rng.GetIn(0,12);
+		this.lastY = this.y;
 	}
 	,update: function() {
 		if(this.y < -64) {
 			this.randomizeData();
 		}
+		this.lastY = this.y;
 		this.y -= this.dy;
 		++this.t;
 	}
-	,render: function(g) {
+	,render: function(g,alpha) {
+		var min = this.lastY;
+		var lerpY = min + (this.y - min) * alpha;
 		var c = Math.sin(this.t / (this.dy * 50));
 		var r = c * 12;
 		g.pushOpacity(Math.max(c,0));
 		g.set_color(-65536);
-		kha_graphics2_GraphicsExtension.fillCircle(g,this.x,this.y,r,8);
+		kha_graphics2_GraphicsExtension.fillCircle(g,this.x,lerpY,r,8);
 		g.set_color(-16777216);
-		kha_graphics2_GraphicsExtension.fillCircle(g,this.x,this.y,r - 4,8);
+		kha_graphics2_GraphicsExtension.fillCircle(g,this.x,lerpY,r - 4,8);
 		g.set_color(-1);
 		g.popOpacity();
 	}
@@ -1185,13 +1328,13 @@ game_backgrounds_NestBackground.prototype = {
 			p.update();
 		}
 	}
-	,render: function(g) {
+	,render: function(g,alpha) {
 		var _g = 0;
 		var _g1 = this.particles;
 		while(_g < _g1.length) {
 			var p = _g1[_g];
 			++_g;
-			p.render(g);
+			p.render(g,alpha);
 		}
 	}
 	,__class__: game_backgrounds_NestBackground
@@ -1237,7 +1380,7 @@ game_boardmanagers_DualBoardManagerOptions.prototype = {
 	,__class__: game_boardmanagers_DualBoardManagerOptions
 };
 var game_boardmanagers_SingleBoardManager = function(opts) {
-	this.gameScreen = opts.gameScreen;
+	this.transformMediator = opts.transformMediator;
 	this.geometries = opts.geometries;
 	this.board = opts.board;
 };
@@ -1245,7 +1388,7 @@ $hxClasses["game.boardmanagers.SingleBoardManager"] = game_boardmanagers_SingleB
 game_boardmanagers_SingleBoardManager.__name__ = "game.boardmanagers.SingleBoardManager";
 game_boardmanagers_SingleBoardManager.__interfaces__ = [game_boardmanagers_IBoardManager];
 game_boardmanagers_SingleBoardManager.prototype = {
-	gameScreen: null
+	transformMediator: null
 	,geometries: null
 	,board: null
 	,update: function() {
@@ -1308,7 +1451,7 @@ game_boardmanagers_SingleBoardManager.prototype = {
 		_this._12 = trans__12;
 		_this._22 = trans__22;
 		g.setTransformation(g.transformations[g.transformationIndex]);
-		this.gameScreen.setTransformedScissor(g,absX,absY,game_geometries_BoardGeometries.WIDTH * scale,game_geometries_BoardGeometries.HEIGHT * scale);
+		this.transformMediator.setTransformedScissor(g,absX,absY,game_geometries_BoardGeometries.WIDTH * scale,game_geometries_BoardGeometries.HEIGHT * scale);
 		this.board.renderScissored(g,g4,alpha);
 		g.disableScissor();
 		this.board.renderFloating(g,g4,alpha);
@@ -1316,15 +1459,15 @@ game_boardmanagers_SingleBoardManager.prototype = {
 	}
 	,__class__: game_boardmanagers_SingleBoardManager
 };
-var game_boardmanagers_SingleBoardManagerOptions = function(gameScreen,geometries,board) {
-	this.gameScreen = gameScreen;
+var game_boardmanagers_SingleBoardManagerOptions = function(transformMediator,geometries,board) {
+	this.transformMediator = transformMediator;
 	this.geometries = geometries;
 	this.board = board;
 };
 $hxClasses["game.boardmanagers.SingleBoardManagerOptions"] = game_boardmanagers_SingleBoardManagerOptions;
 game_boardmanagers_SingleBoardManagerOptions.__name__ = "game.boardmanagers.SingleBoardManagerOptions";
 game_boardmanagers_SingleBoardManagerOptions.prototype = {
-	gameScreen: null
+	transformMediator: null
 	,geometries: null
 	,board: null
 	,__class__: game_boardmanagers_SingleBoardManagerOptions
@@ -1663,17 +1806,10 @@ game_boardstates_EditingBoardStateOptions.prototype = {
 	,prefsSave: null
 	,__class__: game_boardstates_EditingBoardStateOptions
 };
-var game_boardstates__$StandardBoardState_InnerState = $hxEnums["game.boardstates._StandardBoardState.InnerState"] = { __ename__:"game.boardstates._StandardBoardState.InnerState",__constructs__:null
-	,SPAWNING: {_hx_name:"SPAWNING",_hx_index:0,__enum__:"game.boardstates._StandardBoardState.InnerState",toString:$estr}
-	,CONTROLLING: {_hx_name:"CONTROLLING",_hx_index:1,__enum__:"game.boardstates._StandardBoardState.InnerState",toString:$estr}
-	,SIM_STEP: ($_=function(type) { return {_hx_index:2,type:type,__enum__:"game.boardstates._StandardBoardState.InnerState",toString:$estr}; },$_._hx_name="SIM_STEP",$_.__params__ = ["type"],$_)
-	,POP_PAUSE: {_hx_name:"POP_PAUSE",_hx_index:3,__enum__:"game.boardstates._StandardBoardState.InnerState",toString:$estr}
-};
-game_boardstates__$StandardBoardState_InnerState.__constructs__ = [game_boardstates__$StandardBoardState_InnerState.SPAWNING,game_boardstates__$StandardBoardState_InnerState.CONTROLLING,game_boardstates__$StandardBoardState_InnerState.SIM_STEP,game_boardstates__$StandardBoardState_InnerState.POP_PAUSE];
 var game_boardstates_StandardBoardState = function(opts) {
 	this.rule = opts.rule;
 	this.prefsSave = opts.prefsSave;
-	this.gameScreen = opts.gameScreen;
+	this.transformMediator = opts.transformMediator;
 	this.rng = opts.rng;
 	this.geometries = opts.geometries;
 	this.particleManager = opts.particleManager;
@@ -1701,7 +1837,7 @@ game_boardstates_StandardBoardState.__interfaces__ = [game_boardstates_IBoardSta
 game_boardstates_StandardBoardState.prototype = {
 	rule: null
 	,prefsSave: null
-	,gameScreen: null
+	,transformMediator: null
 	,rng: null
 	,geometries: null
 	,particleManager: null
@@ -1958,7 +2094,11 @@ game_boardstates_StandardBoardState.prototype = {
 		}
 		var _this = this.chainSim;
 		this.field.copyFrom(_this.steps[_this.viewIndex].fieldSnapshot);
-		this.state = game_boardstates__$StandardBoardState_InnerState.SIM_STEP(game_simulation_SimulationStepType.END);
+		if(this.field.get(this.field.centerColumnIndex,this.field.outerRows) != null) {
+			this.onLose();
+		} else {
+			this.state = game_boardstates__$StandardBoardState_InnerState.SIM_STEP(game_simulation_SimulationStepType.END);
+		}
 		this.afterEnd();
 	}
 	,handleEndStep: function() {
@@ -2003,6 +2143,8 @@ game_boardstates_StandardBoardState.prototype = {
 		}
 		this.borderColor = utils_Utils.rgbLerp(this.beginBorderColor,this.targetBorderColor,this.borderColorT / 15);
 		this.borderColorT++;
+	}
+	,onLose: function() {
 	}
 	,changeBorderColor: function(target) {
 		this.beginBorderColor = this.borderColor;
@@ -2066,7 +2208,7 @@ game_boardstates_StandardBoardState.prototype = {
 		this.chainCounter.render(g,alpha);
 		var previewPos = this.geometries.preview;
 		var absPreviewPos = this.geometries.absolutePosition.add(previewPos);
-		this.gameScreen.setTransformedScissor(g,absPreviewPos.x - 32,absPreviewPos.y - 32,64,288.);
+		this.transformMediator.setTransformedScissor(g,absPreviewPos.x - 32,absPreviewPos.y - 32,64,288.);
 		this.preview.render(g,previewPos.x,previewPos.y);
 		g.disableScissor();
 		var garbageTrayPos = this.geometries.garbageTray;
@@ -2074,10 +2216,52 @@ game_boardstates_StandardBoardState.prototype = {
 	}
 	,__class__: game_boardstates_StandardBoardState
 };
-var game_boardstates_StandardBoardStateOptions = function(rule,prefsSave,gameScreen,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager) {
+var game_boardstates_EndlessBoardState = function(opts) {
+	game_boardstates_StandardBoardState.call(this,opts);
+	this.trainingSave = opts.trainingSave;
+	this.randomizer = opts.randomizer;
+};
+$hxClasses["game.boardstates.EndlessBoardState"] = game_boardstates_EndlessBoardState;
+game_boardstates_EndlessBoardState.__name__ = "game.boardstates.EndlessBoardState";
+game_boardstates_EndlessBoardState.__super__ = game_boardstates_StandardBoardState;
+game_boardstates_EndlessBoardState.prototype = $extend(game_boardstates_StandardBoardState.prototype,{
+	trainingSave: null
+	,randomizer: null
+	,onLose: function() {
+		this.eraseField();
+		this.garbageManager.clear();
+		switch(this.trainingSave.clearOnXMode) {
+		case "CLEAR":
+			break;
+		case "NEW":
+			break;
+		case "RESTART":
+			this.queue.setIndex(0);
+			this.initSimStepState();
+			break;
+		}
+	}
+	,eraseField: function() {
+		var _gthis = this;
+		var _this = this.field;
+		_this.customForEach(0,_this.totalRows,function(_,x,y) {
+			_gthis.field.clear(x,y);
+		});
+		this.chainSim.modify(this.field.copy());
+		this.chainSim.viewLast();
+	}
+	,regenerateQueue: function() {
+		this.randomizer.generatePools(game_randomizers_RandomizerType.TSU);
+		var _this = this.queue;
+		_this.groups = this.randomizer.createQueueData(game_Dropsets.CLASSICAL);
+		_this.currentIndex = 0;
+	}
+	,__class__: game_boardstates_EndlessBoardState
+});
+var game_boardstates_StandardBoardStateOptions = function(rule,prefsSave,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager) {
 	this.rule = rule;
 	this.prefsSave = prefsSave;
-	this.gameScreen = gameScreen;
+	this.transformMediator = transformMediator;
 	this.rng = rng;
 	this.geometries = geometries;
 	this.particleManager = particleManager;
@@ -2097,7 +2281,7 @@ game_boardstates_StandardBoardStateOptions.__name__ = "game.boardstates.Standard
 game_boardstates_StandardBoardStateOptions.prototype = {
 	rule: null
 	,prefsSave: null
-	,gameScreen: null
+	,transformMediator: null
 	,rng: null
 	,geometries: null
 	,particleManager: null
@@ -2113,21 +2297,37 @@ game_boardstates_StandardBoardStateOptions.prototype = {
 	,garbageManager: null
 	,__class__: game_boardstates_StandardBoardStateOptions
 };
+var game_boardstates_EndlessBoardStateOptions = function(trainingSave,randomizer,rule,prefsSave,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager) {
+	game_boardstates_StandardBoardStateOptions.call(this,rule,prefsSave,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager);
+	this.trainingSave = trainingSave;
+	this.randomizer = randomizer;
+};
+$hxClasses["game.boardstates.EndlessBoardStateOptions"] = game_boardstates_EndlessBoardStateOptions;
+game_boardstates_EndlessBoardStateOptions.__name__ = "game.boardstates.EndlessBoardStateOptions";
+game_boardstates_EndlessBoardStateOptions.__super__ = game_boardstates_StandardBoardStateOptions;
+game_boardstates_EndlessBoardStateOptions.prototype = $extend(game_boardstates_StandardBoardStateOptions.prototype,{
+	trainingSave: null
+	,randomizer: null
+	,__class__: game_boardstates_EndlessBoardStateOptions
+});
+var game_boardstates__$StandardBoardState_InnerState = $hxEnums["game.boardstates._StandardBoardState.InnerState"] = { __ename__:"game.boardstates._StandardBoardState.InnerState",__constructs__:null
+	,SPAWNING: {_hx_name:"SPAWNING",_hx_index:0,__enum__:"game.boardstates._StandardBoardState.InnerState",toString:$estr}
+	,CONTROLLING: {_hx_name:"CONTROLLING",_hx_index:1,__enum__:"game.boardstates._StandardBoardState.InnerState",toString:$estr}
+	,SIM_STEP: ($_=function(type) { return {_hx_index:2,type:type,__enum__:"game.boardstates._StandardBoardState.InnerState",toString:$estr}; },$_._hx_name="SIM_STEP",$_.__params__ = ["type"],$_)
+	,POP_PAUSE: {_hx_name:"POP_PAUSE",_hx_index:3,__enum__:"game.boardstates._StandardBoardState.InnerState",toString:$estr}
+};
+game_boardstates__$StandardBoardState_InnerState.__constructs__ = [game_boardstates__$StandardBoardState_InnerState.SPAWNING,game_boardstates__$StandardBoardState_InnerState.CONTROLLING,game_boardstates__$StandardBoardState_InnerState.SIM_STEP,game_boardstates__$StandardBoardState_InnerState.POP_PAUSE];
 var game_boardstates_TrainingBoardState = function(opts) {
-	game_boardstates_StandardBoardState.call(this,opts);
+	game_boardstates_EndlessBoardState.call(this,opts);
 	this.infoState = opts.infoState;
-	this.trainingSave = opts.trainingSave;
-	this.randomizer = opts.randomizer;
 };
 $hxClasses["game.boardstates.TrainingBoardState"] = game_boardstates_TrainingBoardState;
 game_boardstates_TrainingBoardState.__name__ = "game.boardstates.TrainingBoardState";
-game_boardstates_TrainingBoardState.__super__ = game_boardstates_StandardBoardState;
-game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_StandardBoardState.prototype,{
+game_boardstates_TrainingBoardState.__super__ = game_boardstates_EndlessBoardState;
+game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_EndlessBoardState.prototype,{
 	infoState: null
-	,trainingSave: null
-	,randomizer: null
 	,lockGroup: function() {
-		game_boardstates_StandardBoardState.prototype.lockGroup.call(this);
+		game_boardstates_EndlessBoardState.prototype.lockGroup.call(this);
 		this.infoState.loadChain();
 		this.infoState.startSplitTimer();
 	}
@@ -2144,34 +2344,13 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Standar
 	}
 	,afterEnd: function() {
 		this.infoState.saveSplitCategory();
-		if(this.field.get(this.field.centerColumnIndex,this.field.outerRows) != null) {
-			this.eraseField();
-			this.garbageManager.clear();
-			this.infoState.resetCurrentSplitStatistics();
-			switch(this.trainingSave.clearOnXMode) {
-			case "CLEAR":
-				break;
-			case "NEW":
-				this.regenerateQueue();
-				this.chainSim.clear();
-				this.beginChainSimulation();
-				break;
-			case "RESTART":
-				this.queue.setIndex(0);
-				this.initSimStepState();
-				break;
-			}
-		}
 	}
-	,eraseField: function() {
-		var _gthis = this;
-		this.infoState.stopSplitTimer();
-		var _this = this.field;
-		_this.customForEach(0,_this.totalRows,function(_,x,y) {
-			_gthis.field.clear(x,y);
-		});
-		this.chainSim.modify(this.field.copy());
-		this.chainSim.viewLast();
+	,onLose: function() {
+		game_boardstates_EndlessBoardState.prototype.onLose.call(this);
+		this.infoState.resetCurrentSplitStatistics();
+	}
+	,regenerateQueue: function() {
+		game_boardstates_EndlessBoardState.prototype.regenerateQueue.call(this);
 	}
 	,getField: function() {
 		return this.field;
@@ -2180,12 +2359,6 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Standar
 		this.eraseField();
 		this.queue.currentIndex--;
 		this.initSpawningState();
-	}
-	,regenerateQueue: function() {
-		this.randomizer.generatePools(game_randomizers_RandomizerType.TSU);
-		var _this = this.queue;
-		_this.groups = this.randomizer.createQueueData(game_Dropsets.CLASSICAL);
-		_this.currentIndex = 0;
 	}
 	,resume: function() {
 		var _this = this.chainSim;
@@ -2210,19 +2383,15 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Standar
 	}
 	,__class__: game_boardstates_TrainingBoardState
 });
-var game_boardstates_TrainingBoardStateOptions = function(infoState,trainingSave,randomizer,rule,prefsSave,gameScreen,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager) {
-	game_boardstates_StandardBoardStateOptions.call(this,rule,prefsSave,gameScreen,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager);
+var game_boardstates_TrainingBoardStateOptions = function(infoState,trainingSave,randomizer,rule,prefsSave,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager) {
+	game_boardstates_EndlessBoardStateOptions.call(this,trainingSave,randomizer,rule,prefsSave,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager);
 	this.infoState = infoState;
-	this.trainingSave = trainingSave;
-	this.randomizer = randomizer;
 };
 $hxClasses["game.boardstates.TrainingBoardStateOptions"] = game_boardstates_TrainingBoardStateOptions;
 game_boardstates_TrainingBoardStateOptions.__name__ = "game.boardstates.TrainingBoardStateOptions";
-game_boardstates_TrainingBoardStateOptions.__super__ = game_boardstates_StandardBoardStateOptions;
-game_boardstates_TrainingBoardStateOptions.prototype = $extend(game_boardstates_StandardBoardStateOptions.prototype,{
+game_boardstates_TrainingBoardStateOptions.__super__ = game_boardstates_EndlessBoardStateOptions;
+game_boardstates_TrainingBoardStateOptions.prototype = $extend(game_boardstates_EndlessBoardStateOptions.prototype,{
 	infoState: null
-	,trainingSave: null
-	,randomizer: null
 	,__class__: game_boardstates_TrainingBoardStateOptions
 });
 var game_boardstates_TrainingInfoBoardState = function(opts) {
@@ -2731,7 +2900,7 @@ game_fields_Field.copyTo = function(src,dest) {
 				var gelo = src.get(x,y).copy();
 				dest.data[y][x] = gelo;
 			}
-			if(src.getMarker(x,y) == game_fields_NullFieldMarker.getInstance()) {
+			if(src.getMarker(x,y) == game_fields_NullFieldMarker.get_instance()) {
 				dest.clearMarker(x,y);
 			} else {
 				var marker = src.getMarker(x,y).copy();
@@ -2789,7 +2958,7 @@ game_fields_Field.prototype = {
 			var _g3 = this.columns;
 			while(_g2 < _g3) {
 				var x = _g2++;
-				var marker = game_fields_NullFieldMarker.getInstance();
+				var marker = game_fields_NullFieldMarker.get_instance();
 				this.markers[y][x] = marker;
 			}
 		}
@@ -2863,7 +3032,7 @@ game_fields_Field.prototype = {
 		this.data[y][x] = null;
 	}
 	,clearMarker: function(x,y) {
-		var marker = game_fields_NullFieldMarker.getInstance();
+		var marker = game_fields_NullFieldMarker.get_instance();
 		this.markers[y][x] = marker;
 	}
 	,clearAll: function() {
@@ -2876,7 +3045,7 @@ game_fields_Field.prototype = {
 		return this.get(x,y) == null;
 	}
 	,isMarkerEmpty: function(x,y) {
-		return this.getMarker(x,y) == game_fields_NullFieldMarker.getInstance();
+		return this.getMarker(x,y) == game_fields_NullFieldMarker.get_instance();
 	}
 	,isEmptyAtPoint: function(p) {
 		return this.get(p.x,p.y) == null;
@@ -3100,7 +3269,7 @@ game_fields_Field.prototype = {
 			var _g3 = this.columns;
 			while(_g2 < _g3) {
 				var x = _g2++;
-				if(this.getMarker(x,y) == game_fields_NullFieldMarker.getInstance()) {
+				if(this.getMarker(x,y) == game_fields_NullFieldMarker.get_instance()) {
 					continue;
 				}
 				var screenCoords = this.cellToScreen(x,y);
@@ -3241,7 +3410,7 @@ var game_fields_NullFieldMarker = function() {
 $hxClasses["game.fields.NullFieldMarker"] = game_fields_NullFieldMarker;
 game_fields_NullFieldMarker.__name__ = "game.fields.NullFieldMarker";
 game_fields_NullFieldMarker.__interfaces__ = [game_fields_IFieldMarker];
-game_fields_NullFieldMarker.getInstance = function() {
+game_fields_NullFieldMarker.get_instance = function() {
 	if(game_fields_NullFieldMarker.instance == null) {
 		game_fields_NullFieldMarker.instance = new game_fields_NullFieldMarker();
 	}
@@ -3250,7 +3419,7 @@ game_fields_NullFieldMarker.getInstance = function() {
 game_fields_NullFieldMarker.prototype = {
 	type: null
 	,copy: function() {
-		return game_fields_NullFieldMarker.instance;
+		return game_fields_NullFieldMarker.get_instance();
 	}
 	,onSet: function(value) {
 		return value;
@@ -3259,20 +3428,234 @@ game_fields_NullFieldMarker.prototype = {
 	}
 	,__class__: game_fields_NullFieldMarker
 };
-var game_gamestatebuilders_TrainingGameStateBuilder = function(gameScreen) {
-	this.gameScreen = gameScreen;
+var game_gamemodes_IGameMode = function() { };
+$hxClasses["game.gamemodes.IGameMode"] = game_gamemodes_IGameMode;
+game_gamemodes_IGameMode.__name__ = "game.gamemodes.IGameMode";
+game_gamemodes_IGameMode.__isInterface__ = true;
+game_gamemodes_IGameMode.prototype = {
+	gameMode: null
+	,__class__: game_gamemodes_IGameMode
 };
-$hxClasses["game.gamestatebuilders.TrainingGameStateBuilder"] = game_gamestatebuilders_TrainingGameStateBuilder;
-game_gamestatebuilders_TrainingGameStateBuilder.__name__ = "game.gamestatebuilders.TrainingGameStateBuilder";
-game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
-	gameScreen: null
-	,primaryProfile: null
-	,rngSeed: null
+var game_gamemodes_IReplayableGameMode = function() { };
+$hxClasses["game.gamemodes.IReplayableGameMode"] = game_gamemodes_IReplayableGameMode;
+game_gamemodes_IReplayableGameMode.__name__ = "game.gamemodes.IReplayableGameMode";
+game_gamemodes_IReplayableGameMode.__isInterface__ = true;
+game_gamemodes_IReplayableGameMode.__interfaces__ = [game_gamemodes_IGameMode];
+game_gamemodes_IReplayableGameMode.prototype = {
+	replayData: null
+	,copyWithReplay: null
+	,__class__: game_gamemodes_IReplayableGameMode
+};
+var game_gamemodes_EndlessGameMode = function(rngSeed,rule,replayData) {
+	this.gameMode = 1;
+	this.rngSeed = rngSeed;
+	this.rule = rule;
+	this.replayData = replayData;
+};
+$hxClasses["game.gamemodes.EndlessGameMode"] = game_gamemodes_EndlessGameMode;
+game_gamemodes_EndlessGameMode.__name__ = "game.gamemodes.EndlessGameMode";
+game_gamemodes_EndlessGameMode.__interfaces__ = [game_gamemodes_IReplayableGameMode];
+game_gamemodes_EndlessGameMode.prototype = {
+	rngSeed: null
 	,rule: null
+	,replayData: null
+	,gameMode: null
+	,copyWithReplay: function(data) {
+		return new game_gamemodes_EndlessGameMode(this.rngSeed,this.rule,data);
+	}
+	,__class__: game_gamemodes_EndlessGameMode
+};
+var game_gamemodes_TrainingGameMode = function(rngSeed,rule) {
+	this.gameMode = 0;
+	this.rngSeed = rngSeed;
+	this.rule = rule;
+};
+$hxClasses["game.gamemodes.TrainingGameMode"] = game_gamemodes_TrainingGameMode;
+game_gamemodes_TrainingGameMode.__name__ = "game.gamemodes.TrainingGameMode";
+game_gamemodes_TrainingGameMode.__interfaces__ = [game_gamemodes_IGameMode];
+game_gamemodes_TrainingGameMode.prototype = {
+	rngSeed: null
+	,rule: null
+	,gameMode: null
+	,__class__: game_gamemodes_TrainingGameMode
+};
+var game_gamestatebuilders_EndlessGameStateBuilder = function(opts) {
+	this.gameMode = opts.gameMode;
+	this.transformMediator = opts.transformMediator;
+};
+$hxClasses["game.gamestatebuilders.EndlessGameStateBuilder"] = game_gamestatebuilders_EndlessGameStateBuilder;
+game_gamestatebuilders_EndlessGameStateBuilder.__name__ = "game.gamestatebuilders.EndlessGameStateBuilder";
+game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
+	gameMode: null
+	,transformMediator: null
 	,rng: null
 	,randomizer: null
 	,particleManager: null
 	,marginManager: null
+	,frameCounter: null
+	,pauseMediator: null
+	,borderColorMediator: null
+	,scoreManager: null
+	,chainSim: null
+	,chainCounter: null
+	,field: null
+	,queue: null
+	,inputManager: null
+	,actionBuffer: null
+	,geloGroup: null
+	,allClearManager: null
+	,boardState: null
+	,board: null
+	,pauseMenu: null
+	,gameState: null
+	,buildRNG: function() {
+		this.rng = new kha_math_Random(this.gameMode.rngSeed);
+	}
+	,buildRandomizer: function() {
+		this.randomizer = new game_randomizers_Randomizer(new game_randomizers_RandomizerOptions(this.rng,save_$data_Profile.primary.prefs));
+		this.randomizer.currentPool = 4;
+		this.randomizer.generatePools(game_randomizers_RandomizerType.TSU);
+	}
+	,buildParticleManager: function() {
+		this.particleManager = new game_particles_ParticleManager();
+	}
+	,buildMarginManager: function() {
+		this.marginManager = new game_rules_MarginTimeManager(this.gameMode.rule);
+	}
+	,buildFrameCounter: function() {
+		this.frameCounter = new game_mediators_FrameCounter();
+	}
+	,buildPauseMediator: function() {
+		this.pauseMediator = new game_mediators_PauseMediator();
+	}
+	,buildBorderColorMediator: function() {
+		this.borderColorMediator = new game_mediators_BorderColorMediator();
+	}
+	,buildScoreManager: function() {
+		this.scoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.gameMode.rule,game_geometries_BoardOrientation.LEFT));
+	}
+	,buildChainSim: function() {
+		this.chainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs)));
+	}
+	,buildChainCounter: function() {
+		this.chainCounter = new game_ChainCounter();
+	}
+	,buildField: function() {
+		this.field = game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5));
+	}
+	,buildQueue: function() {
+		this.queue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
+	}
+	,buildInputManager: function() {
+		this.inputManager = new input_InputDeviceManager(save_$data_Profile.primary.input);
+	}
+	,buildActionBuffer: function() {
+		if(this.gameMode.replayData == null) {
+			this.actionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputManager));
+			return;
+		}
+		this.actionBuffer = new game_actionbuffers_ReplayActionBuffer(new game_actionbuffers_ReplayActionBufferOptions(this.gameMode.replayData,this.frameCounter,this.inputManager));
+	}
+	,buildGeloGroup: function() {
+		var prefsSave = save_$data_Profile.primary.prefs;
+		this.geloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.gameMode.rule,this.scoreManager,this.field,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
+	}
+	,buildAllClearManager: function() {
+		this.allClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.CENTERED,this.particleManager,this.borderColorMediator));
+	}
+	,buildBoardState: function() {
+		var _g = this.gameMode.rule;
+		var _g1 = save_$data_Profile.primary.prefs;
+		var _g2 = this.transformMediator;
+		var _g3 = this.rng;
+		var _g4 = this.particleManager;
+		var _g5 = this.geloGroup;
+		var _g6 = this.field;
+		var _g7 = game_garbage_NullGarbageManager.get_instance();
+		this.boardState = new game_boardstates_EndlessBoardState(new game_boardstates_EndlessBoardStateOptions(save_$data_Profile.primary.training,this.randomizer,_g,_g1,_g2,_g3,game_geometries_BoardGeometries.CENTERED,_g4,_g5,this.queue,new game_previews_VerticalPreview(this.queue),this.allClearManager,this.scoreManager,this.actionBuffer,this.chainCounter,this.chainSim,_g6,_g7));
+	}
+	,buildBoard: function() {
+		this.board = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.inputManager,this.actionBuffer,this.boardState));
+	}
+	,buildPauseMenu: function() {
+		if(this.gameMode.replayData == null) {
+			this.pauseMenu = new game_ui_EndlessPauseMenu(new game_ui_EndlessPauseMenuOptions(this.gameMode,save_$data_Profile.primary.training,this.actionBuffer,save_$data_Profile.primary.prefs,this.pauseMediator));
+			return;
+		}
+		this.pauseMenu = new game_ui_ReplayPauseMenu(new game_ui_ReplayPauseMenuOptions(js_Boot.__cast(this.actionBuffer , game_actionbuffers_ReplayActionBuffer),save_$data_Profile.primary.prefs,this.pauseMediator));
+	}
+	,buildGameState: function() {
+		var _g = this.marginManager;
+		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.CENTERED,this.board)),_g,this.pauseMenu,this.frameCounter));
+	}
+	,wireMediators: function() {
+		this.pauseMediator.gameState = this.gameState;
+		this.borderColorMediator.boardState = this.boardState;
+	}
+	,build: function() {
+		this.rng = new kha_math_Random(this.gameMode.rngSeed);
+		this.randomizer = new game_randomizers_Randomizer(new game_randomizers_RandomizerOptions(this.rng,save_$data_Profile.primary.prefs));
+		this.randomizer.currentPool = 4;
+		this.randomizer.generatePools(game_randomizers_RandomizerType.TSU);
+		this.particleManager = new game_particles_ParticleManager();
+		this.marginManager = new game_rules_MarginTimeManager(this.gameMode.rule);
+		this.frameCounter = new game_mediators_FrameCounter();
+		this.pauseMediator = new game_mediators_PauseMediator();
+		this.borderColorMediator = new game_mediators_BorderColorMediator();
+		this.scoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.gameMode.rule,game_geometries_BoardOrientation.LEFT));
+		this.chainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs)));
+		this.chainCounter = new game_ChainCounter();
+		this.field = game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5));
+		this.queue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
+		this.inputManager = new input_InputDeviceManager(save_$data_Profile.primary.input);
+		this.actionBuffer = this.gameMode.replayData == null ? new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputManager)) : new game_actionbuffers_ReplayActionBuffer(new game_actionbuffers_ReplayActionBufferOptions(this.gameMode.replayData,this.frameCounter,this.inputManager));
+		var prefsSave = save_$data_Profile.primary.prefs;
+		this.geloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.gameMode.rule,this.scoreManager,this.field,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
+		this.allClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.CENTERED,this.particleManager,this.borderColorMediator));
+		var _g = this.gameMode.rule;
+		var _g1 = save_$data_Profile.primary.prefs;
+		var _g2 = this.transformMediator;
+		var _g3 = this.rng;
+		var _g4 = this.particleManager;
+		var _g5 = this.geloGroup;
+		var _g6 = this.field;
+		var _g7 = game_garbage_NullGarbageManager.get_instance();
+		this.boardState = new game_boardstates_EndlessBoardState(new game_boardstates_EndlessBoardStateOptions(save_$data_Profile.primary.training,this.randomizer,_g,_g1,_g2,_g3,game_geometries_BoardGeometries.CENTERED,_g4,_g5,this.queue,new game_previews_VerticalPreview(this.queue),this.allClearManager,this.scoreManager,this.actionBuffer,this.chainCounter,this.chainSim,_g6,_g7));
+		this.board = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.inputManager,this.actionBuffer,this.boardState));
+		this.pauseMenu = this.gameMode.replayData == null ? new game_ui_EndlessPauseMenu(new game_ui_EndlessPauseMenuOptions(this.gameMode,save_$data_Profile.primary.training,this.actionBuffer,save_$data_Profile.primary.prefs,this.pauseMediator)) : new game_ui_ReplayPauseMenu(new game_ui_ReplayPauseMenuOptions(js_Boot.__cast(this.actionBuffer , game_actionbuffers_ReplayActionBuffer),save_$data_Profile.primary.prefs,this.pauseMediator));
+		var _g = this.marginManager;
+		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.CENTERED,this.board)),_g,this.pauseMenu,this.frameCounter));
+		this.pauseMediator.gameState = this.gameState;
+		this.borderColorMediator.boardState = this.boardState;
+		return this.gameState;
+	}
+	,__class__: game_gamestatebuilders_EndlessGameStateBuilder
+};
+var game_gamestatebuilders_EndlessGameStateBuilderOptions = function(gameMode,transformMediator) {
+	this.gameMode = gameMode;
+	this.transformMediator = transformMediator;
+};
+$hxClasses["game.gamestatebuilders.EndlessGameStateBuilderOptions"] = game_gamestatebuilders_EndlessGameStateBuilderOptions;
+game_gamestatebuilders_EndlessGameStateBuilderOptions.__name__ = "game.gamestatebuilders.EndlessGameStateBuilderOptions";
+game_gamestatebuilders_EndlessGameStateBuilderOptions.prototype = {
+	gameMode: null
+	,transformMediator: null
+	,__class__: game_gamestatebuilders_EndlessGameStateBuilderOptions
+};
+var game_gamestatebuilders_TrainingGameStateBuilder = function(opts) {
+	this.gameMode = opts.gameMode;
+	this.transformMediator = opts.transformMediator;
+};
+$hxClasses["game.gamestatebuilders.TrainingGameStateBuilder"] = game_gamestatebuilders_TrainingGameStateBuilder;
+game_gamestatebuilders_TrainingGameStateBuilder.__name__ = "game.gamestatebuilders.TrainingGameStateBuilder";
+game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
+	gameMode: null
+	,transformMediator: null
+	,rng: null
+	,randomizer: null
+	,particleManager: null
+	,marginManager: null
+	,frameCounter: null
 	,pauseMediator: null
 	,playerBorderColorMediator: null
 	,playerTargetMediator: null
@@ -3296,10 +3679,10 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	,pauseMenu: null
 	,gameState: null
 	,buildRNG: function() {
-		this.rng = new kha_math_Random(this.rngSeed);
+		this.rng = new kha_math_Random(this.gameMode.rngSeed);
 	}
 	,buildRandomizer: function() {
-		this.randomizer = new game_randomizers_Randomizer(new game_randomizers_RandomizerOptions(this.rng,this.primaryProfile.prefs));
+		this.randomizer = new game_randomizers_Randomizer(new game_randomizers_RandomizerOptions(this.rng,save_$data_Profile.primary.prefs));
 		this.randomizer.currentPool = 4;
 		this.randomizer.generatePools(game_randomizers_RandomizerType.TSU);
 	}
@@ -3307,7 +3690,10 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.particleManager = new game_particles_ParticleManager();
 	}
 	,buildMarginManager: function() {
-		this.marginManager = new game_rules_MarginTimeManager(this.rule);
+		this.marginManager = new game_rules_MarginTimeManager(this.gameMode.rule);
+	}
+	,buildFrameCounter: function() {
+		this.frameCounter = new game_mediators_FrameCounter();
 	}
 	,buildPauseMediator: function() {
 		this.pauseMediator = new game_mediators_PauseMediator();
@@ -3322,63 +3708,63 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.infoTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT,null);
 	}
 	,buildPlayerGarbageManager: function() {
-		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.playerTargetMediator));
+		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.gameMode.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.playerTargetMediator));
 	}
 	,buildPlayerScoreManager: function() {
-		this.playerScoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.rule,game_geometries_BoardOrientation.LEFT));
+		this.playerScoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.gameMode.rule,game_geometries_BoardOrientation.LEFT));
 	}
 	,buildPlayerChainSim: function() {
-		this.playerChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(this.primaryProfile.prefs),game_garbage_trays_GarbageTray.create(this.primaryProfile.prefs)));
+		this.playerChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs)));
 	}
 	,buildPlayerChainCounter: function() {
 		this.playerChainCounter = new game_ChainCounter();
 	}
 	,buildPlayerField: function() {
-		this.playerField = game_fields_Field.create(new game_fields_FieldOptions(this.primaryProfile.prefs,6,12,1,5));
+		this.playerField = game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5));
 	}
 	,buildPlayerQueue: function() {
 		this.playerQueue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
 	}
 	,buildPlayerInputManager: function() {
-		this.playerInputManager = new input_InputDeviceManager(this.primaryProfile.input);
+		this.playerInputManager = new input_InputDeviceManager(save_$data_Profile.primary.input);
 	}
 	,buildPlayerActionBuffer: function() {
-		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.gameScreen,this.playerInputManager));
+		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputManager));
 	}
 	,buildPlayerGeloGroup: function() {
-		var prefsSave = this.primaryProfile.prefs;
-		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.getInstance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
+		var prefsSave = save_$data_Profile.primary.prefs;
+		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.gameMode.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
 	}
 	,buildPlayerAllClearManager: function() {
 		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
 	}
 	,buildInfoGarbageManager: function() {
-		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
+		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.gameMode.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.infoTargetMediator));
 	}
 	,buildInfoState: function() {
-		var prefsSave = this.primaryProfile.prefs;
-		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.RIGHT,this.marginManager,this.rule,this.rng,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),this.primaryProfile.training,game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave),new game_ChainCounter(),this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
+		var prefsSave = save_$data_Profile.primary.prefs;
+		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.RIGHT,this.marginManager,this.gameMode.rule,this.rng,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),save_$data_Profile.primary.training,game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave),new game_ChainCounter(),this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
 	}
 	,buildPlayState: function() {
 		var _g = this.playerField;
 		var _g1 = this.playerGarbageManager;
-		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(this.infoState,this.primaryProfile.training,this.randomizer,this.rule,this.primaryProfile.prefs,this.gameScreen,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,new game_previews_VerticalPreview(this.playerQueue),this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerChainSim,_g,_g1));
+		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(this.infoState,save_$data_Profile.primary.training,this.randomizer,this.gameMode.rule,save_$data_Profile.primary.prefs,this.transformMediator,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,new game_previews_VerticalPreview(this.playerQueue),this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerChainSim,_g,_g1));
 	}
 	,buildEditState: function() {
-		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputManager,game_fields_Field.create(new game_fields_FieldOptions(this.primaryProfile.prefs,6,12,1,5)),this.playerChainSim,this.playerChainCounter,this.primaryProfile.prefs));
+		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputManager,game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5)),this.playerChainSim,this.playerChainCounter,save_$data_Profile.primary.prefs));
 	}
 	,buildPlayerBoard: function() {
 		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputManager,this.playerActionBuffer,this.infoState,this.playState,this.editState));
 	}
 	,buildInfoBoard: function() {
-		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputManager,game_actionbuffers_NullActionBuffer.getInstance(),this.infoState));
+		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputManager,game_actionbuffers_NullActionBuffer.get_instance(),this.infoState));
 	}
 	,buildPauseMenu: function() {
-		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,this.primaryProfile.training,this.playerGarbageManager,this.infoGarbageManager,this.primaryProfile.prefs,this.pauseMediator));
+		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.training,this.playerGarbageManager,this.infoGarbageManager,save_$data_Profile.primary.prefs,this.pauseMediator));
 	}
 	,buildGameState: function() {
 		var _g = this.marginManager;
-		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.gameScreen,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.gameScreen,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu));
+		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
 	}
 	,wireMediators: function() {
 		this.pauseMediator.gameState = this.gameState;
@@ -3386,60 +3772,59 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerTargetMediator.garbageManager = this.infoGarbageManager;
 		this.infoTargetMediator.garbageManager = this.playerGarbageManager;
 	}
-	,setPrimaryProfile: function(value) {
-		this.primaryProfile = value;
-		return this;
-	}
-	,setRNGSeed: function(value) {
-		this.rngSeed = value;
-		return this;
-	}
-	,setRule: function(value) {
-		this.rule = value;
-		return this;
-	}
 	,build: function() {
-		this.rng = new kha_math_Random(this.rngSeed);
-		this.randomizer = new game_randomizers_Randomizer(new game_randomizers_RandomizerOptions(this.rng,this.primaryProfile.prefs));
+		this.rng = new kha_math_Random(this.gameMode.rngSeed);
+		this.randomizer = new game_randomizers_Randomizer(new game_randomizers_RandomizerOptions(this.rng,save_$data_Profile.primary.prefs));
 		this.randomizer.currentPool = 4;
 		this.randomizer.generatePools(game_randomizers_RandomizerType.TSU);
 		this.particleManager = new game_particles_ParticleManager();
-		this.marginManager = new game_rules_MarginTimeManager(this.rule);
+		this.marginManager = new game_rules_MarginTimeManager(this.gameMode.rule);
+		this.frameCounter = new game_mediators_FrameCounter();
 		this.pauseMediator = new game_mediators_PauseMediator();
 		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
 		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT,null);
 		this.infoTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT,null);
-		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.playerTargetMediator));
-		this.playerScoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.rule,game_geometries_BoardOrientation.LEFT));
-		this.playerChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(this.primaryProfile.prefs),game_garbage_trays_GarbageTray.create(this.primaryProfile.prefs)));
+		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.gameMode.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.playerTargetMediator));
+		this.playerScoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.gameMode.rule,game_geometries_BoardOrientation.LEFT));
+		this.playerChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs)));
 		this.playerChainCounter = new game_ChainCounter();
-		this.playerField = game_fields_Field.create(new game_fields_FieldOptions(this.primaryProfile.prefs,6,12,1,5));
+		this.playerField = game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5));
 		this.playerQueue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
-		this.playerInputManager = new input_InputDeviceManager(this.primaryProfile.input);
-		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.gameScreen,this.playerInputManager));
-		var prefsSave = this.primaryProfile.prefs;
-		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.getInstance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
+		this.playerInputManager = new input_InputDeviceManager(save_$data_Profile.primary.input);
+		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputManager));
+		var prefsSave = save_$data_Profile.primary.prefs;
+		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSave,this.gameMode.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave)))));
 		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
-		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,this.primaryProfile.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(this.primaryProfile.prefs),this.infoTargetMediator));
-		var prefsSave = this.primaryProfile.prefs;
-		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.RIGHT,this.marginManager,this.rule,this.rng,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),this.primaryProfile.training,game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave),new game_ChainCounter(),this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
+		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.gameMode.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.infoTargetMediator));
+		var prefsSave = save_$data_Profile.primary.prefs;
+		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.RIGHT,this.marginManager,this.gameMode.rule,this.rng,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),save_$data_Profile.primary.training,game_garbage_trays_GarbageTray.create(prefsSave),game_garbage_trays_GarbageTray.create(prefsSave),new game_ChainCounter(),this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
 		var _g = this.playerField;
 		var _g1 = this.playerGarbageManager;
-		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(this.infoState,this.primaryProfile.training,this.randomizer,this.rule,this.primaryProfile.prefs,this.gameScreen,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,new game_previews_VerticalPreview(this.playerQueue),this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerChainSim,_g,_g1));
-		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputManager,game_fields_Field.create(new game_fields_FieldOptions(this.primaryProfile.prefs,6,12,1,5)),this.playerChainSim,this.playerChainCounter,this.primaryProfile.prefs));
+		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(this.infoState,save_$data_Profile.primary.training,this.randomizer,this.gameMode.rule,save_$data_Profile.primary.prefs,this.transformMediator,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,new game_previews_VerticalPreview(this.playerQueue),this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerChainSim,_g,_g1));
+		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputManager,game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5)),this.playerChainSim,this.playerChainCounter,save_$data_Profile.primary.prefs));
 		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputManager,this.playerActionBuffer,this.infoState,this.playState,this.editState));
-		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputManager,game_actionbuffers_NullActionBuffer.getInstance(),this.infoState));
-		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,this.primaryProfile.training,this.playerGarbageManager,this.infoGarbageManager,this.primaryProfile.prefs,this.pauseMediator));
+		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputManager,game_actionbuffers_NullActionBuffer.get_instance(),this.infoState));
+		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.training,this.playerGarbageManager,this.infoGarbageManager,save_$data_Profile.primary.prefs,this.pauseMediator));
 		var _g = this.marginManager;
-		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.gameScreen,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.gameScreen,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu));
+		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
 		this.pauseMediator.gameState = this.gameState;
 		this.playerBorderColorMediator.boardState = this.playState;
 		this.playerTargetMediator.garbageManager = this.infoGarbageManager;
 		this.infoTargetMediator.garbageManager = this.playerGarbageManager;
-		this.gameState.pause(this.playerInputManager);
 		return this.gameState;
 	}
 	,__class__: game_gamestatebuilders_TrainingGameStateBuilder
+};
+var game_gamestatebuilders_TrainingGameStateBuilderOptions = function(gameMode,transformMediator) {
+	this.gameMode = gameMode;
+	this.transformMediator = transformMediator;
+};
+$hxClasses["game.gamestatebuilders.TrainingGameStateBuilderOptions"] = game_gamestatebuilders_TrainingGameStateBuilderOptions;
+game_gamestatebuilders_TrainingGameStateBuilderOptions.__name__ = "game.gamestatebuilders.TrainingGameStateBuilderOptions";
+game_gamestatebuilders_TrainingGameStateBuilderOptions.prototype = {
+	gameMode: null
+	,transformMediator: null
+	,__class__: game_gamestatebuilders_TrainingGameStateBuilderOptions
 };
 var game_garbage_GarbageIcon = $hxEnums["game.garbage.GarbageIcon"] = { __ename__:"game.garbage.GarbageIcon",__constructs__:null
 	,SMALL: {_hx_name:"SMALL",_hx_index:0,__enum__:"game.garbage.GarbageIcon",toString:$estr}
@@ -3601,7 +3986,7 @@ game_garbage_GarbageManager.prototype = {
 		var absCenter = absPos.add(game_geometries_BoardGeometries.CENTER);
 		var trayCenter = this.geometries.garbageTray.add(new utils_Point(game_geometries_BoardGeometries.CENTER.x,32));
 		var absTrayCenter = absPos.add(trayCenter);
-		var attackControl = new utils_Point(game_screens_GameScreen.PLAY_AREA_DESIGN_WIDTH / 2,0);
+		var attackControl = new utils_Point(game_mediators_TransformationMediator.PLAY_AREA_DESIGN_WIDTH / 2,0);
 		var targetGeometries = this.target.geometries;
 		var targetTrayCenter = targetGeometries.garbageTray.add(new utils_Point(game_geometries_BoardGeometries.CENTER.x,0));
 		var absTargetTrayCenter = targetGeometries.absolutePosition.add(targetTrayCenter);
@@ -3696,6 +4081,39 @@ game_garbage_GarbageManagerOptions.prototype = {
 	,tray: null
 	,target: null
 	,__class__: game_garbage_GarbageManagerOptions
+};
+var game_garbage_NullGarbageManager = function() {
+	this.canReceiveGarbage = false;
+};
+$hxClasses["game.garbage.NullGarbageManager"] = game_garbage_NullGarbageManager;
+game_garbage_NullGarbageManager.__name__ = "game.garbage.NullGarbageManager";
+game_garbage_NullGarbageManager.__interfaces__ = [game_garbage_IGarbageManager];
+game_garbage_NullGarbageManager.get_instance = function() {
+	if(game_garbage_NullGarbageManager.instance == null) {
+		game_garbage_NullGarbageManager.instance = new game_garbage_NullGarbageManager();
+	}
+	return game_garbage_NullGarbageManager.instance;
+};
+game_garbage_NullGarbageManager.prototype = {
+	canReceiveGarbage: null
+	,get_droppableGarbage: function() {
+		return 0;
+	}
+	,init: function() {
+	}
+	,sendGarbage: function(amount,beginners) {
+	}
+	,dropGarbage: function(amount) {
+	}
+	,confirmGarbage: function(amount) {
+	}
+	,clear: function() {
+	}
+	,update: function() {
+	}
+	,render: function(g,x,y,alpha) {
+	}
+	,__class__: game_garbage_NullGarbageManager
 };
 var game_garbage_trays_GarbageTray = function(prefsSave) {
 	this.prefsSave = prefsSave;
@@ -4792,6 +5210,18 @@ game_mediators_BorderColorMediator.prototype = {
 	}
 	,__class__: game_mediators_BorderColorMediator
 };
+var game_mediators_FrameCounter = function() {
+	this.value = 0;
+};
+$hxClasses["game.mediators.FrameCounter"] = game_mediators_FrameCounter;
+game_mediators_FrameCounter.__name__ = "game.mediators.FrameCounter";
+game_mediators_FrameCounter.prototype = {
+	value: null
+	,update: function() {
+		++this.value;
+	}
+	,__class__: game_mediators_FrameCounter
+};
 var game_mediators_GarbageTargetMediator = function(geometries,garbageManager) {
 	this.geometries = geometries;
 	this.garbageManager = garbageManager;
@@ -4825,6 +5255,72 @@ game_mediators_PauseMediator.prototype = {
 		this.gameState.resume();
 	}
 	,__class__: game_mediators_PauseMediator
+};
+var game_mediators_TransformationMediator = function() {
+};
+$hxClasses["game.mediators.TransformationMediator"] = game_mediators_TransformationMediator;
+game_mediators_TransformationMediator.__name__ = "game.mediators.TransformationMediator";
+game_mediators_TransformationMediator.prototype = {
+	translationX: null
+	,translationY: null
+	,onResize: function() {
+		this.translationX = (ScaleManager.width - game_mediators_TransformationMediator.PLAY_AREA_DESIGN_WIDTH * ScaleManager.smallerScale) / 2;
+		this.translationY = (ScaleManager.height - game_mediators_TransformationMediator.PLAY_AREA_DESIGN_HEIGHT * ScaleManager.smallerScale) / 2;
+	}
+	,setTransformedScissor: function(g,x,y,w,h) {
+		var scale = ScaleManager.smallerScale;
+		var tx = this.translationX + x * scale | 0;
+		var ty = this.translationY + y * scale | 0;
+		var tw = w * scale | 0;
+		var th = h * scale | 0;
+		g.scissor(tx,ty,tw,th);
+	}
+	,pushTransformation: function(g) {
+		var scale = ScaleManager.smallerScale;
+		var _this__00 = 1;
+		var _this__10 = 0;
+		var _this__20 = this.translationX;
+		var _this__01 = 0;
+		var _this__11 = 1;
+		var _this__21 = this.translationY;
+		var _this__02 = 0;
+		var _this__12 = 0;
+		var _this__22 = 1;
+		var m__00 = scale;
+		var m__10 = 0;
+		var m__20 = 0;
+		var m__01 = 0;
+		var m__11 = scale;
+		var m__21 = 0;
+		var m__02 = 0;
+		var m__12 = 0;
+		var m__22 = 1;
+		var transform__00 = _this__00 * m__00 + _this__10 * m__01 + _this__20 * m__02;
+		var transform__10 = _this__00 * m__10 + _this__10 * m__11 + _this__20 * m__12;
+		var transform__20 = _this__00 * m__20 + _this__10 * m__21 + _this__20 * m__22;
+		var transform__01 = _this__01 * m__00 + _this__11 * m__01 + _this__21 * m__02;
+		var transform__11 = _this__01 * m__10 + _this__11 * m__11 + _this__21 * m__12;
+		var transform__21 = _this__01 * m__20 + _this__11 * m__21 + _this__21 * m__22;
+		var transform__02 = _this__02 * m__00 + _this__12 * m__01 + _this__22 * m__02;
+		var transform__12 = _this__02 * m__10 + _this__12 * m__11 + _this__22 * m__12;
+		var transform__22 = _this__02 * m__20 + _this__12 * m__21 + _this__22 * m__22;
+		g.transformationIndex++;
+		if(g.transformationIndex == g.transformations.length) {
+			g.transformations.push(new kha_math_FastMatrix3(1,0,0,0,1,0,0,0,1));
+		}
+		var _this = g.transformations[g.transformationIndex];
+		_this._00 = transform__00;
+		_this._10 = transform__10;
+		_this._20 = transform__20;
+		_this._01 = transform__01;
+		_this._11 = transform__11;
+		_this._21 = transform__21;
+		_this._02 = transform__02;
+		_this._12 = transform__12;
+		_this._22 = transform__22;
+		g.setTransformation(g.transformations[g.transformationIndex]);
+	}
+	,__class__: game_mediators_TransformationMediator
 };
 var game_particles_IParticle = function() { };
 $hxClasses["game.particles.IParticle"] = game_particles_IParticle;
@@ -5928,107 +6424,40 @@ game_score_ScoreManagerOptions.prototype = {
 	,orientation: null
 	,__class__: game_score_ScoreManagerOptions
 };
-var game_screens_GameScreen = function() {
-	var seed = kha_System.get_time() * 1000000 | 0;
-	this.background = new game_backgrounds_NestBackground(new kha_math_Random(seed));
+var game_screens_GameScreen = function(gameMode) {
+	this.background = new game_backgrounds_NestBackground(new kha_math_Random(kha_System.get_time() * 1000000 | 0));
+	this.transformMediator = new game_mediators_TransformationMediator();
+	var tmp;
+	switch(gameMode.gameMode) {
+	case 0:
+		tmp = new game_gamestatebuilders_TrainingGameStateBuilder(new game_gamestatebuilders_TrainingGameStateBuilderOptions(js_Boot.__cast(gameMode , game_gamemodes_TrainingGameMode),this.transformMediator)).build();
+		break;
+	case 1:
+		tmp = new game_gamestatebuilders_EndlessGameStateBuilder(new game_gamestatebuilders_EndlessGameStateBuilderOptions(js_Boot.__cast(gameMode , game_gamemodes_EndlessGameMode),this.transformMediator)).build();
+		break;
+	}
+	this.gameState = tmp;
+	ScaleManager.addOnResizeCallback(($_=this.transformMediator,$bind($_,$_.onResize)));
 };
 $hxClasses["game.screens.GameScreen"] = game_screens_GameScreen;
 game_screens_GameScreen.__name__ = "game.screens.GameScreen";
 game_screens_GameScreen.__interfaces__ = [IScreen];
-game_screens_GameScreen.create = function(opts) {
-	var v = new game_screens_GameScreen();
-	ScaleManager.addOnResizeCallback($bind(v,v.updateScaling));
-	var gameStateBuiler = new game_gamestatebuilders_TrainingGameStateBuilder(v).setPrimaryProfile(opts.primaryProfile).setRNGSeed(opts.rngSeed).setRule(opts.rule);
-	v.gameState = gameStateBuiler.build();
-	return v;
-};
 game_screens_GameScreen.prototype = {
 	background: null
-	,translationX: null
-	,translationY: null
-	,scale: null
+	,transformMediator: null
 	,gameState: null
-	,get_currentFrame: function() {
-		return this.gameState.currentFrame;
-	}
-	,updateScaling: function() {
-		this.scale = ScaleManager.smallerScale;
-		this.translationX = (ScaleManager.width - game_screens_GameScreen.PLAY_AREA_DESIGN_WIDTH * this.scale) / 2;
-		this.translationY = (ScaleManager.height - game_screens_GameScreen.PLAY_AREA_DESIGN_HEIGHT * this.scale) / 2;
-	}
-	,setTransformedScissor: function(g,x,y,w,h) {
-		var tx = this.translationX + x * this.scale | 0;
-		var ty = this.translationY + y * this.scale | 0;
-		var tw = w * this.scale | 0;
-		var th = h * this.scale | 0;
-		g.scissor(tx,ty,tw,th);
-	}
 	,update: function() {
 		this.background.update();
 		this.gameState.update();
 	}
 	,render: function(g,g4,alpha) {
-		this.background.render(g);
-		var _this__00 = 1;
-		var _this__10 = 0;
-		var _this__20 = this.translationX;
-		var _this__01 = 0;
-		var _this__11 = 1;
-		var _this__21 = this.translationY;
-		var _this__02 = 0;
-		var _this__12 = 0;
-		var _this__22 = 1;
-		var m__00 = this.scale;
-		var m__10 = 0;
-		var m__20 = 0;
-		var m__01 = 0;
-		var m__11 = this.scale;
-		var m__21 = 0;
-		var m__02 = 0;
-		var m__12 = 0;
-		var m__22 = 1;
-		var transform__00 = _this__00 * m__00 + _this__10 * m__01 + _this__20 * m__02;
-		var transform__10 = _this__00 * m__10 + _this__10 * m__11 + _this__20 * m__12;
-		var transform__20 = _this__00 * m__20 + _this__10 * m__21 + _this__20 * m__22;
-		var transform__01 = _this__01 * m__00 + _this__11 * m__01 + _this__21 * m__02;
-		var transform__11 = _this__01 * m__10 + _this__11 * m__11 + _this__21 * m__12;
-		var transform__21 = _this__01 * m__20 + _this__11 * m__21 + _this__21 * m__22;
-		var transform__02 = _this__02 * m__00 + _this__12 * m__01 + _this__22 * m__02;
-		var transform__12 = _this__02 * m__10 + _this__12 * m__11 + _this__22 * m__12;
-		var transform__22 = _this__02 * m__20 + _this__12 * m__21 + _this__22 * m__22;
-		g.transformationIndex++;
-		if(g.transformationIndex == g.transformations.length) {
-			g.transformations.push(new kha_math_FastMatrix3(1,0,0,0,1,0,0,0,1));
-		}
-		var _this = g.transformations[g.transformationIndex];
-		_this._00 = transform__00;
-		_this._10 = transform__10;
-		_this._20 = transform__20;
-		_this._01 = transform__01;
-		_this._11 = transform__11;
-		_this._21 = transform__21;
-		_this._02 = transform__02;
-		_this._12 = transform__12;
-		_this._22 = transform__22;
-		g.setTransformation(g.transformations[g.transformationIndex]);
+		this.background.render(g,alpha);
+		this.transformMediator.pushTransformation(g);
 		this.gameState.renderTransformed(g,g4,alpha);
 		g.popTransformation();
 		this.gameState.render(g,g4,alpha);
 	}
 	,__class__: game_screens_GameScreen
-};
-var game_screens_GameScreenOptions = function(rngSeed,rule,primaryProfile) {
-	this.rngSeed = rngSeed;
-	this.rule = rule;
-	this.primaryProfile = primaryProfile;
-};
-$hxClasses["game.screens.GameScreenOptions"] = game_screens_GameScreenOptions;
-game_screens_GameScreenOptions.__name__ = "game.screens.GameScreenOptions";
-game_screens_GameScreenOptions.prototype = {
-	rngSeed: null
-	,rule: null
-	,primaryProfile: null
-	,__class__: game_screens_GameScreenOptions
 };
 var game_simulation_SimulationStep = function(type,opts) {
 	this.type = type;
@@ -6536,7 +6965,7 @@ var game_simulation_NullLinkInfoBuilder = function() {
 $hxClasses["game.simulation.NullLinkInfoBuilder"] = game_simulation_NullLinkInfoBuilder;
 game_simulation_NullLinkInfoBuilder.__name__ = "game.simulation.NullLinkInfoBuilder";
 game_simulation_NullLinkInfoBuilder.__interfaces__ = [game_simulation_ILinkInfoBuilder];
-game_simulation_NullLinkInfoBuilder.getInstance = function() {
+game_simulation_NullLinkInfoBuilder.get_instance = function() {
 	if(game_simulation_NullLinkInfoBuilder.instance == null) {
 		game_simulation_NullLinkInfoBuilder.instance = new game_simulation_NullLinkInfoBuilder();
 	}
@@ -6618,8 +7047,8 @@ var game_states_GameState = function(opts) {
 	this.boardManager = opts.boardManager;
 	this.marginManager = opts.marginManager;
 	this.pauseMenu = opts.pauseMenu;
+	this.frameCounter = opts.frameCounter;
 	this.FADE_TO_WHITELocation = Pipelines.FADE_TO_WHITE.getConstantLocation("comp");
-	this.currentFrame = 0;
 };
 $hxClasses["game.states.GameState"] = game_states_GameState;
 game_states_GameState.__name__ = "game.states.GameState";
@@ -6628,10 +7057,10 @@ game_states_GameState.prototype = {
 	,boardManager: null
 	,marginManager: null
 	,pauseMenu: null
+	,frameCounter: null
 	,FADE_TO_WHITELocation: null
 	,isPaused: null
 	,pausingInputs: null
-	,currentFrame: null
 	,pause: function(inputManager) {
 		this.pauseMenu.onShow(inputManager);
 		this.isPaused = true;
@@ -6647,12 +7076,12 @@ game_states_GameState.prototype = {
 		this.boardManager.update();
 		this.particleManager.update();
 		this.marginManager.update();
-		this.currentFrame++;
+		this.frameCounter.update();
 	}
 	,renderTransformed: function(g,g4,alpha) {
 		g.set_pipeline(Pipelines.FADE_TO_WHITE);
 		g4.setPipeline(g.get_pipeline());
-		g4.setFloat(this.FADE_TO_WHITELocation,0.5 + Math.cos(this.currentFrame / 4) / 2);
+		g4.setFloat(this.FADE_TO_WHITELocation,0.5 + Math.cos(this.frameCounter.value / 4) / 2);
 		g.set_pipeline(null);
 		this.particleManager.renderBackground(g,alpha);
 		this.boardManager.render(g,g4,alpha);
@@ -6665,11 +7094,12 @@ game_states_GameState.prototype = {
 	}
 	,__class__: game_states_GameState
 };
-var game_states_GameStateOptions = function(particleManager,boardManager,marginManager,pauseMenu) {
+var game_states_GameStateOptions = function(particleManager,boardManager,marginManager,pauseMenu,frameCounter) {
 	this.particleManager = particleManager;
 	this.boardManager = boardManager;
 	this.marginManager = marginManager;
 	this.pauseMenu = pauseMenu;
+	this.frameCounter = frameCounter;
 };
 $hxClasses["game.states.GameStateOptions"] = game_states_GameStateOptions;
 game_states_GameStateOptions.__name__ = "game.states.GameStateOptions";
@@ -6678,6 +7108,7 @@ game_states_GameStateOptions.prototype = {
 	,boardManager: null
 	,marginManager: null
 	,pauseMenu: null
+	,frameCounter: null
 	,__class__: game_states_GameStateOptions
 };
 var ui_IMenuPage = function() { };
@@ -6816,7 +7247,7 @@ ui_ListMenuPage.prototype = {
 			if(widget == null) {
 				break;
 			}
-			var widgetY = y + this.widgetFontSize * i + this.widgetBottomPadding;
+			var widgetY = y + (this.widgetFontHeight + this.widgetBottomPadding) * i;
 			widget.render(g,x,widgetY,index == this.widgetIndex);
 		}
 		g.set_fontSize(this.descFontSize);
@@ -6932,6 +7363,291 @@ game_ui_ControlsPageWidget.__name__ = "game.ui.ControlsPageWidget";
 game_ui_ControlsPageWidget.__super__ = ui_SubPageWidget;
 game_ui_ControlsPageWidget.prototype = $extend(ui_SubPageWidget.prototype,{
 	__class__: game_ui_ControlsPageWidget
+});
+var ui_Menu = function(initialPage) {
+	this.pages = new haxe_ds_GenericStack();
+	var _this = this.pages;
+	_this.head = new haxe_ds_GenericCell(initialPage,_this.head);
+	this.headerFont = kha_Assets.fonts.DigitalDisco;
+	this.controlsFont = kha_Assets.fonts.Pixellari;
+	ScaleManager.addOnResizeCallback($bind(this,this.resize));
+};
+$hxClasses["ui.Menu"] = ui_Menu;
+ui_Menu.__name__ = "ui.Menu";
+ui_Menu.prototype = {
+	pages: null
+	,headerFont: null
+	,controlsFont: null
+	,headerFontSize: null
+	,headerFontHeight: null
+	,controlsFontSize: null
+	,controlsFontHeight: null
+	,warningFontSize: null
+	,warningFontHeight: null
+	,warningFontWidths: null
+	,padding: null
+	,inputManager: null
+	,resize: function() {
+		var ssc = ScaleManager.smallerScale;
+		this.headerFontSize = 128 * ssc | 0;
+		this.headerFontHeight = this.headerFont.height(this.headerFontSize);
+		this.controlsFontSize = 64 * ssc | 0;
+		this.controlsFontHeight = this.controlsFont.height(this.controlsFontSize);
+		this.warningFontSize = 24 * ssc | 0;
+		this.warningFontHeight = this.controlsFont.height(this.warningFontSize);
+		this.warningFontWidths = [];
+		var _g = 0;
+		var _g1 = ui_Menu.WARNING;
+		while(_g < _g1.length) {
+			var line = _g1[_g];
+			++_g;
+			this.warningFontWidths.push(this.controlsFont.width(this.warningFontSize,line));
+		}
+		this.padding = 64 * ssc;
+		var p = this.pages.iterator();
+		while(p.hasNext()) {
+			var p1 = p.next();
+			p1.onResize();
+		}
+	}
+	,renderKeyboardControls: function(g) {
+		var mappings = this.inputManager.inputOptions.mappings.h["Menu Controls"];
+		var x = this.padding;
+		var _g = 0;
+		var _this = this.pages;
+		var _g1 = (_this.head == null ? null : _this.head.elt).controlDisplays;
+		while(_g < _g1.length) {
+			var d = _g1[_g];
+			++_g;
+			var str = "";
+			var _g2 = 0;
+			var _g3 = d.actions;
+			while(_g2 < _g3.length) {
+				var key = _g3[_g2];
+				++_g2;
+				str += "" + input_KeyCodeToString_KEY_CODE_TO_STRING.h[mappings.h[key].keyboardInput] + "/";
+			}
+			str = str.substring(0,str.length - 1);
+			str += " : " + d.description + "    ";
+			var strWidth = this.controlsFont.width(this.controlsFontSize,str);
+			g.drawString(str,x,ScaleManager.height - this.headerFontHeight);
+			x += strWidth;
+		}
+	}
+	,renderGamepadControls: function(g) {
+		var ssc = ScaleManager.smallerScale;
+		var mappings = this.inputManager.inputOptions.mappings.h["Menu Controls"];
+		var y = ScaleManager.height - this.headerFontHeight;
+		var x = this.padding;
+		var _g = 0;
+		var _this = this.pages;
+		var _g1 = (_this.head == null ? null : _this.head.elt).controlDisplays;
+		while(_g < _g1.length) {
+			var d = _g1[_g];
+			++_g;
+			var str = "";
+			var _g2 = 0;
+			var _g3 = d.actions;
+			while(_g2 < _g3.length) {
+				var key = _g3[_g2];
+				++_g2;
+				var spr = input_GamepadSpriteCoordinates_GAMEPAD_SPRITE_COORDINATES.h[mappings.h[key].gamepadInput];
+				this.inputManager.renderGamepadIcon(g,x,y,spr,this.controlsFontHeight / spr.height);
+				x += spr.width * ssc;
+			}
+			str += ": " + d.description + "    ";
+			var strWidth = g.get_font().width(this.controlsFontSize,str);
+			g.drawString(str,x,y);
+			x += strWidth;
+		}
+	}
+	,onShow: function(inputManager) {
+		this.inputManager = inputManager;
+		var _this = this.pages;
+		(_this.head == null ? null : _this.head.elt).onShow(this);
+	}
+	,pushPage: function(page) {
+		page.onResize();
+		page.onShow(this);
+		var _this = this.pages;
+		_this.head = new haxe_ds_GenericCell(page,_this.head);
+	}
+	,popPage: function() {
+		var _this = this.pages;
+		var k = _this.head;
+		var poppedPage;
+		if(k == null) {
+			poppedPage = null;
+		} else {
+			_this.head = k.next;
+			poppedPage = k.elt;
+		}
+		if(this.pages.head == null) {
+			var _this = this.pages;
+			_this.head = new haxe_ds_GenericCell(poppedPage,_this.head);
+		}
+	}
+	,update: function() {
+		var _this = this.pages;
+		(_this.head == null ? null : _this.head.elt).update();
+	}
+	,render: function(g,alpha) {
+		var _this = this.pages;
+		var currentPage = _this.head == null ? null : _this.head.elt;
+		g.set_font(this.headerFont);
+		g.set_fontSize(this.headerFontSize);
+		g.drawString(currentPage.header,this.padding,this.padding);
+		var topLineY = this.padding + this.headerFontHeight;
+		g.drawLine(this.padding,topLineY,ScaleManager.width - this.padding,topLineY,4);
+		currentPage.render(g,this.padding,topLineY + this.padding * 0.375);
+		g.set_font(this.controlsFont);
+		g.set_fontSize(this.warningFontSize);
+		g.set_color(kha_Color._new(-8947849));
+		var warningBaseline = ScaleManager.height - this.headerFontHeight * 1.5;
+		var invertedIndex = 3;
+		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 0 * this.warningFontHeight);
+		var invertedIndex = 2;
+		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - this.warningFontHeight);
+		var invertedIndex = 1;
+		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 2 * this.warningFontHeight);
+		var invertedIndex = 0;
+		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 3 * this.warningFontHeight);
+		g.set_fontSize(this.controlsFontSize);
+		g.set_color(-1);
+		switch(input_InputDeviceManager.lastDevice._hx_index) {
+		case 0:
+			this.renderKeyboardControls(g);
+			break;
+		case 1:
+			this.renderGamepadControls(g);
+			break;
+		}
+	}
+	,__class__: ui_Menu
+};
+var game_ui_PauseMenu = function(opts) {
+	this.updateGameState = false;
+	this.prefsSave = opts.prefsSave;
+	this.pauseMediator = opts.pauseMediator;
+	ui_Menu.call(this,new ui_ListMenuPage(new ui_ListMenuPageOptions("Paused",$bind(this,this.generateInitalPage))));
+};
+$hxClasses["game.ui.PauseMenu"] = game_ui_PauseMenu;
+game_ui_PauseMenu.__name__ = "game.ui.PauseMenu";
+game_ui_PauseMenu.__super__ = ui_Menu;
+game_ui_PauseMenu.prototype = $extend(ui_Menu.prototype,{
+	prefsSave: null
+	,pauseMediator: null
+	,updateGameState: null
+	,generateInitalPage: function(menu) {
+		var _gthis = this;
+		return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Resume",($_=this.pauseMediator,$bind($_,$_.resume)),["Continue Chaining!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(this.prefsSave),["Change Various Options and Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Show Main Menu",function() {
+			_gthis.pushPage(new main_$menu_ui_MainMenuPage(_gthis.prefsSave));
+		},["Display The Main Menu"]))];
+	}
+	,popPage: function() {
+		var _this = this.pages;
+		var k = _this.head;
+		var poppedPage;
+		if(k == null) {
+			poppedPage = null;
+		} else {
+			_this.head = k.next;
+			poppedPage = k.elt;
+		}
+		if(this.pages.head == null) {
+			var _this = this.pages;
+			_this.head = new haxe_ds_GenericCell(poppedPage,_this.head);
+			this.pauseMediator.resume();
+		}
+	}
+	,update: function() {
+		if(this.inputManager.getAction("Pause")) {
+			this.pauseMediator.resume();
+		}
+		ui_Menu.prototype.update.call(this);
+	}
+	,render: function(g,alpha) {
+		g.pushOpacity(0.90);
+		g.set_color(-16777216);
+		g.fillRect(0,0,ScaleManager.width,ScaleManager.height);
+		g.set_color(-1);
+		g.popOpacity();
+		ui_Menu.prototype.render.call(this,g,alpha);
+	}
+	,__class__: game_ui_PauseMenu
+});
+var game_ui_EndlessPauseMenu = function(opts) {
+	this.gameMode = opts.gameMode;
+	this.trainingSave = opts.trainingSave;
+	this.actionBuffer = opts.actionBuffer;
+	game_ui_PauseMenu.call(this,opts);
+};
+$hxClasses["game.ui.EndlessPauseMenu"] = game_ui_EndlessPauseMenu;
+game_ui_EndlessPauseMenu.__name__ = "game.ui.EndlessPauseMenu";
+game_ui_EndlessPauseMenu.__super__ = game_ui_PauseMenu;
+game_ui_EndlessPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
+	gameMode: null
+	,trainingSave: null
+	,actionBuffer: null
+	,generateInitalPage: function(_) {
+		var _gthis = this;
+		var endlessOpts = new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Endless Options",["Change Various Options And Settings","Specific to Endless Mode"],function(_) {
+			var endlessOpts;
+			switch(_gthis.trainingSave.clearOnXMode) {
+			case "CLEAR":
+				endlessOpts = 0;
+				break;
+			case "NEW":
+				endlessOpts = 2;
+				break;
+			case "RESTART":
+				endlessOpts = 1;
+				break;
+			}
+			return [new ui_OptionListWidget(new ui_OptionListWidgetOptions("Clear Field on X",["Clear The Field When A","Gelo Group Locks On The","Top Of The Center Column","","CLEAR: Clear the Field","RESTART: CLEAR + Restart Queue","NEW: CLEAR + Regenerate Queue"],["CLEAR","RESTART","NEW"],endlessOpts,function(value) {
+				_gthis.trainingSave.clearOnXMode = value;
+				save_$data_SaveManager.saveProfiles();
+			})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Save Replay",function() {
+				var data = _gthis.gameMode.copyWithReplay(_gthis.actionBuffer.exportReplayData());
+				var file = new File([haxe_Serializer.run(data)],"replay.gvr");
+				var uri = URL.createObjectURL(file);
+				var el = window.document.createElement("a");
+				el.href = uri;
+				el.setAttribute("download","replay-" + DateTools.format(new Date(),"%Y-%m-%d_%H-%M") + ".gvr");
+				el.click();
+			},["Download A Replay File Of This Session.","To View It, Just Drag & Drop The File","On The GelaVolt Window"]))];
+		}));
+		var pauseMenuOpts = game_ui_PauseMenu.prototype.generateInitalPage.call(this,_);
+		pauseMenuOpts.unshift(endlessOpts);
+		return pauseMenuOpts;
+	}
+	,__class__: game_ui_EndlessPauseMenu
+});
+var game_ui_PauseMenuOptions = function(prefsSave,pauseMediator) {
+	this.prefsSave = prefsSave;
+	this.pauseMediator = pauseMediator;
+};
+$hxClasses["game.ui.PauseMenuOptions"] = game_ui_PauseMenuOptions;
+game_ui_PauseMenuOptions.__name__ = "game.ui.PauseMenuOptions";
+game_ui_PauseMenuOptions.prototype = {
+	prefsSave: null
+	,pauseMediator: null
+	,__class__: game_ui_PauseMenuOptions
+};
+var game_ui_EndlessPauseMenuOptions = function(gameMode,trainingSave,actionBuffer,prefsSave,pauseMediator) {
+	game_ui_PauseMenuOptions.call(this,prefsSave,pauseMediator);
+	this.gameMode = gameMode;
+	this.trainingSave = trainingSave;
+	this.actionBuffer = actionBuffer;
+};
+$hxClasses["game.ui.EndlessPauseMenuOptions"] = game_ui_EndlessPauseMenuOptions;
+game_ui_EndlessPauseMenuOptions.__name__ = "game.ui.EndlessPauseMenuOptions";
+game_ui_EndlessPauseMenuOptions.__super__ = game_ui_PauseMenuOptions;
+game_ui_EndlessPauseMenuOptions.prototype = $extend(game_ui_PauseMenuOptions.prototype,{
+	gameMode: null
+	,trainingSave: null
+	,actionBuffer: null
+	,__class__: game_ui_EndlessPauseMenuOptions
 });
 var game_ui_GroupEditorPage = function(queue) {
 	this.controlDisplays = [new ui_ControlDisplay(["Left","Up","Down","Right"],"Select"),new ui_ControlDisplay(["Back"],"Back"),new ui_ControlDisplay(["Confirm"],"Cycle Colors")];
@@ -7101,17 +7817,13 @@ game_ui_InputWidget.prototype = {
 		}
 		var inputManager = this.menu.inputManager;
 		var mapping = inputManager.inputOptions.mappings.h[this.category].h[this.action];
-		var kbInput = mapping.keyboardInput;
-		var gpInput = mapping.gamepadInput;
-		var str = "" + this.action + " : ";
-		var width = g.get_font().width(g.get_fontSize(),str);
+		var str = "" + this.action + " : " + input_KeyCodeToString_KEY_CODE_TO_STRING.h[mapping.keyboardInput] + " / ";
+		var w = g.get_font().width(g.get_fontSize(),str);
+		var h = g.get_font().height(g.get_fontSize());
 		g.drawString(str,x,y);
 		g.set_color(-1);
-		var offsetX = x + width;
-		var gpIconSize = 64 * ScaleManager.smallerScale;
-		inputManager.renderGamepadIcon(g,offsetX,y,gpInput,gpIconSize);
-		var kbString = input_KeyCodeToString_KEY_CODE_TO_STRING.h[kbInput];
-		g.drawString(" / " + kbString,offsetX + gpIconSize,y);
+		var spr = input_GamepadSpriteCoordinates_GAMEPAD_SPRITE_COORDINATES.h[mapping.gamepadInput];
+		inputManager.renderGamepadIcon(g,x + w,y,spr,h / spr.height);
 	}
 	,__class__: game_ui_InputWidget
 };
@@ -7137,249 +7849,6 @@ game_ui_ListSubPageWidgetOptions.prototype = {
 	,description: null
 	,widgetBuilder: null
 	,__class__: game_ui_ListSubPageWidgetOptions
-};
-var ui_Menu = function(initialPage) {
-	this.pages = new haxe_ds_GenericStack();
-	var _this = this.pages;
-	_this.head = new haxe_ds_GenericCell(initialPage,_this.head);
-	this.headerFont = kha_Assets.fonts.DigitalDisco;
-	this.controlsFont = kha_Assets.fonts.Pixellari;
-	ScaleManager.addOnResizeCallback($bind(this,this.resize));
-};
-$hxClasses["ui.Menu"] = ui_Menu;
-ui_Menu.__name__ = "ui.Menu";
-ui_Menu.prototype = {
-	pages: null
-	,headerFont: null
-	,controlsFont: null
-	,headerFontSize: null
-	,headerFontHeight: null
-	,controlsFontSize: null
-	,controlsFontHeight: null
-	,warningFontSize: null
-	,warningFontHeight: null
-	,warningFontWidths: null
-	,padding: null
-	,inputManager: null
-	,resize: function() {
-		this.headerFontSize = 128 * ScaleManager.smallerScale | 0;
-		this.headerFontHeight = this.headerFont.height(this.headerFontSize);
-		this.controlsFontSize = 56 * ScaleManager.smallerScale | 0;
-		this.controlsFontHeight = this.controlsFont.height(this.controlsFontSize);
-		this.warningFontSize = 24 * ScaleManager.smallerScale | 0;
-		this.warningFontHeight = this.controlsFont.height(this.warningFontSize);
-		this.warningFontWidths = [];
-		var _g = 0;
-		var _g1 = ui_Menu.WARNING;
-		while(_g < _g1.length) {
-			var line = _g1[_g];
-			++_g;
-			this.warningFontWidths.push(this.controlsFont.width(this.warningFontSize,line));
-		}
-		this.padding = 64 * ScaleManager.smallerScale;
-		var p = this.pages.iterator();
-		while(p.hasNext()) {
-			var p1 = p.next();
-			p1.onResize();
-		}
-	}
-	,renderKeyboardControls: function(g) {
-		var mappings = this.inputManager.inputOptions.mappings.h["Menu Controls"];
-		var x = this.padding;
-		var _g = 0;
-		var _this = this.pages;
-		var _g1 = (_this.head == null ? null : _this.head.elt).controlDisplays;
-		while(_g < _g1.length) {
-			var d = _g1[_g];
-			++_g;
-			var str = "";
-			var _g2 = 0;
-			var _g3 = d.actions;
-			while(_g2 < _g3.length) {
-				var key = _g3[_g2];
-				++_g2;
-				str += "" + input_KeyCodeToString_KEY_CODE_TO_STRING.h[mappings.h[key].keyboardInput] + "/";
-			}
-			str = str.substring(0,str.length - 1);
-			str += " : " + d.description + "    ";
-			var strWidth = g.get_font().width(this.controlsFontSize,str);
-			g.drawString(str,x,ScaleManager.height - this.headerFontHeight);
-			x += strWidth;
-		}
-	}
-	,renderGamepadControls: function(g) {
-		var mappings = this.inputManager.inputOptions.mappings.h["Menu Controls"];
-		var gamepadIconSize = 64 * ScaleManager.smallerScale;
-		var y = ScaleManager.height - this.headerFontHeight;
-		var x = this.padding;
-		var _g = 0;
-		var _this = this.pages;
-		var _g1 = (_this.head == null ? null : _this.head.elt).controlDisplays;
-		while(_g < _g1.length) {
-			var d = _g1[_g];
-			++_g;
-			var str = "";
-			var _g2 = 0;
-			var _g3 = d.actions;
-			while(_g2 < _g3.length) {
-				var key = _g3[_g2];
-				++_g2;
-				this.inputManager.renderGamepadIcon(g,x,y - 4,mappings.h[key].gamepadInput,gamepadIconSize);
-				x += gamepadIconSize;
-			}
-			str += " : " + d.description + "    ";
-			var strWidth = g.get_font().width(this.controlsFontSize,str);
-			g.drawString(str,x,y);
-			x += strWidth;
-		}
-	}
-	,onShow: function(inputManager) {
-		this.inputManager = inputManager;
-		var _this = this.pages;
-		(_this.head == null ? null : _this.head.elt).onShow(this);
-	}
-	,pushPage: function(page) {
-		page.onResize();
-		page.onShow(this);
-		var _this = this.pages;
-		_this.head = new haxe_ds_GenericCell(page,_this.head);
-	}
-	,popPage: function() {
-		var _this = this.pages;
-		var k = _this.head;
-		var poppedPage;
-		if(k == null) {
-			poppedPage = null;
-		} else {
-			_this.head = k.next;
-			poppedPage = k.elt;
-		}
-		if(this.pages.head == null) {
-			var _this = this.pages;
-			_this.head = new haxe_ds_GenericCell(poppedPage,_this.head);
-		}
-	}
-	,update: function() {
-		var _this = this.pages;
-		(_this.head == null ? null : _this.head.elt).update();
-	}
-	,render: function(g,alpha) {
-		var _this = this.pages;
-		var currentPage = _this.head == null ? null : _this.head.elt;
-		g.set_font(this.headerFont);
-		g.set_fontSize(this.headerFontSize);
-		g.drawString(currentPage.header,this.padding,this.padding);
-		var topLineY = this.padding + this.headerFontHeight;
-		g.drawLine(this.padding,topLineY,ScaleManager.width - this.padding,topLineY,4);
-		currentPage.render(g,this.padding,topLineY + this.padding * 0.375);
-		g.set_font(this.controlsFont);
-		g.set_fontSize(this.warningFontSize);
-		g.set_color(kha_Color._new(-8947849));
-		var warningBaseline = ScaleManager.height - this.headerFontHeight * 1.5;
-		var invertedIndex = 3;
-		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 0 * this.warningFontHeight);
-		var invertedIndex = 2;
-		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - this.warningFontHeight);
-		var invertedIndex = 1;
-		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 2 * this.warningFontHeight);
-		var invertedIndex = 0;
-		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 3 * this.warningFontHeight);
-		g.set_fontSize(this.controlsFontSize);
-		g.set_color(-1);
-		switch(input_InputDeviceManager.lastDevice._hx_index) {
-		case 0:
-			this.renderKeyboardControls(g);
-			break;
-		case 1:
-			this.renderGamepadControls(g);
-			break;
-		}
-	}
-	,__class__: ui_Menu
-};
-var game_ui_PauseMenu = function(opts) {
-	this.updateGameState = false;
-	this.prefsSave = opts.prefsSave;
-	this.pauseMediator = opts.pauseMediator;
-	ui_Menu.call(this,new ui_ListMenuPage(new ui_ListMenuPageOptions("Paused",$bind(this,this.generateInitalPage))));
-};
-$hxClasses["game.ui.PauseMenu"] = game_ui_PauseMenu;
-game_ui_PauseMenu.__name__ = "game.ui.PauseMenu";
-game_ui_PauseMenu.__super__ = ui_Menu;
-game_ui_PauseMenu.prototype = $extend(ui_Menu.prototype,{
-	prefsSave: null
-	,pauseMediator: null
-	,updateGameState: null
-	,generateInitalPage: function(_) {
-		var _gthis = this;
-		return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Resume",($_=this.pauseMediator,$bind($_,$_.resume)),["Continue Chaining!"])),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Options",["Change Various Options and Settings"],function(_) {
-			return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Controls",["Change Keybindings For Keyboard And Gamepads"],function(_) {
-				return [new game_ui_ControlsPageWidget("Menu Controls"),new game_ui_ControlsPageWidget("Game Controls"),new game_ui_ControlsPageWidget("Training Controls")];
-			})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Personalization",["Change Various Options Related","To Appearance And Game Mechanics"],function(_) {
-				return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Gelo Group Shadow Options",["Change Various Options Related","To the Gelo Group Shadow Appearance"],function(_) {
-					return [new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable",["Enable Or Disable The Shadow","That Shows Where Gelo","Groups Will Fall"],_gthis.prefsSave.showGroupShadow,function(value) {
-						_gthis.prefsSave.showGroupShadow = value;
-						save_$data_SaveManager.saveProfiles();
-					})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Opacity",["Change The Transparency Of The","Gelo Group Shadow"],0,1,0.1,_gthis.prefsSave.shadowOpacity,function(value) {
-						_gthis.prefsSave.shadowOpacity = value;
-						save_$data_SaveManager.saveProfiles();
-					})),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Highlight Rotating Shadows",["Alter The Appearance Of Rotating","Gelos' Shadow"],_gthis.prefsSave.shadowHighlightOthers,function(value) {
-						_gthis.prefsSave.shadowHighlightOthers = value;
-						save_$data_SaveManager.saveProfiles();
-					})),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Show Potential Chain Triggering",["Animate The Gelo Group Shadow","If A Chain Is About To Be","Triggered"],_gthis.prefsSave.shadowWillTriggerChain,function(value) {
-						_gthis.prefsSave.shadowWillTriggerChain = value;
-						save_$data_SaveManager.saveProfiles();
-					}))];
-				}))];
-			}))];
-		})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Download Desktop Version",function() {
-			window.open("https://github.com/doczi-dominik/gelavolt/releases");
-		},["Download GelaVolt's","Desktop Version For","Better Performance","And Offline Play"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Official Discord",function() {
-			window.open("https://discord.gg/wsWArpAFJK");
-		},["Join The Official","Development Server","For GelaVolt!","","https://discord.gg/wsWArpAFJK"]))];
-	}
-	,popPage: function() {
-		var _this = this.pages;
-		var k = _this.head;
-		var poppedPage;
-		if(k == null) {
-			poppedPage = null;
-		} else {
-			_this.head = k.next;
-			poppedPage = k.elt;
-		}
-		if(this.pages.head == null) {
-			var _this = this.pages;
-			_this.head = new haxe_ds_GenericCell(poppedPage,_this.head);
-			this.pauseMediator.resume();
-		}
-	}
-	,update: function() {
-		if(this.inputManager.getAction("Pause")) {
-			this.pauseMediator.resume();
-		}
-		ui_Menu.prototype.update.call(this);
-	}
-	,render: function(g,alpha) {
-		g.pushOpacity(0.90);
-		g.set_color(-16777216);
-		g.fillRect(0,0,ScaleManager.width,ScaleManager.height);
-		g.set_color(-1);
-		g.popOpacity();
-		ui_Menu.prototype.render.call(this,g,alpha);
-	}
-	,__class__: game_ui_PauseMenu
-});
-var game_ui_PauseMenuOptions = function(prefsSave,pauseMediator) {
-	this.prefsSave = prefsSave;
-	this.pauseMediator = pauseMediator;
-};
-$hxClasses["game.ui.PauseMenuOptions"] = game_ui_PauseMenuOptions;
-game_ui_PauseMenuOptions.__name__ = "game.ui.PauseMenuOptions";
-game_ui_PauseMenuOptions.prototype = {
-	prefsSave: null
-	,pauseMediator: null
-	,__class__: game_ui_PauseMenuOptions
 };
 var game_ui_QueueEditorPage = function(opts) {
 	this.controlDisplays = [new ui_ControlDisplay(["Left","Up","Down","Right"],"Select"),new ui_ControlDisplay(["Back"],"Back"),new ui_ControlDisplay(["Confirm"],"Edit")];
@@ -7562,6 +8031,40 @@ game_ui_QueueEditorPageOptions.prototype = {
 	,groupEditor: null
 	,__class__: game_ui_QueueEditorPageOptions
 };
+var game_ui_ReplayPauseMenu = function(opts) {
+	this.actionBuffer = opts.actionBuffer;
+	game_ui_PauseMenu.call(this,opts);
+};
+$hxClasses["game.ui.ReplayPauseMenu"] = game_ui_ReplayPauseMenu;
+game_ui_ReplayPauseMenu.__name__ = "game.ui.ReplayPauseMenu";
+game_ui_ReplayPauseMenu.__super__ = game_ui_PauseMenu;
+game_ui_ReplayPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
+	actionBuffer: null
+	,generateInitalPage: function(_) {
+		var _gthis = this;
+		var replayOpts = new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Replay Options",["Change Various Options and Settings","Specific to Replays"],function(_) {
+			return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Take Control",function() {
+				_gthis.actionBuffer.mode = 1;
+				_gthis.pauseMediator.resume();
+			},["Stop Replay Playback And","Take Control Of The Board"]))];
+		}));
+		var pauseMenuOpts = game_ui_PauseMenu.prototype.generateInitalPage.call(this,_);
+		pauseMenuOpts.unshift(replayOpts);
+		return pauseMenuOpts;
+	}
+	,__class__: game_ui_ReplayPauseMenu
+});
+var game_ui_ReplayPauseMenuOptions = function(actionBuffer,prefsSave,pauseMediator) {
+	game_ui_PauseMenuOptions.call(this,prefsSave,pauseMediator);
+	this.actionBuffer = actionBuffer;
+};
+$hxClasses["game.ui.ReplayPauseMenuOptions"] = game_ui_ReplayPauseMenuOptions;
+game_ui_ReplayPauseMenuOptions.__name__ = "game.ui.ReplayPauseMenuOptions";
+game_ui_ReplayPauseMenuOptions.__super__ = game_ui_PauseMenuOptions;
+game_ui_ReplayPauseMenuOptions.prototype = $extend(game_ui_PauseMenuOptions.prototype,{
+	actionBuffer: null
+	,__class__: game_ui_ReplayPauseMenuOptions
+});
 var game_ui_TrainingPauseMenu = function(opts) {
 	this.rule = opts.rule;
 	this.randomizer = opts.randomizer;
@@ -7774,6 +8277,11 @@ var haxe_IMap = function() { };
 $hxClasses["haxe.IMap"] = haxe_IMap;
 haxe_IMap.__name__ = "haxe.IMap";
 haxe_IMap.__isInterface__ = true;
+haxe_IMap.prototype = {
+	get: null
+	,keys: null
+	,__class__: haxe_IMap
+};
 var haxe_Exception = function(message,previous,native) {
 	Error.call(this,message);
 	this.message = message;
@@ -8785,6 +9293,11 @@ haxe_ds_BalancedTree.prototype = {
 		}
 		return null;
 	}
+	,keys: function() {
+		var ret = [];
+		this.keysLoop(this.root,ret);
+		return new haxe_iterators_ArrayIterator(ret);
+	}
 	,setLoop: function(k,v,node) {
 		if(node == null) {
 			return new haxe_ds_TreeNode(null,k,v,null);
@@ -8798,6 +9311,13 @@ haxe_ds_BalancedTree.prototype = {
 		} else {
 			var nr = this.setLoop(k,v,node.right);
 			return this.balance(node.left,node.key,node.value,nr);
+		}
+	}
+	,keysLoop: function(node,acc) {
+		if(node != null) {
+			this.keysLoop(node.left,acc);
+			acc.push(node.key);
+			this.keysLoop(node.right,acc);
 		}
 	}
 	,balance: function(l,k,v,r) {
@@ -8946,6 +9466,9 @@ haxe_ds_IntMap.__name__ = "haxe.ds.IntMap";
 haxe_ds_IntMap.__interfaces__ = [haxe_IMap];
 haxe_ds_IntMap.prototype = {
 	h: null
+	,get: function(key) {
+		return this.h[key];
+	}
 	,keys: function() {
 		var a = [];
 		for( var key in this.h ) if(this.h.hasOwnProperty(key)) a.push(+key);
@@ -9009,6 +9532,9 @@ haxe_ds_ObjectMap.prototype = {
 		this.h[id] = value;
 		this.h.__keys__[id] = key;
 	}
+	,get: function(key) {
+		return this.h[key.__id__];
+	}
 	,keys: function() {
 		var a = [];
 		for( var key in this.h.__keys__ ) {
@@ -9028,7 +9554,34 @@ haxe_ds_StringMap.__name__ = "haxe.ds.StringMap";
 haxe_ds_StringMap.__interfaces__ = [haxe_IMap];
 haxe_ds_StringMap.prototype = {
 	h: null
+	,get: function(key) {
+		return this.h[key];
+	}
+	,keys: function() {
+		return new haxe_ds__$StringMap_StringMapKeyIterator(this.h);
+	}
 	,__class__: haxe_ds_StringMap
+};
+var haxe_ds__$StringMap_StringMapKeyIterator = function(h) {
+	this.h = h;
+	this.keys = Object.keys(h);
+	this.length = this.keys.length;
+	this.current = 0;
+};
+$hxClasses["haxe.ds._StringMap.StringMapKeyIterator"] = haxe_ds__$StringMap_StringMapKeyIterator;
+haxe_ds__$StringMap_StringMapKeyIterator.__name__ = "haxe.ds._StringMap.StringMapKeyIterator";
+haxe_ds__$StringMap_StringMapKeyIterator.prototype = {
+	h: null
+	,keys: null
+	,length: null
+	,current: null
+	,hasNext: function() {
+		return this.current < this.length;
+	}
+	,next: function() {
+		return this.keys[this.current++];
+	}
+	,__class__: haxe_ds__$StringMap_StringMapKeyIterator
 };
 var haxe_exceptions_PosException = function(message,previous,pos) {
 	haxe_Exception.call(this,message,previous);
@@ -9643,9 +10196,10 @@ input_InputDeviceManager.prototype = {
 		this.keyboard.notify(this.keyRebindListener);
 		this.gamepad.notify(null,this.buttonRebindListener);
 	}
-	,renderGamepadIcon: function(g,x,y,button,size) {
-		var subImageCoords = input_GamepadSpriteCoordinates_GAMEPAD_SPRITE_COORDINATES.h[button];
-		g.drawScaledSubImage(kha_Assets.images.Buttons,subImageCoords.x,subImageCoords.y,64,64,x,y,size,size);
+	,renderGamepadIcon: function(g,x,y,sprite,scale) {
+		var w = sprite.width;
+		var h = sprite.height;
+		g.drawScaledSubImage(kha_Assets.images.Buttons,sprite.x,sprite.y,w,h,x,y,w * scale,h * scale);
 	}
 	,__class__: input_InputDeviceManager
 };
@@ -9668,7 +10222,7 @@ var input_NullInputDeviceManager = function() {
 $hxClasses["input.NullInputDeviceManager"] = input_NullInputDeviceManager;
 input_NullInputDeviceManager.__name__ = "input.NullInputDeviceManager";
 input_NullInputDeviceManager.__interfaces__ = [input_IInputDeviceManager];
-input_NullInputDeviceManager.getInstance = function() {
+input_NullInputDeviceManager.get_instance = function() {
 	if(input_NullInputDeviceManager.instance == null) {
 		input_NullInputDeviceManager.instance = new input_NullInputDeviceManager();
 	}
@@ -9683,7 +10237,7 @@ input_NullInputDeviceManager.prototype = {
 	}
 	,rebind: function(action,category) {
 	}
-	,renderGamepadIcon: function(g,x,y,button,size) {
+	,renderGamepadIcon: function(g,x,y,sprite,scale) {
 	}
 	,__class__: input_NullInputDeviceManager
 };
@@ -9932,8 +10486,8 @@ var kha__$Assets_ImageList = function() {
 	this.ParticlesDescription = { name : "Particles", original_height : 1024, file_sizes : [9253], original_width : 1024, files : ["Particles.png"], type : "image"};
 	this.ParticlesName = "Particles";
 	this.Particles = null;
-	this.ButtonsSize = 2074;
-	this.ButtonsDescription = { name : "Buttons", original_height : 72, file_sizes : [2074], original_width : 1148, files : ["Buttons.png"], type : "image"};
+	this.ButtonsSize = 9914;
+	this.ButtonsDescription = { name : "Buttons", original_height : 832, file_sizes : [9914], original_width : 512, files : ["Buttons.png"], type : "image"};
 	this.ButtonsName = "Buttons";
 	this.Buttons = null;
 	this.BorderSize = 3242;
@@ -12864,8 +13418,14 @@ kha_SystemImpl.initAnimate = function(callback) {
 		if(canvas.getContext != null) {
 			if(kha_SystemImpl.lastCanvasClientWidth != canvas.clientWidth || kha_SystemImpl.lastCanvasClientHeight != canvas.clientHeight) {
 				var scale = window.devicePixelRatio;
-				canvas.width = canvas.clientWidth * scale | 0;
-				canvas.height = canvas.clientHeight * scale | 0;
+				var clientWidth = canvas.clientWidth;
+				var clientHeight = canvas.clientHeight;
+				canvas.width = clientWidth;
+				canvas.height = clientHeight;
+				if(scale != 1) {
+					canvas.style.width = (clientWidth / scale | 0) + "px";
+					canvas.style.height = (clientHeight / scale | 0) + "px";
+				}
 				kha_SystemImpl.lastCanvasClientWidth = canvas.clientWidth;
 				kha_SystemImpl.lastCanvasClientHeight = canvas.clientHeight;
 			}
@@ -12999,7 +13559,7 @@ kha_SystemImpl.unlockSound = function() {
 			context.resume().then(function(c) {
 				kha_SystemImpl.soundEnabled = true;
 			}).catch(function(err) {
-				haxe_Log.trace(err,{ fileName : "kha/SystemImpl.hx", lineNumber : 685, className : "kha.SystemImpl", methodName : "unlockSound"});
+				haxe_Log.trace(err,{ fileName : "kha/SystemImpl.hx", lineNumber : 698, className : "kha.SystemImpl", methodName : "unlockSound"});
 			});
 		}
 		kha_audio2_Audio.wakeChannels();
@@ -40180,6 +40740,75 @@ kha_vr_TimeWarpParms.prototype = {
 	,RightOverlay: null
 	,__class__: kha_vr_TimeWarpParms
 };
+var main_$menu_MainMenuScreen = function() {
+	this.menu = new ui_Menu(new main_$menu_ui_MainMenuPage(save_$data_Profile.primary.prefs));
+	this.menu.onShow(new input_InputDeviceManager(save_$data_Profile.primary.input));
+};
+$hxClasses["main_menu.MainMenuScreen"] = main_$menu_MainMenuScreen;
+main_$menu_MainMenuScreen.__name__ = "main_menu.MainMenuScreen";
+main_$menu_MainMenuScreen.__interfaces__ = [IScreen];
+main_$menu_MainMenuScreen.prototype = {
+	menu: null
+	,update: function() {
+		this.menu.update();
+	}
+	,render: function(g,g4,alpha) {
+		this.menu.render(g,alpha);
+	}
+	,__class__: main_$menu_MainMenuScreen
+};
+var main_$menu_ui_MainMenuPage = function(prefsSave) {
+	this.prefsSave = prefsSave;
+	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions("GelaVolt",function(_) {
+		return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Training Mode",function() {
+			GlobalScreenSwitcher.switchScreen(new game_screens_GameScreen(new game_gamemodes_TrainingGameMode(kha_System.get_time() * 1000000 | 0,new game_rules_Rule(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null))));
+		},["Practice In GelaVolt's","Signature Training Mode!"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Endless Mode",function() {
+			GlobalScreenSwitcher.switchScreen(new game_screens_GameScreen(new game_gamemodes_EndlessGameMode(kha_System.get_time() * 1000000 | 0,new game_rules_Rule(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null),null)));
+		},["Play For As Long As You","Can In Endless Mode And","Share Your Replays!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(prefsSave),["Change Various Options and Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Download Desktop Version",function() {
+			window.open("https://github.com/doczi-dominik/gelavolt/releases");
+		},["Download GelaVolt's","Desktop Version For","Better Performance","And Offline Play"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Official Discord",function() {
+			window.open("https://discord.gg/wsWArpAFJK");
+		},["Join The Official","Development Server","For GelaVolt!","","https://discord.gg/wsWArpAFJK"]))];
+	}));
+};
+$hxClasses["main_menu.ui.MainMenuPage"] = main_$menu_ui_MainMenuPage;
+main_$menu_ui_MainMenuPage.__name__ = "main_menu.ui.MainMenuPage";
+main_$menu_ui_MainMenuPage.__super__ = ui_ListMenuPage;
+main_$menu_ui_MainMenuPage.prototype = $extend(ui_ListMenuPage.prototype,{
+	prefsSave: null
+	,__class__: main_$menu_ui_MainMenuPage
+});
+var main_$menu_ui_OptionsPage = function(prefsSave) {
+	this.prefsSave = prefsSave;
+	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions("Options",function(_) {
+		return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Controls",["Change Keybindings For Keyboard And Gamepads"],function(_) {
+			return [new game_ui_ControlsPageWidget("Menu Controls"),new game_ui_ControlsPageWidget("Game Controls"),new game_ui_ControlsPageWidget("Training Controls")];
+		})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Personalization",["Change Various Options Related","To Appearance And Game Mechanics"],function(_) {
+			return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Gelo Group Shadow Options",["Change Various Options Related","To the Gelo Group Shadow Appearance"],function(_) {
+				return [new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable",["Enable Or Disable The Shadow","That Shows Where Gelo","Groups Will Fall"],prefsSave.showGroupShadow,function(value) {
+					prefsSave.showGroupShadow = value;
+					save_$data_SaveManager.saveProfiles();
+				})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Opacity",["Change The Transparency Of The","Gelo Group Shadow"],0,1,0.1,prefsSave.shadowOpacity,function(value) {
+					prefsSave.shadowOpacity = value;
+					save_$data_SaveManager.saveProfiles();
+				})),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Highlight Rotating Shadows",["Alter The Appearance Of Rotating","Gelos' Shadow"],prefsSave.shadowHighlightOthers,function(value) {
+					prefsSave.shadowHighlightOthers = value;
+					save_$data_SaveManager.saveProfiles();
+				})),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Show Potential Chain Triggering",["Animate The Gelo Group Shadow","If A Chain Is About To Be","Triggered"],prefsSave.shadowWillTriggerChain,function(value) {
+					prefsSave.shadowWillTriggerChain = value;
+					save_$data_SaveManager.saveProfiles();
+				}))];
+			}))];
+		}))];
+	}));
+};
+$hxClasses["main_menu.ui.OptionsPage"] = main_$menu_ui_OptionsPage;
+main_$menu_ui_OptionsPage.__name__ = "main_menu.ui.OptionsPage";
+main_$menu_ui_OptionsPage.__super__ = ui_ListMenuPage;
+main_$menu_ui_OptionsPage.prototype = $extend(ui_ListMenuPage.prototype,{
+	prefsSave: null
+	,__class__: main_$menu_ui_OptionsPage
+});
 var save_$data_GraphicsSave = function() {
 };
 $hxClasses["save_data.GraphicsSave"] = save_$data_GraphicsSave;
@@ -40915,6 +41544,10 @@ js_Boot.__toStr = ({ }).toString;
 if(ArrayBuffer.prototype.slice == null) {
 	ArrayBuffer.prototype.slice = js_lib__$ArrayBuffer_ArrayBufferCompat.sliceImpl;
 }
+DateTools.DAY_SHORT_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+DateTools.DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+DateTools.MONTH_SHORT_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+DateTools.MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 Main.FIXED_UPDATE_DELTA = 0.0166666666666666664;
 Main.accumulator = 0.0;
 ScaleManager.DESIGN_WIDTH = 1920;
@@ -40922,7 +41555,7 @@ ScaleManager.DESIGN_HEIGHT = 1080;
 ScaleManager.onResize = [];
 ScaleManager.width = 1920;
 ScaleManager.height = 1080;
-GlobalScreenSwitcher.currentScreen = NullScreen.getInstance();
+GlobalScreenSwitcher.currentScreen = NullScreen.get_instance();
 kha_Color.Black = -16777216;
 kha_Color.White = -1;
 kha_Color.Red = -65536;
@@ -41213,6 +41846,8 @@ game_geometries_BoardGeometries.CENTER = new utils_Point(game_geometries_BoardGe
 game_geometries_BoardGeometries.LEFT = new game_geometries_BoardGeometries(new utils_Point(168,160),1,game_geometries_BoardOrientation.LEFT,new utils_Point(game_geometries_BoardGeometries.WIDTH + 48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(0,-77),new utils_Point(game_geometries_BoardGeometries.WIDTH + 48,game_geometries_BoardGeometries.HEIGHT - 64));
 game_geometries_BoardGeometries.RIGHT = new game_geometries_BoardGeometries(new utils_Point(888,160),1,game_geometries_BoardOrientation.RIGHT,new utils_Point(-48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(0,-77),new utils_Point(-48,game_geometries_BoardGeometries.HEIGHT - 64));
 game_geometries_BoardGeometries.CENTERED = new game_geometries_BoardGeometries(new utils_Point(528,160),1,game_geometries_BoardOrientation.LEFT,new utils_Point(game_geometries_BoardGeometries.WIDTH + 48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(0,-77),new utils_Point(game_geometries_BoardGeometries.WIDTH + 48,game_geometries_BoardGeometries.HEIGHT - 64));
+game_mediators_TransformationMediator.PLAY_AREA_DESIGN_WIDTH = 1440;
+game_mediators_TransformationMediator.PLAY_AREA_DESIGN_HEIGHT = 1080;
 var game_rules_ColorBonusTables_COLOR_BONUS_TABLES = (function($this) {
 	var $r;
 	var _g = new haxe_ds_StringMap();
@@ -41247,25 +41882,21 @@ var game_rules_PowerTables_POWER_TABLES = (function($this) {
 	$r = _g;
 	return $r;
 }(this));
-game_screens_GameScreen.PLAY_AREA_DESIGN_WIDTH = 1440;
-game_screens_GameScreen.PLAY_AREA_DESIGN_HEIGHT = 1080;
 game_simulation_SimulationStep.LABEL_SIZE = 64;
 game_simulation_SimulationStep.CARD_SIZE = 512;
 game_simulation_SimulationStep.TITLE_FONT_SIZE = 40;
 game_simulation_SimulationStep.CARD_FONT_SIZE = 32;
-ui_ListMenuPage.WIDGET_FONT_SIZE = 60;
 ui_ListMenuPage.DESC_FONT_SIZE = 48;
 ui_ListMenuPage.MAX_WIDGETS_PER_VIEW = 10;
 ui_ListMenuPage.WIDGET_BOTTOM_PADDING = 16;
 ui_ListMenuPage.DEFAULT_CONTROL_DISPLAYS = [new ui_ControlDisplay(["Up","Down"],"Select"),new ui_ControlDisplay(["Back"],"Back")];
-game_ui_GroupEditorPage.GRID_COLOR = kha_Color._new(-12303292);
+ui_ListMenuPage.WIDGET_FONT_SIZE = 60;
 ui_Menu.HEADER_FONT_SIZE = 128;
-ui_Menu.CONTROLS_FONT_SIZE = 56;
+ui_Menu.CONTROLS_FONT_SIZE = 64;
 ui_Menu.WARNING_FONT_SIZE = 24;
 ui_Menu.PADDING = 64;
 ui_Menu.WARNING = ["BEWARE! This Is A Pre-Alpha Build of GelaVolt.","Everything Is Subject To Change. Expect Bugs and Crashes.","Thank You For Trying GelaVolt! Please Consider Leaving","Feedback On The Official Server! :)"];
-game_ui_PauseMenu.DISCORD_INVITE = "https://discord.gg/wsWArpAFJK";
-game_ui_PauseMenu.RELEASES_URL = "https://github.com/doczi-dominik/gelavolt/releases";
+game_ui_GroupEditorPage.GRID_COLOR = kha_Color._new(-12303292);
 game_ui_QueueEditorPage.FONT_SIZE = 72;
 haxe_Serializer.USE_CACHE = false;
 haxe_Serializer.USE_ENUM_INDEX = false;
@@ -41279,59 +41910,59 @@ var input_GamepadSpriteCoordinates_GAMEPAD_SPRITE_COORDINATES = (function($this)
 	var $r;
 	var _g = new haxe_ds_IntMap();
 	{
-		var value = new utils_Point(368,4);
+		var value = new utils_Geometry(64,64,0,0);
 		_g.h[0] = value;
 	}
 	{
-		var value = new utils_Point(296,4);
+		var value = new utils_Geometry(64,64,64,0);
 		_g.h[1] = value;
 	}
 	{
-		var value = new utils_Point(512,4);
+		var value = new utils_Geometry(64,64,128,0);
 		_g.h[2] = value;
 	}
 	{
-		var value = new utils_Point(440,4);
+		var value = new utils_Geometry(64,64,192,0);
 		_g.h[3] = value;
 	}
 	{
-		var value = new utils_Point(724,4);
+		var value = new utils_Geometry(64,64,256,0);
 		_g.h[4] = value;
 	}
 	{
-		var value = new utils_Point(796,4);
+		var value = new utils_Geometry(64,64,320,0);
 		_g.h[5] = value;
 	}
 	{
-		var value = new utils_Point(580,4);
+		var value = new utils_Geometry(64,64,384,0);
 		_g.h[6] = value;
 	}
 	{
-		var value = new utils_Point(652,4);
+		var value = new utils_Geometry(64,64,448,0);
 		_g.h[7] = value;
 	}
 	{
-		var value = new utils_Point(868,4);
+		var value = new utils_Geometry(128,64,384,64);
 		_g.h[8] = value;
 	}
 	{
-		var value = new utils_Point(940,4);
+		var value = new utils_Geometry(128,64,256,64);
 		_g.h[9] = value;
 	}
 	{
-		var value = new utils_Point(4,4);
+		var value = new utils_Geometry(64,64,192,128);
 		_g.h[12] = value;
 	}
 	{
-		var value = new utils_Point(148,4);
+		var value = new utils_Geometry(64,64,256,128);
 		_g.h[13] = value;
 	}
 	{
-		var value = new utils_Point(220,4);
+		var value = new utils_Geometry(64,64,64,128);
 		_g.h[14] = value;
 	}
 	{
-		var value = new utils_Point(76,4);
+		var value = new utils_Geometry(64,64,128,128);
 		_g.h[15] = value;
 	}
 	$r = _g;
@@ -41805,6 +42436,8 @@ kha_netsync_Session.RPC_SERVER = 0;
 kha_netsync_Session.RPC_ALL = 1;
 kha_netsync_SyncBuilder.nextId = 0;
 kha_netsync_SyncBuilder.objects = [];
+main_$menu_ui_MainMenuPage.DISCORD_INVITE = "https://discord.gg/wsWArpAFJK";
+main_$menu_ui_MainMenuPage.RELEASES_URL = "https://github.com/doczi-dominik/gelavolt/releases";
 save_$data_SaveManager.PROFILES_FILENAME = "profiles";
 save_$data_SaveManager.GRAPHICS_FIELNAME = "graphics";
 save_$data_SaveManager.profiles = [];
