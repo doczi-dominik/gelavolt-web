@@ -2234,6 +2234,8 @@ game_boardstates_EndlessBoardState.prototype = $extend(game_boardstates_Standard
 		case "CLEAR":
 			break;
 		case "NEW":
+			this.regenerateQueue();
+			this.initSimStepState();
 			break;
 		case "RESTART":
 			this.queue.setIndex(0);
