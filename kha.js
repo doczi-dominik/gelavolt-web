@@ -7567,7 +7567,7 @@ ui_Menu.prototype = {
 		var ssc = ScaleManager.smallerScale;
 		this.headerFontSize = 128 * ssc | 0;
 		this.headerFontHeight = this.headerFont.height(this.headerFontSize);
-		this.controlsFontSize = 52 * ssc | 0;
+		this.controlsFontSize = 48 * ssc | 0;
 		this.warningFontSize = 24 * ssc | 0;
 		this.warningFontHeight = this.controlsFont.height(this.warningFontSize);
 		this.warningFontWidths = [];
@@ -10600,7 +10600,11 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		if(!(axisMapping.axis == null && axisMapping.direction == null)) {
 			var key = mapping.gamepadAxis.hashCode();
 			var axisSpr = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
-			input_GamepadInputDevice.renderButton(g,x,y,fontHeight / axisSpr.height,axisSpr);
+			if(axisSpr != null) {
+				input_GamepadInputDevice.renderButton(g,x,y,fontHeight / axisSpr.height,axisSpr);
+			} else {
+				g.drawString("AXIS" + axisMapping.axis,x,y);
+			}
 		}
 	}
 	,renderControls: function(g,x,y,controls) {
@@ -41491,21 +41495,26 @@ var main_$menu_ui_ProfilePage = function(listPage,profile) {
 		var widgets = [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Reset To Default",["Reset Various Aspects Of The Profile","To Their Default Values"],function(_) {
 			return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Input Settings",function() {
 				profile.input = new save_$data_InputSettings(new haxe_ds_StringMap());
+				save_$data_Profile.reloadPrimary();
 				save_$data_SaveManager.saveProfiles();
 			},["Reset Input Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Preferences",function() {
 				profile.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
+				save_$data_Profile.reloadPrimary();
 				save_$data_SaveManager.saveProfiles();
 			},["Reset Preferences"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Training Options",function() {
 				profile.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
+				save_$data_Profile.reloadPrimary();
 				save_$data_SaveManager.saveProfiles();
 			},["Reset Training Mode-Exclusive Options"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Endless Options",function() {
 				profile.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+				save_$data_Profile.reloadPrimary();
 				save_$data_SaveManager.saveProfiles();
 			},["Reset Endless Mode-Exclusive Options"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset All",function() {
 				profile.input = new save_$data_InputSettings(new haxe_ds_StringMap());
 				profile.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
 				profile.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
 				profile.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+				save_$data_Profile.reloadPrimary();
 				save_$data_SaveManager.saveProfiles();
 			},["Reset Input, Preferences, Training","And Endless Options"]))];
 		}))];
@@ -41903,6 +41912,9 @@ save_$data_Profile.addOnChangePrimaryCallback = function(callback) {
 };
 save_$data_Profile.changePrimary = function(p) {
 	save_$data_Profile.primary = p;
+	save_$data_Profile.reloadPrimary();
+};
+save_$data_Profile.reloadPrimary = function() {
 	var _g = 0;
 	var _g1 = save_$data_Profile.onChangePrimary;
 	while(_g < _g1.length) {
@@ -43100,7 +43112,7 @@ ui_ListMenuPage.WIDGET_BOTTOM_PADDING = 16;
 ui_ListMenuPage.DEFAULT_CONTROL_DISPLAYS = [new ui_ControlDisplay(["MENU_UP","MENU_DOWN"],"Select"),new ui_ControlDisplay(["BACK"],"Back")];
 ui_ButtonWidget.FONT_SIZE = 60;
 ui_Menu.HEADER_FONT_SIZE = 128;
-ui_Menu.CONTROLS_FONT_SIZE = 52;
+ui_Menu.CONTROLS_FONT_SIZE = 48;
 ui_Menu.WARNING_FONT_SIZE = 24;
 ui_Menu.PADDING = 64;
 ui_Menu.WARNING = ["BEWARE! This Is A Pre-Alpha Build of GelaVolt.","Everything Is Subject To Change. Expect Bugs and Crashes.","Thank You For Trying GelaVolt! Please Consider Leaving","Feedback On The Official Server! :)"];
@@ -43219,8 +43231,6 @@ var input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES = (function($this) {
 	$r = _g;
 	return $r;
 }(this));
-input_InputDevice.MAPPINGS_FONT_SIZE = 60;
-input_InputDevice.CONTROLS_FONT_SIZE = 56;
 input_InputDevice.instances = [];
 input_GamepadInputDevice.SEPARATOR = " / ";
 var input_KeyCodeToString_KEY_CODE_TO_STRING = (function($this) {
