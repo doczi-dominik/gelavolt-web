@@ -234,7 +234,7 @@ Main.main = function() {
 			Pipelines.init();
 			save_$data_SaveManager.loadProfiles();
 			save_$data_SaveManager.loadGraphics();
-			save_$data_Profile.changePrimary(save_$data_SaveManager.getProfile(0));
+			save_$data_Profile.changePrimary(save_$data_SaveManager.profiles[0]);
 			input_AnyInputDevice.init();
 			ScaleManager.resize(kha_System.windowWidth(),kha_System.windowHeight());
 			GlobalScreenSwitcher.switchScreen(new main_$menu_MainMenuScreen());
@@ -1546,14 +1546,26 @@ game_boards_SingleStateBoardOptions.prototype = {
 	,state: null
 	,__class__: game_boards_SingleStateBoardOptions
 };
+var ui_ControlDisplay = function(actions,description) {
+	this.actions = actions;
+	this.description = description;
+};
+$hxClasses["ui.ControlDisplay"] = ui_ControlDisplay;
+ui_ControlDisplay.__name__ = "ui.ControlDisplay";
+ui_ControlDisplay.prototype = {
+	actions: null
+	,description: null
+	,__class__: ui_ControlDisplay
+};
 var game_boards_TrainingBoard = function(opts) {
 	this.pauseMediator = opts.pauseMediator;
 	this.inputDevice = opts.inputDevice;
 	this.actionBuffer = opts.playActionBuffer;
 	this.infoState = opts.infoState;
+	this.controlDisplayContainer = opts.controlDisplayContainer;
 	this.playState = opts.playState;
 	this.editState = opts.editState;
-	this.activeState = this.playState;
+	this.changeToGame();
 };
 $hxClasses["game.boards.TrainingBoard"] = game_boards_TrainingBoard;
 game_boards_TrainingBoard.__name__ = "game.boards.TrainingBoard";
@@ -1563,17 +1575,20 @@ game_boards_TrainingBoard.prototype = {
 	,inputDevice: null
 	,actionBuffer: null
 	,infoState: null
+	,controlDisplayContainer: null
 	,playState: null
 	,editState: null
 	,activeState: null
 	,changeToEdit: function() {
 		this.editState.loadStep();
 		this.infoState.showChainSteps();
+		this.controlDisplayContainer.value = game_boards_TrainingBoard.EDIT_CONTROL_DISPLAY;
 		this.activeState = this.editState;
 	}
 	,changeToGame: function() {
 		this.playState.resume();
 		this.infoState.hideChainSteps();
+		this.controlDisplayContainer.value = game_boards_TrainingBoard.GAME_CONTROL_DISPLAY;
 		this.activeState = this.playState;
 	}
 	,getField: function() {
@@ -1624,11 +1639,12 @@ game_boards_TrainingBoard.prototype = {
 	}
 	,__class__: game_boards_TrainingBoard
 };
-var game_boards_TrainingBoardOptions = function(pauseMediator,inputDevice,playActionBuffer,infoState,playState,editState) {
+var game_boards_TrainingBoardOptions = function(pauseMediator,inputDevice,playActionBuffer,infoState,controlDisplayContainer,playState,editState) {
 	this.pauseMediator = pauseMediator;
 	this.inputDevice = inputDevice;
 	this.playActionBuffer = playActionBuffer;
 	this.infoState = infoState;
+	this.controlDisplayContainer = controlDisplayContainer;
 	this.playState = playState;
 	this.editState = editState;
 };
@@ -1639,6 +1655,7 @@ game_boards_TrainingBoardOptions.prototype = {
 	,inputDevice: null
 	,playActionBuffer: null
 	,infoState: null
+	,controlDisplayContainer: null
 	,playState: null
 	,editState: null
 	,__class__: game_boards_TrainingBoardOptions
@@ -3679,6 +3696,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	,particleManager: null
 	,marginManager: null
 	,frameCounter: null
+	,controlDisplayContainer: null
 	,pauseMediator: null
 	,playerBorderColorMediator: null
 	,playerTargetMediator: null
@@ -3717,6 +3735,9 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	}
 	,buildFrameCounter: function() {
 		this.frameCounter = new game_mediators_FrameCounter();
+	}
+	,buildControlDisplayContainer: function() {
+		this.controlDisplayContainer = new game_mediators_ControlDisplayContainer();
 	}
 	,buildPauseMediator: function() {
 		this.pauseMediator = new game_mediators_PauseMediator();
@@ -3777,17 +3798,17 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputDevice,game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5)),this.playerChainSim,this.playerChainCounter,save_$data_Profile.primary.prefs));
 	}
 	,buildPlayerBoard: function() {
-		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputDevice,this.playerActionBuffer,this.infoState,this.playState,this.editState));
+		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputDevice,this.playerActionBuffer,this.infoState,this.controlDisplayContainer,this.playState,this.editState));
 	}
 	,buildInfoBoard: function() {
 		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputDevice,game_actionbuffers_NullActionBuffer.get_instance(),this.infoState));
 	}
 	,buildPauseMenu: function() {
-		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,save_$data_Profile.primary.prefs,this.pauseMediator));
+		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,this.controlDisplayContainer,save_$data_Profile.primary.prefs,this.pauseMediator));
 	}
 	,buildGameState: function() {
 		var _g = this.marginManager;
-		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
+		this.gameState = new game_states_ControlDisplayGameState(new game_states_ControlDisplayGameStateOptions(this.controlDisplayContainer,this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
 	}
 	,wireMediators: function() {
 		this.pauseMediator.gameState = this.gameState;
@@ -3803,6 +3824,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.particleManager = new game_particles_ParticleManager();
 		this.marginManager = new game_rules_MarginTimeManager(this.gameMode.rule);
 		this.frameCounter = new game_mediators_FrameCounter();
+		this.controlDisplayContainer = new game_mediators_ControlDisplayContainer();
 		this.pauseMediator = new game_mediators_PauseMediator();
 		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
 		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT,null);
@@ -3825,11 +3847,11 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		var _g1 = this.playerGarbageManager;
 		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(save_$data_Profile.primary.trainingSettings,this.infoState,save_$data_Profile.primary.trainingSettings,this.randomizer,this.gameMode.rule,save_$data_Profile.primary.prefs,this.transformMediator,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,new game_previews_VerticalPreview(this.playerQueue),this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerChainSim,_g,_g1));
 		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputDevice,game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5)),this.playerChainSim,this.playerChainCounter,save_$data_Profile.primary.prefs));
-		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputDevice,this.playerActionBuffer,this.infoState,this.playState,this.editState));
+		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputDevice,this.playerActionBuffer,this.infoState,this.controlDisplayContainer,this.playState,this.editState));
 		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputDevice,game_actionbuffers_NullActionBuffer.get_instance(),this.infoState));
-		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,save_$data_Profile.primary.prefs,this.pauseMediator));
+		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,this.controlDisplayContainer,save_$data_Profile.primary.prefs,this.pauseMediator));
 		var _g = this.marginManager;
-		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
+		this.gameState = new game_states_ControlDisplayGameState(new game_states_ControlDisplayGameStateOptions(this.controlDisplayContainer,this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
 		this.pauseMediator.gameState = this.gameState;
 		this.playerBorderColorMediator.boardState = this.playState;
 		this.playerTargetMediator.garbageManager = this.infoGarbageManager;
@@ -5232,6 +5254,17 @@ game_mediators_BorderColorMediator.prototype = {
 		this.boardState.changeBorderColor(target);
 	}
 	,__class__: game_mediators_BorderColorMediator
+};
+var game_mediators_ControlDisplayContainer = function() {
+	this.isVisible = true;
+	this.value = [];
+};
+$hxClasses["game.mediators.ControlDisplayContainer"] = game_mediators_ControlDisplayContainer;
+game_mediators_ControlDisplayContainer.__name__ = "game.mediators.ControlDisplayContainer";
+game_mediators_ControlDisplayContainer.prototype = {
+	isVisible: null
+	,value: null
+	,__class__: game_mediators_ControlDisplayContainer
 };
 var game_mediators_FrameCounter = function() {
 	this.value = 0;
@@ -7132,6 +7165,36 @@ game_states_GameState.prototype = {
 	}
 	,__class__: game_states_GameState
 };
+var game_states_ControlDisplayGameState = function(opts) {
+	game_states_GameState.call(this,opts);
+	this.font = kha_Assets.fonts.Pixellari;
+	this.container = opts.controlDisplayContainer;
+	ScaleManager.addOnResizeCallback($bind(this,this.onResize));
+	this.lastIsVisible = this.container.isVisible;
+};
+$hxClasses["game.states.ControlDisplayGameState"] = game_states_ControlDisplayGameState;
+game_states_ControlDisplayGameState.__name__ = "game.states.ControlDisplayGameState";
+game_states_ControlDisplayGameState.__super__ = game_states_GameState;
+game_states_ControlDisplayGameState.prototype = $extend(game_states_GameState.prototype,{
+	font: null
+	,container: null
+	,fontSize: null
+	,fontHeight: null
+	,lastIsVisible: null
+	,onResize: function() {
+		this.fontSize = 32 * ScaleManager.smallerScale | 0;
+		this.fontHeight = this.font.height(this.fontSize);
+	}
+	,render: function(g,g4,alpha) {
+		if(this.container.isVisible) {
+			g.set_font(this.font);
+			g.set_fontSize(this.fontSize);
+			input_AnyInputDevice.instance.renderControls(g,0,ScaleManager.height - this.fontHeight,this.container.value);
+		}
+		game_states_GameState.prototype.render.call(this,g,g4,alpha);
+	}
+	,__class__: game_states_ControlDisplayGameState
+});
 var game_states_GameStateOptions = function(particleManager,boardManager,marginManager,pauseMenu,frameCounter) {
 	this.particleManager = particleManager;
 	this.boardManager = boardManager;
@@ -7149,6 +7212,17 @@ game_states_GameStateOptions.prototype = {
 	,frameCounter: null
 	,__class__: game_states_GameStateOptions
 };
+var game_states_ControlDisplayGameStateOptions = function(controlDisplayContainer,particleManager,boardManager,marginManager,pauseMenu,frameCounter) {
+	game_states_GameStateOptions.call(this,particleManager,boardManager,marginManager,pauseMenu,frameCounter);
+	this.controlDisplayContainer = controlDisplayContainer;
+};
+$hxClasses["game.states.ControlDisplayGameStateOptions"] = game_states_ControlDisplayGameStateOptions;
+game_states_ControlDisplayGameStateOptions.__name__ = "game.states.ControlDisplayGameStateOptions";
+game_states_ControlDisplayGameStateOptions.__super__ = game_states_GameStateOptions;
+game_states_ControlDisplayGameStateOptions.prototype = $extend(game_states_GameStateOptions.prototype,{
+	controlDisplayContainer: null
+	,__class__: game_states_ControlDisplayGameStateOptions
+});
 var ui_IMenuPage = function() { };
 $hxClasses["ui.IMenuPage"] = ui_IMenuPage;
 ui_IMenuPage.__name__ = "ui.IMenuPage";
@@ -7161,17 +7235,6 @@ ui_IMenuPage.prototype = {
 	,update: null
 	,render: null
 	,__class__: ui_IMenuPage
-};
-var ui_ControlDisplay = function(actions,description) {
-	this.actions = actions;
-	this.description = description;
-};
-$hxClasses["ui.ControlDisplay"] = ui_ControlDisplay;
-ui_ControlDisplay.__name__ = "ui.ControlDisplay";
-ui_ControlDisplay.prototype = {
-	actions: null
-	,description: null
-	,__class__: ui_ControlDisplay
 };
 var ui_ListMenuPage = function(opts) {
 	this.header = opts.header;
@@ -7198,6 +7261,7 @@ ui_ListMenuPage.prototype = {
 	,header: null
 	,controlDisplays: null
 	,onSelect: function() {
+		this.widgetIndex = Math.min(this.widgets.length - 1,Math.max(this.widgetIndex,0)) | 0;
 		this.controlDisplays = ui_ListMenuPage.DEFAULT_CONTROL_DISPLAYS.concat(this.widgets[this.widgetIndex].controlDisplays);
 	}
 	,popPage: function() {
@@ -7332,10 +7396,8 @@ ui_InputLimitedListPage.__super__ = ui_ListMenuPage;
 ui_InputLimitedListPage.prototype = $extend(ui_ListMenuPage.prototype,{
 	inputDevice: null
 	,onShow: function(menu) {
-		var inputDevice = this.inputDevice;
-		inputDevice.onResize();
 		var _this = menu.inputDevices;
-		_this.head = new haxe_ds_GenericCell(inputDevice,_this.head);
+		_this.head = new haxe_ds_GenericCell(this.inputDevice,_this.head);
 		menu.setInputDevice();
 		ui_ListMenuPage.prototype.onShow.call(this,menu);
 	}
@@ -7483,7 +7545,7 @@ var ui_Menu = function(initialPage) {
 	_this.head = new haxe_ds_GenericCell(initialPage,_this.head);
 	this.inputDevices = new haxe_ds_GenericStack();
 	this.headerFont = kha_Assets.fonts.DigitalDisco;
-	this.warningFont = kha_Assets.fonts.Pixellari;
+	this.controlsFont = kha_Assets.fonts.Pixellari;
 	ScaleManager.addOnResizeCallback($bind(this,this.resize));
 };
 $hxClasses["ui.Menu"] = ui_Menu;
@@ -7492,9 +7554,10 @@ ui_Menu.prototype = {
 	pages: null
 	,inputDevices: null
 	,headerFont: null
-	,warningFont: null
+	,controlsFont: null
 	,headerFontSize: null
 	,headerFontHeight: null
+	,controlsFontSize: null
 	,warningFontSize: null
 	,warningFontHeight: null
 	,warningFontWidths: null
@@ -7504,15 +7567,16 @@ ui_Menu.prototype = {
 		var ssc = ScaleManager.smallerScale;
 		this.headerFontSize = 128 * ssc | 0;
 		this.headerFontHeight = this.headerFont.height(this.headerFontSize);
+		this.controlsFontSize = 52 * ssc | 0;
 		this.warningFontSize = 24 * ssc | 0;
-		this.warningFontHeight = this.warningFont.height(this.warningFontSize);
+		this.warningFontHeight = this.controlsFont.height(this.warningFontSize);
 		this.warningFontWidths = [];
 		var _g = 0;
 		var _g1 = ui_Menu.WARNING;
 		while(_g < _g1.length) {
 			var line = _g1[_g];
 			++_g;
-			this.warningFontWidths.push(this.warningFont.width(this.warningFontSize,line));
+			this.warningFontWidths.push(this.controlsFont.width(this.warningFontSize,line));
 		}
 		this.padding = 64 * ssc;
 		var p = this.pages.iterator();
@@ -7520,18 +7584,12 @@ ui_Menu.prototype = {
 			var p1 = p.next();
 			p1.onResize();
 		}
-		var i = this.inputDevices.iterator();
-		while(i.hasNext()) {
-			var i1 = i.next();
-			i1.onResize();
-		}
 	}
 	,setInputDevice: function() {
 		var _this = this.inputDevices;
 		this.inputDevice = _this.head == null ? null : _this.head.elt;
 	}
 	,onShow: function(inputDevice) {
-		inputDevice.onResize();
 		var _this = this.inputDevices;
 		_this.head = new haxe_ds_GenericCell(inputDevice,_this.head);
 		this.setInputDevice();
@@ -7562,7 +7620,6 @@ ui_Menu.prototype = {
 		}
 	}
 	,pushInputDevice: function(inputDevice) {
-		inputDevice.onResize();
 		var _this = this.inputDevices;
 		_this.head = new haxe_ds_GenericCell(inputDevice,_this.head);
 		this.setInputDevice();
@@ -7588,7 +7645,7 @@ ui_Menu.prototype = {
 		var topLineY = this.padding + this.headerFontHeight;
 		g.drawLine(this.padding,topLineY,ScaleManager.width - this.padding,topLineY,4);
 		currentPage.render(g,this.padding,topLineY + this.padding * 0.375);
-		g.set_font(this.warningFont);
+		g.set_font(this.controlsFont);
 		g.set_fontSize(this.warningFontSize);
 		g.set_color(kha_Color._new(-8947849));
 		var warningBaseline = ScaleManager.height - this.headerFontHeight * 1.5;
@@ -7601,6 +7658,7 @@ ui_Menu.prototype = {
 		var invertedIndex = 0;
 		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 3 * this.warningFontHeight);
 		g.set_color(-1);
+		g.set_fontSize(this.controlsFontSize);
 		var _this = this.pages;
 		this.inputDevice.renderControls(g,this.padding,ScaleManager.height - this.headerFontHeight,(_this.head == null ? null : _this.head.elt).controlDisplays);
 	}
@@ -7870,7 +7928,8 @@ game_ui_GroupEditorPage.prototype = {
 	,__class__: game_ui_GroupEditorPage
 };
 var game_ui_InputWidget = function(action) {
-	this.controlDisplays = [new ui_ControlDisplay(["CONFIRM"],"Rebind")];
+	this.controlDisplays = [new ui_ControlDisplay(["MENU_LEFT"],"Unbind"),new ui_ControlDisplay(["MENU_RIGHT"],"Default"),new ui_ControlDisplay(["CONFIRM"],"Rebind")];
+	this.font = kha_Assets.fonts.Pixellari;
 	this.action = action;
 	this.description = game_actions_ActionData_ACTION_DATA.h[action].description;
 };
@@ -7878,7 +7937,9 @@ $hxClasses["game.ui.InputWidget"] = game_ui_InputWidget;
 game_ui_InputWidget.__name__ = "game.ui.InputWidget";
 game_ui_InputWidget.__interfaces__ = [ui_IListWidget];
 game_ui_InputWidget.prototype = {
-	action: null
+	font: null
+	,action: null
+	,fontSize: null
 	,menu: null
 	,description: null
 	,controlDisplays: null
@@ -7887,15 +7948,25 @@ game_ui_InputWidget.prototype = {
 		this.menu = menu;
 	}
 	,onResize: function() {
-		this.height = this.menu.inputDevice.height;
+		this.fontSize = 60 * ScaleManager.smallerScale | 0;
+		this.height = this.font.height(this.fontSize);
 	}
 	,update: function() {
-		if(this.menu.inputDevice.getAction("CONFIRM")) {
-			this.menu.inputDevice.rebind(this.action);
+		var inputDevice = this.menu.inputDevice;
+		if(inputDevice.getAction("MENU_LEFT")) {
+			inputDevice.unbind(this.action);
+		}
+		if(inputDevice.getAction("MENU_RIGHT")) {
+			inputDevice.bindDefault(this.action);
+		}
+		if(inputDevice.getAction("CONFIRM")) {
+			inputDevice.rebind(this.action);
 		}
 	}
 	,render: function(g,x,y,isSelected) {
 		g.set_color(isSelected ? -23296 : -1);
+		g.set_font(this.font);
+		g.set_fontSize(this.fontSize);
 		this.menu.inputDevice.renderBinding(g,x,y,this.action);
 		g.set_color(-1);
 	}
@@ -8152,6 +8223,7 @@ var game_ui_TrainingPauseMenu = function(opts) {
 	this.trainingSettings = opts.trainingSettings;
 	this.playerGarbageManager = opts.playerGarbageManager;
 	this.infoGarbageManager = opts.infoGarbageManager;
+	this.controlDisplayContainer = opts.controlDisplayContainer;
 	game_ui_PauseMenu.call(this,opts);
 };
 $hxClasses["game.ui.TrainingPauseMenu"] = game_ui_TrainingPauseMenu;
@@ -8170,23 +8242,27 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 	,trainingSettings: null
 	,playerGarbageManager: null
 	,infoGarbageManager: null
+	,controlDisplayContainer: null
 	,generateInitalPage: function(_) {
 		var _gthis = this;
 		var trainingSettings = new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Training Options",["Change Various Options And Settings","To Help Elevate Your Practice!"],function(_) {
 			return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Misc. Options",["Change Miscelaneous","Training Options"],function(_) {
-				var trainingSettings;
+				var trainingSettings = new ui_YesNoWidget(new ui_YesNoWidgetOptions("Show Control Hints",["Show Or Hide The Control Display","At The Bottom"],_gthis.controlDisplayContainer.isVisible,function(value) {
+					_gthis.controlDisplayContainer.isVisible = value;
+				}));
+				var trainingSettings1;
 				switch(_gthis.trainingSettings.clearOnXMode) {
 				case "CLEAR":
-					trainingSettings = 0;
+					trainingSettings1 = 0;
 					break;
 				case "NEW":
-					trainingSettings = 2;
+					trainingSettings1 = 2;
 					break;
 				case "RESTART":
-					trainingSettings = 1;
+					trainingSettings1 = 1;
 					break;
 				}
-				return [new ui_OptionListWidget(new ui_OptionListWidgetOptions("Clear Field on X",["Clear The Field When A","Gelo Group Locks On The","Top Of The Center Column","","CLEAR: Clear the Field","RESTART: CLEAR + Restart Queue","NEW: CLEAR + Regenerate Queue"],["CLEAR","RESTART","NEW"],trainingSettings,function(value) {
+				return [trainingSettings,new ui_OptionListWidget(new ui_OptionListWidgetOptions("Clear Field on X",["Clear The Field When A","Gelo Group Locks On The","Top Of The Center Column","","CLEAR: Clear the Field","RESTART: CLEAR + Restart Queue","NEW: CLEAR + Regenerate Queue"],["CLEAR","RESTART","NEW"],trainingSettings1,function(value) {
 					_gthis.trainingSettings.clearOnXMode = value;
 					save_$data_SaveManager.saveProfiles();
 				})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Clear Player Garbage Tray",($_=_gthis.playerGarbageManager,$bind($_,$_.clear)),["Clear The Garbage Tray Above","The Board You Control"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Clear Info Garbage Tray",($_=_gthis.infoGarbageManager,$bind($_,$_.clear)),["Clear The Garbage Tray Above","The Information Display"])),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Garbage Auto-Clear",["Automatically Clear The","Garbage Tray Above The","Information Display Before","Every Chain"],_gthis.trainingSettings.autoClear,function(value) {
@@ -8314,7 +8390,7 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 	}
 	,__class__: game_ui_TrainingPauseMenu
 });
-var game_ui_TrainingPauseMenuOptions = function(rule,randomizer,queue,playState,infoState,trainingBoard,allClearManager,chainSim,marginManager,trainingSettings,playerGarbageManager,infoGarbageManager,prefsSettings,pauseMediator) {
+var game_ui_TrainingPauseMenuOptions = function(rule,randomizer,queue,playState,infoState,trainingBoard,allClearManager,chainSim,marginManager,trainingSettings,playerGarbageManager,infoGarbageManager,controlDisplayContainer,prefsSettings,pauseMediator) {
 	game_ui_PauseMenuOptions.call(this,prefsSettings,pauseMediator);
 	this.rule = rule;
 	this.randomizer = randomizer;
@@ -8328,6 +8404,7 @@ var game_ui_TrainingPauseMenuOptions = function(rule,randomizer,queue,playState,
 	this.trainingSettings = trainingSettings;
 	this.playerGarbageManager = playerGarbageManager;
 	this.infoGarbageManager = infoGarbageManager;
+	this.controlDisplayContainer = controlDisplayContainer;
 };
 $hxClasses["game.ui.TrainingPauseMenuOptions"] = game_ui_TrainingPauseMenuOptions;
 game_ui_TrainingPauseMenuOptions.__name__ = "game.ui.TrainingPauseMenuOptions";
@@ -8345,6 +8422,7 @@ game_ui_TrainingPauseMenuOptions.prototype = $extend(game_ui_PauseMenuOptions.pr
 	,trainingSettings: null
 	,playerGarbageManager: null
 	,infoGarbageManager: null
+	,controlDisplayContainer: null
 	,__class__: game_ui_TrainingPauseMenuOptions
 });
 var haxe_IMap = function() { };
@@ -10058,16 +10136,15 @@ input_IInputDevice.prototype = {
 	get_inputSettings: null
 	,type: null
 	,inputSettings: null
-	,height: null
+	,unbind: null
+	,bindDefault: null
 	,rebind: null
 	,getAction: null
-	,onResize: null
 	,renderBinding: null
 	,renderControls: null
 	,__class__: input_IInputDevice
 };
 var input_AnyInputDevice = function() {
-	this.font = kha_Assets.fonts.Pixellari;
 	this.devices = new haxe_ds_IntMap();
 	this.isRebinding = false;
 	this.type = 2;
@@ -10084,13 +10161,10 @@ input_AnyInputDevice.init = function() {
 	input_AnyInputDevice.instance = new input_AnyInputDevice();
 };
 input_AnyInputDevice.prototype = {
-	font: null
-	,devices: null
-	,fontSize: null
+	devices: null
 	,isRebinding: null
 	,type: null
 	,inputSettings: null
-	,height: null
 	,connectListener: function(id) {
 		var this1 = this.devices;
 		var v = new input_GamepadInputDevice(save_$data_Profile.primary.input,id);
@@ -10109,8 +10183,12 @@ input_AnyInputDevice.prototype = {
 	,get_inputSettings: function() {
 		return save_$data_Profile.primary.input;
 	}
-	,clearLastGamepadID: function() {
-		input_AnyInputDevice.lastGamepadID = null;
+	,resetLastDeviceID: function() {
+		input_AnyInputDevice.lastDeviceID = -1;
+	}
+	,unbind: function(action) {
+	}
+	,bindDefault: function(action) {
 	}
 	,rebind: function(action) {
 		this.isRebinding = false;
@@ -10134,43 +10212,14 @@ input_AnyInputDevice.prototype = {
 	,getKeyboard: function() {
 		return js_Boot.__cast(this.devices.h[-1] , input_KeyboardInputDevice);
 	}
-	,onResize: function() {
-		this.fontSize = 48 * ScaleManager.smallerScale | 0;
-		this.height = this.font.height(this.fontSize);
-	}
 	,renderBinding: function(g,x,y,action) {
 	}
 	,renderControls: function(g,x,y,controls) {
-		g.set_font(this.font);
-		g.set_fontSize(this.fontSize);
-		var _g = 0;
-		while(_g < controls.length) {
-			var d = controls[_g];
-			++_g;
-			var str = "";
-			var _g1 = 0;
-			var _g2 = d.actions;
-			while(_g1 < _g2.length) {
-				var action = _g2[_g1];
-				++_g1;
-				var mapping = this.get_inputSettings().mappings.h[action];
-				var buttonSpr = input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[mapping.gamepadButton];
-				input_GamepadInputDevice.renderButton(g,x,y,this.height / buttonSpr.height,buttonSpr);
-				x += buttonSpr.width * ScaleManager.smallerScale;
-				if(mapping.gamepadAxis != null) {
-					var key = mapping.gamepadAxis.hashCode();
-					var axisSpr = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
-					input_GamepadInputDevice.renderButton(g,x,y,this.height / axisSpr.height,axisSpr);
-					x += axisSpr.width * ScaleManager.smallerScale;
-				}
-				str += "" + input_KeyCodeToString_KEY_CODE_TO_STRING.h[mapping.keyboardInput] + ", ";
-			}
-			str = HxOverrides.substr(str,0,str.length - 2);
-			str += ": " + d.description + "    ";
-			var strWidth = g.get_font().width(this.fontSize,str);
-			g.drawString(str,x,y);
-			x += strWidth;
+		var lastDevice = this.devices.h[input_AnyInputDevice.lastDeviceID];
+		if(lastDevice == null) {
+			return;
 		}
+		lastDevice.renderControls(g,x,y,controls);
 	}
 	,__class__: input_AnyInputDevice
 };
@@ -10197,13 +10246,19 @@ input_AxisMapping.prototype = {
 			return true;
 		}
 	}
+	,isNull: function() {
+		if(this.axis == null) {
+			return this.direction == null;
+		} else {
+			return false;
+		}
+	}
 	,asString: function() {
 		return "" + this.axis + ";" + this.direction;
 	}
 	,__class__: input_AxisMapping
 };
 var input_InputDevice = function(type,inputSettings) {
-	this.font = kha_Assets.fonts.Pixellari;
 	this.counters = new haxe_ds_StringMap();
 	this.isRebinding = false;
 	this.type = type;
@@ -10224,16 +10279,12 @@ input_InputDevice.update = function() {
 	}
 };
 input_InputDevice.prototype = {
-	font: null
-	,counters: null
-	,controlsFontSize: null
-	,bindingsFontSize: null
+	counters: null
 	,actions: null
 	,isRebinding: null
 	,latestRebindAction: null
 	,type: null
 	,inputSettings: null
-	,height: null
 	,buildActions: function() {
 	}
 	,addListeners: function() {
@@ -10283,6 +10334,14 @@ input_InputDevice.prototype = {
 		this.addListeners();
 		this.buildActions();
 	}
+	,unbind: function(action) {
+		save_$data_SaveManager.saveProfiles();
+		this.buildActions();
+	}
+	,bindDefault: function(action) {
+		save_$data_SaveManager.saveProfiles();
+		this.buildActions();
+	}
 	,rebind: function(action) {
 		this.isRebinding = true;
 		input_AnyInputDevice.rebindCounter++;
@@ -10291,18 +10350,9 @@ input_InputDevice.prototype = {
 	,getAction: function(action) {
 		return this.actions.h[action](this.counters.h[action]);
 	}
-	,onResize: function() {
-		this.controlsFontSize = 56 * ScaleManager.smallerScale | 0;
-		this.bindingsFontSize = 60 * ScaleManager.smallerScale | 0;
-		this.height = this.font.height(this.bindingsFontSize);
-	}
 	,renderBinding: function(g,x,y,action) {
-		g.set_font(this.font);
-		g.set_fontSize(this.bindingsFontSize);
 	}
 	,renderControls: function(g,x,y,controls) {
-		g.set_font(this.font);
-		g.set_fontSize(this.controlsFontSize);
 	}
 	,__class__: input_InputDevice
 };
@@ -10322,8 +10372,6 @@ input_GamepadInputDevice.__super__ = input_InputDevice;
 input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	id: null
 	,gamepad: null
-	,controlsFontHeight: null
-	,bindingsFontHeight: null
 	,separatorWidth: null
 	,buttonsToActions: null
 	,axesToActions: null
@@ -10331,7 +10379,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	,latestAxisRebindFunction: null
 	,buttonListener: function(button,value) {
 		if(value != 0) {
-			input_AnyInputDevice.lastGamepadID = this.id;
+			input_AnyInputDevice.lastDeviceID = this.id;
 		}
 		if(!this.buttonsToActions.h.hasOwnProperty(button)) {
 			return;
@@ -10376,6 +10424,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			var v = _g.value;
 			if(k.axis == axis && k.direction * value >= 0) {
 				if(Math.abs(value) > this.get_inputSettings().deadzone) {
+					input_AnyInputDevice.lastDeviceID = this.id;
 					this.axisDownListener(v);
 				} else {
 					this.upListener(v);
@@ -10436,14 +10485,16 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		while(action_current < action_length) {
 			var action = action_keys[action_current++];
 			var mapping = this.get_inputSettings().mappings.h[action];
-			var buttonInput = mapping.gamepadButton;
-			if(this.buttonsToActions.h[buttonInput] == null) {
-				var v = [];
-				this.buttonsToActions.h[buttonInput] = v;
+			var buttonMapping = mapping.gamepadButton;
+			if(buttonMapping != null) {
+				if(this.buttonsToActions.h[buttonMapping] == null) {
+					var v = [];
+					this.buttonsToActions.h[buttonMapping] = v;
+				}
+				this.buttonsToActions.h[buttonMapping].push(action);
 			}
-			this.buttonsToActions.h[buttonInput].push(action);
 			var axisMapping = mapping.gamepadAxis;
-			if(axisMapping != null) {
+			if(!(axisMapping.axis == null && axisMapping.direction == null)) {
 				var _this = this.axesToActions.values;
 				var key = axisMapping.hashCode();
 				if(_this.h[key] == null) {
@@ -10484,6 +10535,21 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	,removeRebindListeners: function() {
 		this.gamepad.remove(this.latestAxisRebindFunction,this.latestButtonRebindFunction);
 	}
+	,unbind: function(action) {
+		var old = this.get_inputSettings().mappings.h[action];
+		var this1 = this.get_inputSettings().mappings;
+		var v = new input_InputMapping(old.keyboardInput,null,new input_AxisMapping(null,null));
+		this1.h[action] = v;
+		input_InputDevice.prototype.unbind.call(this,action);
+	}
+	,bindDefault: function(action) {
+		var def = save_$data_InputSettings.MAPPINGS_DEFAULTS.h[action];
+		var old = this.get_inputSettings().mappings.h[action];
+		var this1 = this.get_inputSettings().mappings;
+		var v = new input_InputMapping(old.keyboardInput,def.gamepadButton,def.gamepadAxis);
+		this1.h[action] = v;
+		input_InputDevice.prototype.bindDefault.call(this,action);
+	}
 	,rebind: function(action) {
 		input_InputDevice.prototype.rebind.call(this,action);
 		var _g = $bind(this,this.axisRebindListener);
@@ -10499,12 +10565,6 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		this.latestRebindAction = action;
 		this.gamepad.notify(this.latestAxisRebindFunction,this.latestButtonRebindFunction);
 	}
-	,onResize: function() {
-		input_InputDevice.prototype.onResize.call(this);
-		this.controlsFontHeight = this.font.height(this.controlsFontSize);
-		this.bindingsFontHeight = this.font.height(this.bindingsFontSize);
-		this.separatorWidth = this.font.width(this.bindingsFontSize," / ");
-	}
 	,renderBinding: function(g,x,y,action) {
 		input_InputDevice.prototype.renderBinding.call(this,g,x,y,action);
 		var title = game_actions_ActionData_ACTION_DATA.h[action].title;
@@ -10512,26 +10572,39 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			g.drawString("Press any button / stick for [ " + title + " ]",x,y);
 			return;
 		}
-		var str = "" + title + ": ";
-		var strW = this.font.width(this.bindingsFontSize,str);
 		var mapping = this.get_inputSettings().mappings.h[action];
-		var buttonSpr = input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[mapping.gamepadButton];
+		var tmp;
+		if(mapping.gamepadButton == null) {
+			var _this = mapping.gamepadAxis;
+			tmp = _this.axis == null && _this.direction == null;
+		} else {
+			tmp = false;
+		}
+		if(tmp) {
+			g.drawString("" + title + ": [ UNBOUND ]",x,y);
+			return;
+		}
+		var fontHeight = g.get_font().height(g.get_fontSize());
+		var str = "" + title + ": ";
+		var strW = g.get_font().width(g.get_fontSize(),str);
 		g.drawString(str,x,y);
 		x += strW;
 		g.set_color(-1);
-		input_GamepadInputDevice.renderButton(g,x,y,this.bindingsFontHeight / buttonSpr.height,buttonSpr);
-		var axisMapping = mapping.gamepadAxis;
-		if(axisMapping == null) {
-			return;
+		var buttonMapping = mapping.gamepadButton;
+		if(buttonMapping != null) {
+			var buttonSpr = input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[buttonMapping];
+			input_GamepadInputDevice.renderButton(g,x,y,fontHeight / buttonSpr.height,buttonSpr);
+			x += buttonSpr.width * ScaleManager.smallerScale;
 		}
-		x += buttonSpr.width * ScaleManager.smallerScale;
-		g.drawString(" / ",x,y);
-		x += this.separatorWidth;
-		var key = mapping.gamepadAxis.hashCode();
-		var axisSpr = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
-		input_GamepadInputDevice.renderButton(g,x,y,this.bindingsFontHeight / axisSpr.height,axisSpr);
+		var axisMapping = mapping.gamepadAxis;
+		if(!(axisMapping.axis == null && axisMapping.direction == null)) {
+			var key = mapping.gamepadAxis.hashCode();
+			var axisSpr = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
+			input_GamepadInputDevice.renderButton(g,x,y,fontHeight / axisSpr.height,axisSpr);
+		}
 	}
 	,renderControls: function(g,x,y,controls) {
+		var fontHeight = g.get_font().height(g.get_fontSize());
 		input_InputDevice.prototype.renderControls.call(this,g,x,y,controls);
 		var _g = 0;
 		while(_g < controls.length) {
@@ -10544,21 +10617,27 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 				var action = _g2[_g1];
 				++_g1;
 				var mapping = this.get_inputSettings().mappings.h[action];
-				var buttonSpr = input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[mapping.gamepadButton];
-				input_GamepadInputDevice.renderButton(g,x,y,this.controlsFontHeight / buttonSpr.height,buttonSpr);
-				x += buttonSpr.width * ScaleManager.smallerScale;
-				if(mapping.gamepadAxis == null) {
-					continue;
+				var button = mapping.gamepadButton;
+				var axis = mapping.gamepadAxis;
+				if(button != null) {
+					var buttonSpr = input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[button];
+					var buttonScale = fontHeight / buttonSpr.height;
+					input_GamepadInputDevice.renderButton(g,x,y,buttonScale,buttonSpr);
+					x += buttonSpr.width * buttonScale * 1.25;
 				}
-				var key = mapping.gamepadAxis.hashCode();
-				var axisSpr = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
-				input_GamepadInputDevice.renderButton(g,x,y,this.controlsFontHeight / axisSpr.height,axisSpr);
-				x += axisSpr.width * ScaleManager.smallerScale;
+				if(!(axis.axis == null && axis.direction == null)) {
+					haxe_Log.trace("Action: " + action + " Axis: " + axis.axis + " Direction: " + axis.direction,{ fileName : "input/GamepadInputDevice.hx", lineNumber : 300, className : "input.GamepadInputDevice", methodName : "renderControls"});
+					var key = axis.hashCode();
+					var axisSpr = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
+					var axisScale = fontHeight / axisSpr.height;
+					input_GamepadInputDevice.renderButton(g,x,y,axisScale,axisSpr);
+					x += axisSpr.width * axisScale * 1.25;
+				}
 			}
 			str = str.substring(0,str.length - 1);
 			str += " : " + d.description + "    ";
-			var strWidth = this.font.width(this.controlsFontSize,str);
-			g.drawString(str,x,y);
+			var strWidth = g.get_font().width(g.get_fontSize(),str);
+			utils_Utils.shadowDrawString(g,3,-16777216,-1,str,x,y);
 			x += strWidth;
 		}
 	}
@@ -10573,29 +10652,24 @@ $hxClasses["input.InputMapping"] = input_InputMapping;
 input_InputMapping.__name__ = "input.InputMapping";
 input_InputMapping.fromString = function(str) {
 	var parts = str.split(";");
-	return new input_InputMapping(js_Boot.__cast(Std.parseInt(parts[0]) , Int),Std.parseInt(parts[1]),parts[2] == null ? null : input_AxisMapping.fromString(parts[2]));
+	return new input_InputMapping(parts[0] != "" ? js_Boot.__cast(Std.parseInt(parts[0]) , Int) : null,parts[1] != "" ? Std.parseInt(parts[1]) : null,parts[2] != "" ? input_AxisMapping.fromString(parts[2]) : null);
 };
 input_InputMapping.prototype = {
 	keyboardInput: null
 	,gamepadButton: null
 	,gamepadAxis: null
 	,isNotEqual: function(other) {
-		var isAxisNotEqual;
-		if(this.gamepadAxis == null && other.gamepadAxis == null) {
-			isAxisNotEqual = false;
-		} else if(this.gamepadAxis != null && other.gamepadAxis != null) {
-			isAxisNotEqual = this.gamepadAxis.isNotEqual(other.gamepadAxis);
-		} else {
-			isAxisNotEqual = true;
-		}
 		if(!(this.keyboardInput != other.keyboardInput || this.gamepadButton != other.gamepadButton)) {
-			return isAxisNotEqual;
+			return this.gamepadAxis.isNotEqual(other.gamepadAxis);
 		} else {
 			return true;
 		}
 	}
 	,asString: function() {
-		return "" + this.keyboardInput + ";" + this.gamepadButton + (this.gamepadAxis == null ? "" : ";gamepadAxis.asString()");
+		var kb = this.keyboardInput == null ? "" : "" + this.keyboardInput;
+		var bt = this.gamepadButton == null ? "" : "" + this.gamepadButton;
+		var ax = this.gamepadAxis == null ? "" : "" + this.gamepadAxis.asString();
+		return "" + kb + ";" + bt + ";" + ax;
 	}
 	,__class__: input_InputMapping
 };
@@ -10616,6 +10690,7 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	,downListener: function(key) {
 		this.anyKeyCounter++;
 		this.isAnyKeyDown = true;
+		input_AnyInputDevice.lastDeviceID = -1;
 		if(!this.keysToActions.h.hasOwnProperty(key)) {
 			return;
 		}
@@ -10649,11 +10724,14 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			}
 		}
 	}
-	,rebindListener: function(action,key) {
+	,changeKeybind: function(action,key) {
 		var original = this.get_inputSettings().mappings.h[action];
 		var this1 = this.get_inputSettings().mappings;
 		var v = new input_InputMapping(key,original.gamepadButton,original.gamepadAxis);
 		this1.h[action] = v;
+	}
+	,rebindListener: function(action,key) {
+		this.changeKeybind(action,key);
 		this.finishRebind();
 	}
 	,buildActions: function() {
@@ -10667,11 +10745,13 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		while(action_current < action_length) {
 			var action = action_keys[action_current++];
 			var kbInput = this.get_inputSettings().mappings.h[action].keyboardInput;
-			if(this.keysToActions.h[kbInput] == null) {
-				var v = [];
-				this.keysToActions.h[kbInput] = v;
+			if(kbInput != null) {
+				if(this.keysToActions.h[kbInput] == null) {
+					var v = [];
+					this.keysToActions.h[kbInput] = v;
+				}
+				this.keysToActions.h[kbInput].push(action);
 			}
-			this.keysToActions.h[kbInput].push(action);
 			switch(game_actions_ActionData_ACTION_DATA.h[action].inputType._hx_index) {
 			case 0:
 				var v1 = $bind(this,this.holdActionHandler);
@@ -10697,6 +10777,14 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	,removeRebindListeners: function() {
 		this.keyboard.remove(this.latestRebindFunction);
 	}
+	,unbind: function(action) {
+		this.changeKeybind(action,null);
+		input_InputDevice.prototype.unbind.call(this,action);
+	}
+	,bindDefault: function(action) {
+		this.changeKeybind(action,save_$data_InputSettings.MAPPINGS_DEFAULTS.h[action].keyboardInput);
+		input_InputDevice.prototype.bindDefault.call(this,action);
+	}
 	,rebind: function(action) {
 		input_InputDevice.prototype.rebind.call(this,action);
 		var _g = $bind(this,this.rebindListener);
@@ -10711,11 +10799,12 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		input_InputDevice.prototype.renderBinding.call(this,g,x,y,action);
 		var title = game_actions_ActionData_ACTION_DATA.h[action].title;
 		if(action == this.latestRebindAction && this.isRebinding) {
-			g.drawString("Press any key for [ " + title + " ]",x,y);
+			g.drawString("[ Press any key for " + title + " ]",x,y);
 			return;
 		}
-		var key = this.get_inputSettings().mappings.h[action].keyboardInput;
-		g.drawString("" + title + ": " + input_KeyCodeToString_KEY_CODE_TO_STRING.h[key],x,y);
+		var kbInput = this.get_inputSettings().mappings.h[action].keyboardInput;
+		var binding = kbInput == null ? "[ UNBOUND ]" : input_KeyCodeToString_KEY_CODE_TO_STRING.h[kbInput];
+		g.drawString("" + title + ": " + binding,x,y);
 	}
 	,renderControls: function(g,x,y,controls) {
 		input_InputDevice.prototype.renderControls.call(this,g,x,y,controls);
@@ -10729,13 +10818,15 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			while(_g1 < _g2.length) {
 				var action = _g2[_g1];
 				++_g1;
-				var key = this.get_inputSettings().mappings.h[action].keyboardInput;
-				str += "" + input_KeyCodeToString_KEY_CODE_TO_STRING.h[key] + "/";
+				var mapping = this.get_inputSettings().mappings.h[action].keyboardInput;
+				if(mapping != null) {
+					str += "" + input_KeyCodeToString_KEY_CODE_TO_STRING.h[mapping] + "/";
+				}
 			}
 			str = str.substring(0,str.length - 1);
 			str += " : " + d.description + "    ";
-			var strWidth = this.font.width(this.controlsFontSize,str);
-			g.drawString(str,x,y);
+			var strWidth = g.get_font().width(g.get_fontSize(),str);
+			utils_Utils.shadowDrawString(g,3,-16777216,-1,str,x,y);
 			x += strWidth;
 		}
 	}
@@ -41338,7 +41429,7 @@ var main_$menu_ui_OptionsPage = function(prefsSettings) {
 					save_$data_SaveManager.saveProfiles();
 				}))];
 			}))];
-		})),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Profiles",new main_$menu_ui_ProfilePage(),["View and Edit Profiles"]))];
+		})),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Profiles",new main_$menu_ui_ProfileListPage(),["View and Edit Profiles"]))];
 	}));
 };
 $hxClasses["main_menu.ui.OptionsPage"] = main_$menu_ui_OptionsPage;
@@ -41359,19 +41450,72 @@ main_$menu_ui_OptionsPage.prototype = $extend(ui_ListMenuPage.prototype,{
 	}
 	,__class__: main_$menu_ui_OptionsPage
 });
-var main_$menu_ui_ProfilePage = function() {
+var main_$menu_ui_ProfileListPage = function() {
 	var _gthis = this;
 	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions("Profiles",function(_) {
 		var widgets = [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Create New",function() {
 			save_$data_SaveManager.newProfile();
 			_gthis.onShow(_gthis.menu);
+			_gthis.onResize();
 		},["Create A New Profile"]))];
 		var _g = 0;
 		var _g1 = save_$data_SaveManager.profiles;
 		while(_g < _g1.length) {
 			var p = _g1[_g];
 			++_g;
-			widgets.push(new main_$menu_ui_ProfileWidget(_gthis,p));
+			var _g2 = ["Edit " + p.name + " Or Set It As Primary"];
+			widgets.push(new ui_SubPageWidget(new ui_SubPageWidgetOptions(p.name,new main_$menu_ui_ProfilePage(_gthis,p),_g2)));
+		}
+		return widgets;
+	}));
+};
+$hxClasses["main_menu.ui.ProfileListPage"] = main_$menu_ui_ProfileListPage;
+main_$menu_ui_ProfileListPage.__name__ = "main_menu.ui.ProfileListPage";
+main_$menu_ui_ProfileListPage.__super__ = ui_ListMenuPage;
+main_$menu_ui_ProfileListPage.prototype = $extend(ui_ListMenuPage.prototype,{
+	rebuild: function() {
+		this.onShow(this.menu);
+		this.onResize();
+	}
+	,__class__: main_$menu_ui_ProfileListPage
+});
+var main_$menu_ui_ProfilePage = function(listPage,profile) {
+	var _gthis = this;
+	this.listPage = listPage;
+	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions(profile.name,function(_) {
+		var widgets = [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Reset To Default",["Reset Various Aspects Of The Profile","To Their Default Values"],function(_) {
+			return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Input Settings",function() {
+				profile.input = new save_$data_InputSettings(new haxe_ds_StringMap());
+				save_$data_SaveManager.saveProfiles();
+			},["Reset Input Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Preferences",function() {
+				profile.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
+				save_$data_SaveManager.saveProfiles();
+			},["Reset Preferences"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Training Options",function() {
+				profile.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
+				save_$data_SaveManager.saveProfiles();
+			},["Reset Training Mode-Exclusive Options"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Endless Options",function() {
+				profile.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+				save_$data_SaveManager.saveProfiles();
+			},["Reset Endless Mode-Exclusive Options"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset All",function() {
+				profile.input = new save_$data_InputSettings(new haxe_ds_StringMap());
+				profile.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
+				profile.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
+				profile.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+				save_$data_SaveManager.saveProfiles();
+			},["Reset Input, Preferences, Training","And Endless Options"]))];
+		}))];
+		if(profile != save_$data_Profile.primary) {
+			widgets.unshift(new ui_ButtonWidget(new ui_ButtonWidgetOptions("Set As Primary",function() {
+				save_$data_Profile.changePrimary(profile);
+				_gthis.onShow(_gthis.menu);
+				_gthis.onResize();
+			},["Set The Profile As Primary","","The Primary Profile Is Used For","Menu Keybinds And Universal Match Preferences","(Background Animation, Music, Etc.)"])));
+			widgets.push(new ui_ButtonWidget(new ui_ButtonWidgetOptions("Delete Profile",function() {
+				save_$data_SaveManager.deleteProfile(profile);
+				_gthis.menu.popPage();
+				listPage.onShow(listPage.menu);
+				listPage.onResize();
+			},["Permanently Delete This Profile"])));
 		}
 		return widgets;
 	}));
@@ -41380,22 +41524,8 @@ $hxClasses["main_menu.ui.ProfilePage"] = main_$menu_ui_ProfilePage;
 main_$menu_ui_ProfilePage.__name__ = "main_menu.ui.ProfilePage";
 main_$menu_ui_ProfilePage.__super__ = ui_ListMenuPage;
 main_$menu_ui_ProfilePage.prototype = $extend(ui_ListMenuPage.prototype,{
-	rebuild: function() {
-		this.onShow(this.menu);
-	}
+	listPage: null
 	,__class__: main_$menu_ui_ProfilePage
-});
-var main_$menu_ui_ProfileWidget = function(page,profile) {
-	ui_ButtonWidget.call(this,new ui_ButtonWidgetOptions("" + profile.name + (profile == save_$data_Profile.primary ? " (Primary)" : ""),function() {
-		save_$data_Profile.changePrimary(profile);
-		page.onShow(page.menu);
-	},[]));
-};
-$hxClasses["main_menu.ui.ProfileWidget"] = main_$menu_ui_ProfileWidget;
-main_$menu_ui_ProfileWidget.__name__ = "main_menu.ui.ProfileWidget";
-main_$menu_ui_ProfileWidget.__super__ = ui_ButtonWidget;
-main_$menu_ui_ProfileWidget.prototype = $extend(ui_ButtonWidget.prototype,{
-	__class__: main_$menu_ui_ProfileWidget
 });
 var save_$data_IClearOnXModeContainer = function() { };
 $hxClasses["save_data.IClearOnXModeContainer"] = save_$data_IClearOnXModeContainer;
@@ -41777,11 +41907,29 @@ save_$data_Profile.changePrimary = function(p) {
 	}
 };
 save_$data_Profile.prototype = {
-	input: null
+	name: null
+	,input: null
 	,prefs: null
 	,trainingSettings: null
 	,endlessSettings: null
-	,name: null
+	,setInputDefaults: function() {
+		this.input = new save_$data_InputSettings(new haxe_ds_StringMap());
+	}
+	,setPrefsDefaults: function() {
+		this.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
+	}
+	,setTrainingDefaults: function() {
+		this.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
+	}
+	,setEndlessDefaults: function() {
+		this.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+	}
+	,setDefaults: function() {
+		this.input = new save_$data_InputSettings(new haxe_ds_StringMap());
+		this.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
+		this.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
+		this.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+	}
 	,exportOverrides: function() {
 		var overrides = new haxe_ds_StringMap();
 		overrides.h["NAME"] = this.name;
@@ -41844,8 +41992,15 @@ save_$data_SaveManager.newProfile = function() {
 	save_$data_SaveManager.profiles.push(new save_$data_Profile(_g));
 	save_$data_SaveManager.saveProfiles();
 };
+save_$data_SaveManager.deleteProfile = function(p) {
+	HxOverrides.remove(save_$data_SaveManager.profiles,p);
+	save_$data_SaveManager.saveProfiles();
+};
 save_$data_SaveManager.getProfile = function(index) {
 	return save_$data_SaveManager.profiles[index];
+};
+save_$data_SaveManager.getProfileCount = function() {
+	return save_$data_SaveManager.profiles.length;
 };
 save_$data_SaveManager.saveGraphics = function() {
 	var overrides = save_$data_SaveManager.graphics.exportOverrides();
@@ -42033,17 +42188,15 @@ ui_AnyGamepadDetectWrapper.prototype = {
 	}
 	,onShow: function(menu) {
 		this.menu = menu;
-		var inputDevice = this.keyboardDevice;
-		inputDevice.onResize();
 		var _this = menu.inputDevices;
-		_this.head = new haxe_ds_GenericCell(inputDevice,_this.head);
+		_this.head = new haxe_ds_GenericCell(this.keyboardDevice,_this.head);
 		menu.setInputDevice();
-		input_AnyInputDevice.instance.clearLastGamepadID();
+		input_AnyInputDevice.instance.resetLastDeviceID();
 	}
 	,update: function() {
 		var anyDevice = input_AnyInputDevice.instance;
-		var lastID = input_AnyInputDevice.lastGamepadID;
-		if(lastID != null) {
+		var lastID = input_AnyInputDevice.lastDeviceID;
+		if(lastID != -1) {
 			var page = this.pageBuilder(js_Boot.__cast(anyDevice.devices.h[lastID] , input_GamepadInputDevice));
 			var _this = this.menu;
 			var _this1 = _this.inputDevices;
@@ -42656,6 +42809,8 @@ var game_actions_ActionData_ACTION_DATA = (function($this) {
 	return $r;
 }(this));
 game_all_$clear_AllClearManager.SHORT_STR = "AC!";
+game_boards_TrainingBoard.GAME_CONTROL_DISPLAY = [new ui_ControlDisplay(["TOGGLE_EDIT_MODE"],"Edit Mode"),new ui_ControlDisplay(["PREVIOUS_GROUP"],"Undo"),new ui_ControlDisplay(["NEXT_GROUP"],"Get Next Group")];
+game_boards_TrainingBoard.EDIT_CONTROL_DISPLAY = [new ui_ControlDisplay(["TOGGLE_EDIT_MODE"],"Play Mode"),new ui_ControlDisplay(["EDIT_SET"],"Set"),new ui_ControlDisplay(["EDIT_CLEAR"],"Clear"),new ui_ControlDisplay(["PREVIOUS_STEP","NEXT_STEP"],"Cycle Chain Steps"),new ui_ControlDisplay(["PREVIOUS_COLOR","NEXT_COLOR"],"Cycle Gelos / Markers"),new ui_ControlDisplay(["TOGGLE_MARKERS"],"Toggle Gelos / Markers")];
 game_boardstates_EditingBoardState.COLORS = [0,1,2,3,4,6];
 game_boardstates_TrainingInfoBoardState.TITLE_FONT_SIZE = 40;
 game_boardstates_TrainingInfoBoardState.CARD_FONT_SIZE = 32;
@@ -42933,17 +43088,19 @@ game_simulation_SimulationStep.LABEL_SIZE = 64;
 game_simulation_SimulationStep.CARD_SIZE = 512;
 game_simulation_SimulationStep.TITLE_FONT_SIZE = 40;
 game_simulation_SimulationStep.CARD_FONT_SIZE = 32;
+game_states_ControlDisplayGameState.FONT_SIZE = 32;
 ui_ListMenuPage.DESC_FONT_SIZE = 48;
 ui_ListMenuPage.MAX_WIDGETS_PER_VIEW = 7;
 ui_ListMenuPage.WIDGET_BOTTOM_PADDING = 16;
 ui_ListMenuPage.DEFAULT_CONTROL_DISPLAYS = [new ui_ControlDisplay(["MENU_UP","MENU_DOWN"],"Select"),new ui_ControlDisplay(["BACK"],"Back")];
 ui_ButtonWidget.FONT_SIZE = 60;
 ui_Menu.HEADER_FONT_SIZE = 128;
-ui_Menu.CONTROLS_FONT_SIZE = 64;
+ui_Menu.CONTROLS_FONT_SIZE = 52;
 ui_Menu.WARNING_FONT_SIZE = 24;
 ui_Menu.PADDING = 64;
 ui_Menu.WARNING = ["BEWARE! This Is A Pre-Alpha Build of GelaVolt.","Everything Is Subject To Change. Expect Bugs and Crashes.","Thank You For Trying GelaVolt! Please Consider Leaving","Feedback On The Official Server! :)"];
 game_ui_GroupEditorPage.GRID_COLOR = kha_Color._new(-12303292);
+game_ui_InputWidget.FONT_SIZE = 60;
 game_ui_QueueEditorPage.FONT_SIZE = 72;
 haxe_Serializer.USE_CACHE = false;
 haxe_Serializer.USE_ENUM_INDEX = false;
@@ -42956,6 +43113,7 @@ haxe_io_FPHelper.helper = new DataView(new ArrayBuffer(8));
 input_AnyInputDevice.FONT_SIZE = 48;
 input_AnyInputDevice.KEYBOARD_ID = -1;
 input_AnyInputDevice.rebindCounter = 0;
+input_AnyInputDevice.lastDeviceID = -1;
 var input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES = (function($this) {
 	var $r;
 	var _g = new haxe_ds_IntMap();
@@ -43534,7 +43692,7 @@ save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
 	var $r;
 	var _g = new haxe_ds_StringMap();
 	{
-		var value = new input_InputMapping(27,9,null);
+		var value = new input_InputMapping(27,9,new input_AxisMapping(null,null));
 		_g.h["PAUSE"] = value;
 	}
 	{
@@ -43554,11 +43712,11 @@ save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
 		_g.h["MENU_UP"] = value;
 	}
 	{
-		var value = new input_InputMapping(8,0,null);
+		var value = new input_InputMapping(8,0,new input_AxisMapping(null,null));
 		_g.h["BACK"] = value;
 	}
 	{
-		var value = new input_InputMapping(13,1,null);
+		var value = new input_InputMapping(13,1,new input_AxisMapping(null,null));
 		_g.h["CONFIRM"] = value;
 	}
 	{
@@ -43578,15 +43736,15 @@ save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
 		_g.h["HARD_DROP"] = value;
 	}
 	{
-		var value = new input_InputMapping(68,0,null);
+		var value = new input_InputMapping(68,0,new input_AxisMapping(null,null));
 		_g.h["ROTATE_LEFT"] = value;
 	}
 	{
-		var value = new input_InputMapping(70,1,null);
+		var value = new input_InputMapping(70,1,new input_AxisMapping(null,null));
 		_g.h["ROTATE_RIGHT"] = value;
 	}
 	{
-		var value = new input_InputMapping(81,8,null);
+		var value = new input_InputMapping(81,8,new input_AxisMapping(null,null));
 		_g.h["TOGGLE_EDIT_MODE"] = value;
 	}
 	{
@@ -43606,39 +43764,39 @@ save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
 		_g.h["EDIT_UP"] = value;
 	}
 	{
-		var value = new input_InputMapping(68,0,null);
+		var value = new input_InputMapping(68,0,new input_AxisMapping(null,null));
 		_g.h["EDIT_CLEAR"] = value;
 	}
 	{
-		var value = new input_InputMapping(70,1,null);
+		var value = new input_InputMapping(70,1,new input_AxisMapping(null,null));
 		_g.h["EDIT_SET"] = value;
 	}
 	{
-		var value = new input_InputMapping(89,2,null);
+		var value = new input_InputMapping(89,2,new input_AxisMapping(null,null));
 		_g.h["PREVIOUS_STEP"] = value;
 	}
 	{
-		var value = new input_InputMapping(88,3,null);
+		var value = new input_InputMapping(88,3,new input_AxisMapping(null,null));
 		_g.h["NEXT_STEP"] = value;
 	}
 	{
-		var value = new input_InputMapping(67,6,null);
+		var value = new input_InputMapping(67,6,new input_AxisMapping(null,null));
 		_g.h["PREVIOUS_COLOR"] = value;
 	}
 	{
-		var value = new input_InputMapping(86,7,null);
+		var value = new input_InputMapping(86,7,new input_AxisMapping(null,null));
 		_g.h["NEXT_COLOR"] = value;
 	}
 	{
-		var value = new input_InputMapping(89,2,null);
+		var value = new input_InputMapping(89,2,new input_AxisMapping(null,null));
 		_g.h["PREVIOUS_GROUP"] = value;
 	}
 	{
-		var value = new input_InputMapping(88,3,null);
+		var value = new input_InputMapping(88,3,new input_AxisMapping(null,null));
 		_g.h["NEXT_GROUP"] = value;
 	}
 	{
-		var value = new input_InputMapping(66,5,null);
+		var value = new input_InputMapping(66,5,new input_AxisMapping(null,null));
 		_g.h["TOGGLE_MARKERS"] = value;
 	}
 	$r = _g;
