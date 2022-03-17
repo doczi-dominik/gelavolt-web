@@ -10626,12 +10626,17 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 					x += buttonSpr.width * buttonScale * 1.25;
 				}
 				if(!(axis.axis == null && axis.direction == null)) {
-					haxe_Log.trace("Action: " + action + " Axis: " + axis.axis + " Direction: " + axis.direction,{ fileName : "input/GamepadInputDevice.hx", lineNumber : 300, className : "input.GamepadInputDevice", methodName : "renderControls"});
 					var key = axis.hashCode();
 					var axisSpr = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
-					var axisScale = fontHeight / axisSpr.height;
-					input_GamepadInputDevice.renderButton(g,x,y,axisScale,axisSpr);
-					x += axisSpr.width * axisScale * 1.25;
+					if(axisSpr != null) {
+						var axisScale = fontHeight / axisSpr.height;
+						input_GamepadInputDevice.renderButton(g,x,y,axisScale,axisSpr);
+						x += axisSpr.width * axisScale * 1.25;
+					} else {
+						var str1 = "AXIS" + axis.axis;
+						g.drawString(str1,x,y);
+						x += g.get_font().width(g.get_fontSize(),str1) * 1.25;
+					}
 				}
 			}
 			str = str.substring(0,str.length - 1);
@@ -10652,7 +10657,7 @@ $hxClasses["input.InputMapping"] = input_InputMapping;
 input_InputMapping.__name__ = "input.InputMapping";
 input_InputMapping.fromString = function(str) {
 	var parts = str.split(";");
-	return new input_InputMapping(parts[0] != "" ? js_Boot.__cast(Std.parseInt(parts[0]) , Int) : null,parts[1] != "" ? Std.parseInt(parts[1]) : null,parts[2] != "" ? input_AxisMapping.fromString(parts[2]) : null);
+	return new input_InputMapping(parts[0] != "" ? js_Boot.__cast(Std.parseInt(parts[0]) , Int) : null,parts[1] != "" ? Std.parseInt(parts[1]) : null,parts[2] != "" ? input_AxisMapping.fromString(parts[2]) : new input_AxisMapping(null,null));
 };
 input_InputMapping.prototype = {
 	keyboardInput: null
