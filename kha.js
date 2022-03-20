@@ -1017,10 +1017,11 @@ var input_InputType = $hxEnums["input.InputType"] = { __ename__:"input.InputType
 	,REPEAT: {_hx_name:"REPEAT",_hx_index:2,__enum__:"input.InputType",toString:$estr}
 };
 input_InputType.__constructs__ = [input_InputType.HOLD,input_InputType.PRESS,input_InputType.REPEAT];
-var game_actions_ActionDataEntry = function(title,description,inputType) {
+var game_actions_ActionDataEntry = function(title,description,inputType,isUnbindable) {
 	this.title = title;
 	this.description = description;
 	this.inputType = inputType;
+	this.isUnbindable = isUnbindable;
 };
 $hxClasses["game.actions.ActionDataEntry"] = game_actions_ActionDataEntry;
 game_actions_ActionDataEntry.__name__ = "game.actions.ActionDataEntry";
@@ -1028,6 +1029,7 @@ game_actions_ActionDataEntry.prototype = {
 	title: null
 	,description: null
 	,inputType: null
+	,isUnbindable: null
 	,__class__: game_actions_ActionDataEntry
 };
 var game_all_$clear_AllClearManager = function(opts) {
@@ -7189,7 +7191,7 @@ game_states_ControlDisplayGameState.prototype = $extend(game_states_GameState.pr
 		if(this.container.isVisible) {
 			g.set_font(this.font);
 			g.set_fontSize(this.fontSize);
-			input_AnyInputDevice.instance.renderControls(g,0,ScaleManager.height - this.fontHeight,this.container.value);
+			input_AnyInputDevice.instance.renderControls(g,0,this.container.value);
 		}
 		game_states_GameState.prototype.render.call(this,g,g4,alpha);
 	}
@@ -7425,7 +7427,6 @@ var game_ui_ControlsPage = function(opts) {
 		}
 		return result;
 	}));
-	this.controlDisplays = [new ui_ControlDisplay(["MENU_UP","MENU_DOWN"],"Select List Entry"),new ui_ControlDisplay(["BACK"],"Back"),new ui_ControlDisplay(["CONFIRM"],"Rebind")];
 };
 $hxClasses["game.ui.ControlsPage"] = game_ui_ControlsPage;
 game_ui_ControlsPage.__name__ = "game.ui.ControlsPage";
@@ -7660,7 +7661,7 @@ ui_Menu.prototype = {
 		g.set_color(-1);
 		g.set_fontSize(this.controlsFontSize);
 		var _this = this.pages;
-		this.inputDevice.renderControls(g,this.padding,ScaleManager.height - this.headerFontHeight,(_this.head == null ? null : _this.head.elt).controlDisplays);
+		this.inputDevice.renderControls(g,this.padding,(_this.head == null ? null : _this.head.elt).controlDisplays);
 	}
 	,__class__: ui_Menu
 };
@@ -7928,10 +7929,15 @@ game_ui_GroupEditorPage.prototype = {
 	,__class__: game_ui_GroupEditorPage
 };
 var game_ui_InputWidget = function(action) {
-	this.controlDisplays = [new ui_ControlDisplay(["MENU_LEFT"],"Unbind"),new ui_ControlDisplay(["MENU_RIGHT"],"Default"),new ui_ControlDisplay(["CONFIRM"],"Rebind")];
+	this.controlDisplays = [new ui_ControlDisplay(["CONFIRM"],"Rebind"),new ui_ControlDisplay(["MENU_RIGHT"],"Default (HOLD)")];
 	this.font = kha_Assets.fonts.Pixellari;
 	this.action = action;
-	this.description = game_actions_ActionData_ACTION_DATA.h[action].description;
+	var data = game_actions_ActionData_ACTION_DATA.h[action];
+	this.isUnbindable = data.isUnbindable;
+	if(this.isUnbindable) {
+		this.controlDisplays.push(new ui_ControlDisplay(["MENU_LEFT"],"Unbind (HOLD)"));
+	}
+	this.description = data.description;
 };
 $hxClasses["game.ui.InputWidget"] = game_ui_InputWidget;
 game_ui_InputWidget.__name__ = "game.ui.InputWidget";
@@ -7941,6 +7947,9 @@ game_ui_InputWidget.prototype = {
 	,action: null
 	,fontSize: null
 	,menu: null
+	,unbindCounter: null
+	,defaultCounter: null
+	,isUnbindable: null
 	,description: null
 	,controlDisplays: null
 	,height: null
@@ -7953,11 +7962,25 @@ game_ui_InputWidget.prototype = {
 	}
 	,update: function() {
 		var inputDevice = this.menu.inputDevice;
-		if(inputDevice.getAction("MENU_LEFT")) {
-			inputDevice.unbind(this.action);
+		if(this.isUnbindable && inputDevice.getRawAction("MENU_LEFT")) {
+			++this.unbindCounter;
+		} else {
+			this.unbindCounter = 0;
 		}
-		if(inputDevice.getAction("MENU_RIGHT")) {
+		if(inputDevice.getRawAction("MENU_RIGHT")) {
+			++this.defaultCounter;
+		} else {
+			this.defaultCounter = 0;
+		}
+		if(this.unbindCounter == 90) {
+			inputDevice.unbind(this.action);
+			this.unbindCounter = 100;
+			this.defaultCounter = 100;
+		}
+		if(this.defaultCounter == 90) {
 			inputDevice.bindDefault(this.action);
+			this.unbindCounter = 100;
+			this.defaultCounter = 100;
 		}
 		if(inputDevice.getAction("CONFIRM")) {
 			inputDevice.rebind(this.action);
@@ -9767,28 +9790,6 @@ haxe_ds__$StringMap_StringMapKeyIterator.prototype = {
 	}
 	,__class__: haxe_ds__$StringMap_StringMapKeyIterator
 };
-var haxe_ds__$StringMap_StringMapKeyValueIterator = function(h) {
-	this.h = h;
-	this.keys = Object.keys(h);
-	this.length = this.keys.length;
-	this.current = 0;
-};
-$hxClasses["haxe.ds._StringMap.StringMapKeyValueIterator"] = haxe_ds__$StringMap_StringMapKeyValueIterator;
-haxe_ds__$StringMap_StringMapKeyValueIterator.__name__ = "haxe.ds._StringMap.StringMapKeyValueIterator";
-haxe_ds__$StringMap_StringMapKeyValueIterator.prototype = {
-	h: null
-	,keys: null
-	,length: null
-	,current: null
-	,hasNext: function() {
-		return this.current < this.length;
-	}
-	,next: function() {
-		var key = this.keys[this.current++];
-		return { key : key, value : this.h[key]};
-	}
-	,__class__: haxe_ds__$StringMap_StringMapKeyValueIterator
-};
 var haxe_exceptions_PosException = function(message,previous,pos) {
 	haxe_Exception.call(this,message,previous);
 	if(pos == null) {
@@ -10140,6 +10141,7 @@ input_IInputDevice.prototype = {
 	,bindDefault: null
 	,rebind: null
 	,getAction: null
+	,getRawAction: null
 	,renderBinding: null
 	,renderControls: null
 	,__class__: input_IInputDevice
@@ -10149,8 +10151,20 @@ var input_AnyInputDevice = function() {
 	this.isRebinding = false;
 	this.type = 2;
 	var this1 = this.devices;
-	var v = new input_KeyboardInputDevice(save_$data_Profile.primary.input);
+	var v = new input_KeyboardInputDevice(this.get_inputSettings());
 	this1.h[-1] = v;
+	if(kha_input_Gamepad.get(0).connected) {
+		this.connectListener(0);
+	}
+	if(kha_input_Gamepad.get(1).connected) {
+		this.connectListener(1);
+	}
+	if(kha_input_Gamepad.get(2).connected) {
+		this.connectListener(2);
+	}
+	if(kha_input_Gamepad.get(3).connected) {
+		this.connectListener(3);
+	}
 	kha_input_Gamepad.notifyOnConnect($bind(this,this.connectListener),$bind(this,this.disconnectListener));
 	save_$data_Profile.addOnChangePrimaryCallback($bind(this,this.onChangePrimary));
 };
@@ -10177,7 +10191,7 @@ input_AnyInputDevice.prototype = {
 		var d = this.devices.iterator();
 		while(d.hasNext()) {
 			var d1 = d.next();
-			d1.set_inputSettings(save_$data_Profile.primary.input);
+			d1.inputSettings = save_$data_Profile.primary.input;
 		}
 	}
 	,get_inputSettings: function() {
@@ -10206,6 +10220,19 @@ input_AnyInputDevice.prototype = {
 		}
 		return false;
 	}
+	,getRawAction: function(action) {
+		if(input_AnyInputDevice.rebindCounter > 0) {
+			return false;
+		}
+		var d = this.devices.iterator();
+		while(d.hasNext()) {
+			var d1 = d.next();
+			if(d1.getRawAction(action)) {
+				return true;
+			}
+		}
+		return false;
+	}
 	,getGamepad: function(id) {
 		return js_Boot.__cast(this.devices.h[id] , input_GamepadInputDevice);
 	}
@@ -10214,12 +10241,12 @@ input_AnyInputDevice.prototype = {
 	}
 	,renderBinding: function(g,x,y,action) {
 	}
-	,renderControls: function(g,x,y,controls) {
+	,renderControls: function(g,padding,controls) {
 		var lastDevice = this.devices.h[input_AnyInputDevice.lastDeviceID];
 		if(lastDevice == null) {
 			return;
 		}
-		lastDevice.renderControls(g,x,y,controls);
+		lastDevice.renderControls(g,padding,controls);
 	}
 	,__class__: input_AnyInputDevice
 };
@@ -10259,10 +10286,11 @@ input_AxisMapping.prototype = {
 	,__class__: input_AxisMapping
 };
 var input_InputDevice = function(type,inputSettings) {
-	this.counters = new haxe_ds_StringMap();
 	this.isRebinding = false;
+	this.scrollT = 0;
 	this.type = type;
-	this.set_inputSettings(inputSettings);
+	this.inputSettings = inputSettings;
+	inputSettings.addUpdateListener($bind(this,this.buildActions));
 	this.addListeners();
 	input_InputDevice.instances.push(this);
 };
@@ -10275,7 +10303,7 @@ input_InputDevice.update = function() {
 	while(_g < _g1.length) {
 		var i = _g1[_g];
 		++_g;
-		i.updateCounters();
+		i.updateInstance();
 	}
 };
 input_InputDevice.prototype = {
@@ -10283,6 +10311,7 @@ input_InputDevice.prototype = {
 	,actions: null
 	,isRebinding: null
 	,latestRebindAction: null
+	,scrollT: null
 	,type: null
 	,inputSettings: null
 	,buildActions: function() {
@@ -10296,12 +10325,7 @@ input_InputDevice.prototype = {
 	,get_inputSettings: function() {
 		return this.inputSettings;
 	}
-	,set_inputSettings: function(value) {
-		this.inputSettings = value;
-		this.buildActions();
-		return this.get_inputSettings();
-	}
-	,updateCounters: function() {
+	,updateInstance: function() {
 		var h = this.counters.h;
 		var k_h = h;
 		var k_keys = Object.keys(h);
@@ -10313,6 +10337,7 @@ input_InputDevice.prototype = {
 			var v = this.counters.h[tmp] + 1;
 			this.counters.h[tmp] = v;
 		}
+		++this.scrollT;
 	}
 	,holdActionHandler: function(value) {
 		return value > 0;
@@ -10332,15 +10357,24 @@ input_InputDevice.prototype = {
 		save_$data_SaveManager.saveProfiles();
 		this.removeRebindListeners();
 		this.addListeners();
-		this.buildActions();
+		this.get_inputSettings().notifyListeners();
+	}
+	,getScrollX: function(width,screenWidth) {
+		var diff = width - screenWidth;
+		if(diff <= 0) {
+			this.scrollT = 375;
+			return 0.0;
+		}
+		var sinCalc = Math.sin(this.scrollT / 75);
+		return (Math.min(0.4,Math.max(sinCalc,-0.4)) + 0.4) * diff * 1.25;
 	}
 	,unbind: function(action) {
 		save_$data_SaveManager.saveProfiles();
-		this.buildActions();
+		this.get_inputSettings().notifyListeners();
 	}
 	,bindDefault: function(action) {
 		save_$data_SaveManager.saveProfiles();
-		this.buildActions();
+		this.get_inputSettings().notifyListeners();
 	}
 	,rebind: function(action) {
 		this.isRebinding = true;
@@ -10350,9 +10384,12 @@ input_InputDevice.prototype = {
 	,getAction: function(action) {
 		return this.actions.h[action](this.counters.h[action]);
 	}
+	,getRawAction: function(action) {
+		return this.holdActionHandler(this.counters.h[action]);
+	}
 	,renderBinding: function(g,x,y,action) {
 	}
-	,renderControls: function(g,x,y,controls) {
+	,renderControls: function(g,padding,controls) {
 	}
 	,__class__: input_InputDevice
 };
@@ -10375,6 +10412,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	,separatorWidth: null
 	,buttonsToActions: null
 	,axesToActions: null
+	,axesCache: null
 	,latestButtonRebindFunction: null
 	,latestAxisRebindFunction: null
 	,buttonListener: function(button,value) {
@@ -10388,10 +10426,10 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		if(value == 0) {
 			this.upListener(actions);
 		} else {
-			this.buttonDownListener(actions);
+			this.downListener(actions);
 		}
 	}
-	,buttonDownListener: function(actions) {
+	,downListener: function(actions) {
 		var _g = 0;
 		while(_g < actions.length) {
 			var action = actions[_g];
@@ -10423,33 +10461,30 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			var k = _g.key;
 			var v = _g.value;
 			if(k.axis == axis && k.direction * value >= 0) {
+				var somethingChanged = false;
 				if(Math.abs(value) > this.get_inputSettings().deadzone) {
-					input_AnyInputDevice.lastDeviceID = this.id;
-					this.axisDownListener(v);
-				} else {
+					if(this.axesCache.indexOf(axis) == -1) {
+						input_AnyInputDevice.lastDeviceID = this.id;
+						this.downListener(v);
+						this.axesCache.push(axis);
+						somethingChanged = true;
+					}
+				} else if(this.axesCache.indexOf(axis) != -1) {
 					this.upListener(v);
+					HxOverrides.remove(this.axesCache,axis);
+					somethingChanged = true;
 				}
-				var oppositeMapping = new input_AxisMapping(axis,k.direction * -1);
-				var _this1 = this.axesToActions.values;
-				var key2 = oppositeMapping.hashCode();
-				if(_this1.h.hasOwnProperty(key2)) {
-					var _this2 = this.axesToActions.values;
-					var key3 = oppositeMapping.hashCode();
-					this.upListener(_this2.h[key3]);
+				if(somethingChanged) {
+					var oppositeMapping = new input_AxisMapping(axis,k.direction * -1);
+					var _this1 = this.axesToActions.values;
+					var key2 = oppositeMapping.hashCode();
+					if(_this1.h.hasOwnProperty(key2)) {
+						var _this2 = this.axesToActions.values;
+						var key3 = oppositeMapping.hashCode();
+						this.upListener(_this2.h[key3]);
+					}
 				}
-				return;
 			}
-		}
-	}
-	,axisDownListener: function(actions) {
-		var _g = 0;
-		while(_g < actions.length) {
-			var action = actions[_g];
-			++_g;
-			if(Object.prototype.hasOwnProperty.call(this.counters.h,action)) {
-				continue;
-			}
-			this.counters.h[action] = 0;
 		}
 	}
 	,buttonRebindListener: function(action,button,value) {
@@ -10473,10 +10508,12 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		this.finishRebind();
 	}
 	,buildActions: function() {
+		this.counters = new haxe_ds_StringMap();
 		this.actions = new haxe_ds_StringMap();
 		this.buttonsToActions = new haxe_ds_IntMap();
 		var this1 = new haxe_ds__$HashMap_HashMapData();
 		this.axesToActions = this1;
+		this.axesCache = [];
 		var h = game_actions_ActionData_ACTION_DATA.h;
 		var action_h = h;
 		var action_keys = Object.keys(h);
@@ -10592,14 +10629,17 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		g.set_color(-1);
 		var buttonMapping = mapping.gamepadButton;
 		if(buttonMapping != null) {
-			var buttonSpr = input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[buttonMapping];
+			var key = this.get_inputSettings().gamepadBrand;
+			var buttonSpr = input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[key].h[buttonMapping];
 			input_GamepadInputDevice.renderButton(g,x,y,fontHeight / buttonSpr.height,buttonSpr);
 			x += buttonSpr.width * ScaleManager.smallerScale;
 		}
 		var axisMapping = mapping.gamepadAxis;
 		if(!(axisMapping.axis == null && axisMapping.direction == null)) {
+			var key = this.get_inputSettings().gamepadBrand;
+			var this1 = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
 			var key = mapping.gamepadAxis.hashCode();
-			var axisSpr = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
+			var axisSpr = this1.h[key];
 			if(axisSpr != null) {
 				input_GamepadInputDevice.renderButton(g,x,y,fontHeight / axisSpr.height,axisSpr);
 			} else {
@@ -10607,9 +10647,40 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			}
 		}
 	}
-	,renderControls: function(g,x,y,controls) {
+	,renderControls: function(g,padding,controls) {
 		var fontHeight = g.get_font().height(g.get_fontSize());
-		input_InputDevice.prototype.renderControls.call(this,g,x,y,controls);
+		var y = ScaleManager.height - padding - fontHeight;
+		var paddedScreenWidth = ScaleManager.width - padding * 2;
+		var x = padding;
+		var totalWidth = 0.0;
+		var _g = 0;
+		while(_g < controls.length) {
+			var d = controls[_g];
+			++_g;
+			var _g1 = 0;
+			var _g2 = d.actions;
+			while(_g1 < _g2.length) {
+				var action = _g2[_g1];
+				++_g1;
+				var mapping = this.get_inputSettings().mappings.h[action];
+				var button = mapping.gamepadButton;
+				var axis = mapping.gamepadAxis;
+				var buttonSpr = this.get_inputSettings().getButtonSprite(action);
+				if(buttonSpr != null) {
+					totalWidth += buttonSpr.width * (fontHeight / buttonSpr.height) * 1.25;
+				}
+				if(!(axis.axis == null && axis.direction == null)) {
+					var axisSpr = this.get_inputSettings().getAxisSprite(action);
+					if(axisSpr != null) {
+						totalWidth += axisSpr.width * (fontHeight / axisSpr.height) * 1.25;
+					} else {
+						totalWidth += g.get_font().width(g.get_fontSize(),"AXIS" + axis.axis) * 1.25;
+					}
+				}
+			}
+			totalWidth += g.get_font().width(g.get_fontSize()," : " + d.description + "    ");
+		}
+		var scrollX = this.getScrollX(totalWidth,paddedScreenWidth);
 		var _g = 0;
 		while(_g < controls.length) {
 			var d = controls[_g];
@@ -10621,24 +10692,22 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 				var action = _g2[_g1];
 				++_g1;
 				var mapping = this.get_inputSettings().mappings.h[action];
-				var button = mapping.gamepadButton;
 				var axis = mapping.gamepadAxis;
-				if(button != null) {
-					var buttonSpr = input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[button];
+				var buttonSpr = this.get_inputSettings().getButtonSprite(action);
+				if(buttonSpr != null) {
 					var buttonScale = fontHeight / buttonSpr.height;
-					input_GamepadInputDevice.renderButton(g,x,y,buttonScale,buttonSpr);
+					input_GamepadInputDevice.renderButton(g,x - scrollX,y,buttonScale,buttonSpr);
 					x += buttonSpr.width * buttonScale * 1.25;
 				}
 				if(!(axis.axis == null && axis.direction == null)) {
-					var key = axis.hashCode();
-					var axisSpr = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[key];
+					var axisSpr = this.get_inputSettings().getAxisSprite(action);
 					if(axisSpr != null) {
 						var axisScale = fontHeight / axisSpr.height;
-						input_GamepadInputDevice.renderButton(g,x,y,axisScale,axisSpr);
+						input_GamepadInputDevice.renderButton(g,x - scrollX,y,axisScale,axisSpr);
 						x += axisSpr.width * axisScale * 1.25;
 					} else {
 						var str1 = "AXIS" + axis.axis;
-						g.drawString(str1,x,y);
+						g.drawString(str1,x - scrollX,y);
 						x += g.get_font().width(g.get_fontSize(),str1) * 1.25;
 					}
 				}
@@ -10646,7 +10715,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			str = str.substring(0,str.length - 1);
 			str += " : " + d.description + "    ";
 			var strWidth = g.get_font().width(g.get_fontSize(),str);
-			utils_Utils.shadowDrawString(g,3,-16777216,-1,str,x,y);
+			utils_Utils.shadowDrawString(g,3,-16777216,-1,str,x - scrollX,y);
 			x += strWidth;
 		}
 	}
@@ -10744,6 +10813,7 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		this.finishRebind();
 	}
 	,buildActions: function() {
+		this.counters = new haxe_ds_StringMap();
 		this.actions = new haxe_ds_StringMap();
 		this.keysToActions = new haxe_ds_IntMap();
 		var h = game_actions_ActionData_ACTION_DATA.h;
@@ -10815,13 +10885,12 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		var binding = kbInput == null ? "[ UNBOUND ]" : input_KeyCodeToString_KEY_CODE_TO_STRING.h[kbInput];
 		g.drawString("" + title + ": " + binding,x,y);
 	}
-	,renderControls: function(g,x,y,controls) {
-		input_InputDevice.prototype.renderControls.call(this,g,x,y,controls);
+	,renderControls: function(g,padding,controls) {
+		var str = "";
 		var _g = 0;
 		while(_g < controls.length) {
 			var d = controls[_g];
 			++_g;
-			var str = "";
 			var _g1 = 0;
 			var _g2 = d.actions;
 			while(_g1 < _g2.length) {
@@ -10834,10 +10903,10 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			}
 			str = str.substring(0,str.length - 1);
 			str += " : " + d.description + "    ";
-			var strWidth = g.get_font().width(g.get_fontSize(),str);
-			utils_Utils.shadowDrawString(g,3,-16777216,-1,str,x,y);
-			x += strWidth;
 		}
+		var strWidth = g.get_font().width(g.get_fontSize(),str);
+		var paddedScreenWidth = ScaleManager.width - padding * 2;
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,str,padding - this.getScrollX(strWidth,paddedScreenWidth),ScaleManager.height - padding - g.get_font().height(g.get_fontSize()));
 	}
 	,resetIsAnyKeyDown: function() {
 		this.anyKeyCounter = 0;
@@ -11090,8 +11159,8 @@ var kha__$Assets_ImageList = function() {
 	this.ParticlesDescription = { name : "Particles", original_height : 1024, file_sizes : [9253], original_width : 1024, files : ["Particles.png"], type : "image"};
 	this.ParticlesName = "Particles";
 	this.Particles = null;
-	this.ButtonsSize = 12206;
-	this.ButtonsDescription = { name : "Buttons", original_height : 832, file_sizes : [12206], original_width : 704, files : ["Buttons.png"], type : "image"};
+	this.ButtonsSize = 15208;
+	this.ButtonsDescription = { name : "Buttons", original_height : 832, file_sizes : [15208], original_width : 704, files : ["Buttons.png"], type : "image"};
 	this.ButtonsName = "Buttons";
 	this.Buttons = null;
 	this.BorderSize = 3242;
@@ -41405,23 +41474,25 @@ var main_$menu_ui_OptionsPage = function(prefsSettings) {
 	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions("Options",function(_) {
 		return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Controls",["Change Keybindings For Keyboard And Gamepads"],function(menu) {
 			var inputDevice = menu.inputDevice;
+			var middle;
 			switch(inputDevice.type) {
-			case 0:
-				return _gthis.buildControls(inputDevice);
-			case 1:
-				return _gthis.buildGamepadControls(inputDevice);
+			case 0:case 1:
+				middle = _gthis.buildControls(inputDevice);
+				break;
 			case 2:
 				var keyboardDevice = js_Boot.__cast(input_AnyInputDevice.instance.devices.h[-1] , input_KeyboardInputDevice);
-				return [new ui_SubPageWidget(new ui_SubPageWidgetOptions("Keyboard Controls",new ui_KeyboardConfirmWrapper(new ui_KeyboardConfirmWrapperOptions(keyboardDevice,function() {
+				middle = [new ui_SubPageWidget(new ui_SubPageWidgetOptions("Keyboard Controls",new ui_KeyboardConfirmWrapper(new ui_KeyboardConfirmWrapperOptions(keyboardDevice,function() {
 					return new ui_InputLimitedListPage(new ui_InputLimitedListPageOptions(keyboardDevice,"Keyboard Controls",function(_) {
 						return _gthis.buildControls(keyboardDevice);
 					}));
 				})),["Change Keybindings"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Gamepad Controls",new ui_AnyGamepadDetectWrapper(new ui_AnyGamepadDetectWrapperOptions(keyboardDevice,function(gamepadDevice) {
 					return new ui_InputLimitedListPage(new ui_InputLimitedListPageOptions(gamepadDevice,"Gamepad Controls",function(_) {
-						return _gthis.buildGamepadControls(gamepadDevice);
+						return _gthis.buildControls(gamepadDevice);
 					}));
 				})),["Change Gamepad Bindings"]))];
+				break;
 			}
+			return _gthis.buildUniversalTop(inputDevice).concat(middle).concat(_gthis.buildUniversalBottom(inputDevice));
 		})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Personalization",["Change Various Options Related","To Appearance And Game Mechanics"],function(_) {
 			return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Gelo Group Shadow Options",["Change Various Options Related","To the Gelo Group Shadow Appearance"],function(_) {
 				return [new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable",["Enable Or Disable The Shadow","That Shows Where Gelo","Groups Will Fall"],prefsSettings.showGroupShadow,function(value) {
@@ -41446,16 +41517,45 @@ main_$menu_ui_OptionsPage.__name__ = "main_menu.ui.OptionsPage";
 main_$menu_ui_OptionsPage.__super__ = ui_ListMenuPage;
 main_$menu_ui_OptionsPage.prototype = $extend(ui_ListMenuPage.prototype,{
 	prefsSettings: null
+	,buildUniversalTop: function(inputDevice) {
+		var inputSettings = inputDevice.get_inputSettings();
+		var tmp = new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Gamepad Stick Deadzone",["Adjust The Threshold Where","The Analog Stick Doesn't Respond","To Inputs","","Increase This Value In Small Increments"," If You Experience Drifting, Rebounding","or Weird Inputs In General"],0,0.9,0.05,inputSettings.deadzone,function(value) {
+			inputSettings.deadzone = value;
+			save_$data_SaveManager.saveProfiles();
+		}));
+		var tmp1;
+		switch(inputSettings.gamepadBrand) {
+		case "DS4":
+			tmp1 = 0;
+			break;
+		case "JOYCON":
+			tmp1 = 2;
+			break;
+		case "SW Pro Controller":
+			tmp1 = 1;
+			break;
+		case "XB360":
+			tmp1 = 4;
+			break;
+		case "XBONE":
+			tmp1 = 3;
+			break;
+		}
+		return [tmp,new ui_OptionListWidget(new ui_OptionListWidgetOptions("Gamepad Brand",["Change The Type Of Button Icons","To Display"],["DS4","SW Pro Controller","JOYCON","XBONE","XB360"],tmp1,function(value) {
+			inputSettings.gamepadBrand = value;
+			save_$data_SaveManager.saveProfiles();
+		}))];
+	}
+	,buildUniversalBottom: function(inputDevice) {
+		return [new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Input Settings","Reset To Default",function() {
+			inputDevice.get_inputSettings().setDefaults();
+			save_$data_SaveManager.saveProfiles();
+		},["Reset Input Settings"]))];
+	}
 	,buildControls: function(inputDevice) {
 		return [new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Menu Controls",["Change Controls Related To","Menu Navigation"],["PAUSE","MENU_LEFT","MENU_RIGHT","MENU_UP","MENU_DOWN","BACK","CONFIRM"],inputDevice)),new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Game Controls",["Change Controls Related To","Gameplay"],["SHIFT_LEFT","SHIFT_RIGHT","SOFT_DROP","HARD_DROP","ROTATE_LEFT","ROTATE_RIGHT"],inputDevice)),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Training Controls",["Change Controls Specific To","Training Mode"],function(_) {
 			return [new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Universal Controls",["Change Controls That Are Used","Both In Play Mode And","Edit Mode"],["TOGGLE_EDIT_MODE"],inputDevice)),new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Play Mode Controls",["Change Controls That Are Only","Available In Play Mode"],["PREVIOUS_GROUP","NEXT_GROUP"],inputDevice)),new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Edit Mode Controls",["Change Controls That Are Only","Available In Edit Mode"],["EDIT_LEFT","EDIT_RIGHT","EDIT_UP","EDIT_DOWN","EDIT_CLEAR","EDIT_SET","PREVIOUS_STEP","NEXT_STEP","PREVIOUS_COLOR","NEXT_COLOR","TOGGLE_MARKERS"],inputDevice))];
 		}))];
-	}
-	,buildGamepadControls: function(inputDevice) {
-		return [new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Stick Deadzone",["Adjust The Threshold Where","The Analog Stick Doesn't Respond","To Inputs","","Increase This Value In Small Increments"," If You Experience Drifting, Rebounding","or Weird Inputs In General"],0,0.9,0.05,inputDevice.get_inputSettings().deadzone,function(value) {
-			inputDevice.get_inputSettings().deadzone = value;
-			save_$data_SaveManager.saveProfiles();
-		}))].concat(this.buildControls(inputDevice));
 	}
 	,__class__: main_$menu_ui_OptionsPage
 });
@@ -41493,28 +41593,23 @@ var main_$menu_ui_ProfilePage = function(listPage,profile) {
 	this.listPage = listPage;
 	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions(profile.name,function(_) {
 		var widgets = [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Reset To Default",["Reset Various Aspects Of The Profile","To Their Default Values"],function(_) {
-			return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Input Settings",function() {
-				profile.input = new save_$data_InputSettings(new haxe_ds_StringMap());
-				save_$data_Profile.reloadPrimary();
+			return [new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Input Settings","Reset Input Settings",function() {
+				profile.input.setDefaults();
 				save_$data_SaveManager.saveProfiles();
-			},["Reset Input Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Preferences",function() {
+			},["Reset Input Settings"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Preferences","Reset Preferences",function() {
 				profile.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
-				save_$data_Profile.reloadPrimary();
 				save_$data_SaveManager.saveProfiles();
-			},["Reset Preferences"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Training Options",function() {
+			},["Reset Preferences"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Training Options","Reset Training Options",function() {
 				profile.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
-				save_$data_Profile.reloadPrimary();
 				save_$data_SaveManager.saveProfiles();
-			},["Reset Training Mode-Exclusive Options"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Endless Options",function() {
+			},["Reset Training Mode-Exclusive Options"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Endless Options","Reset Endless Options",function() {
 				profile.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
-				save_$data_Profile.reloadPrimary();
 				save_$data_SaveManager.saveProfiles();
-			},["Reset Endless Mode-Exclusive Options"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset All",function() {
-				profile.input = new save_$data_InputSettings(new haxe_ds_StringMap());
+			},["Reset Endless Mode-Exclusive Options"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset All Of Your Data","Reset All",function() {
+				profile.input.setDefaults();
 				profile.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
 				profile.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
 				profile.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
-				save_$data_Profile.reloadPrimary();
 				save_$data_SaveManager.saveProfiles();
 			},["Reset Input, Preferences, Training","And Endless Options"]))];
 		}))];
@@ -41552,16 +41647,21 @@ save_$data_IClearOnXModeContainer.prototype = {
 var save_$data_EndlessSettings = function(overrides) {
 	this.clearOnXMode = "NEW";
 	try {
-		var _g = new haxe_ds__$StringMap_StringMapKeyValueIterator(overrides.h);
-		while(_g.hasNext()) {
-			var _g1 = _g.next();
-			var k = _g1.key;
-			var v = _g1.value;
+		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
+		var _g_h = h;
+		var _g_keys = Object.keys(h);
+		var _g_length = _g_keys.length;
+		var _g_current = 0;
+		while(_g_current < _g_length) {
+			var key = _g_keys[_g_current++];
+			var _g = { key : key, value : _g_h[key]};
+			var k = _g.key;
+			var v = _g.value;
 			try {
-				if(k == "CLEAR_ON_X_MODE") {
+				if(js_Boot.__cast(k , String) == "CLEAR_ON_X_MODE") {
 					this.clearOnXMode = js_Boot.__cast(v , String);
 				}
-			} catch( _g2 ) {
+			} catch( _g1 ) {
 				continue;
 			}
 		}
@@ -41591,16 +41691,21 @@ save_$data_EndlessSettings.prototype = {
 var save_$data_GraphicsSettings = function(overrides) {
 	this.fullscreen = true;
 	try {
-		var _g = new haxe_ds__$StringMap_StringMapKeyValueIterator(overrides.h);
-		while(_g.hasNext()) {
-			var _g1 = _g.next();
-			var k = _g1.key;
-			var v = _g1.value;
+		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
+		var _g_h = h;
+		var _g_keys = Object.keys(h);
+		var _g_length = _g_keys.length;
+		var _g_current = 0;
+		while(_g_current < _g_length) {
+			var key = _g_keys[_g_current++];
+			var _g = { key : key, value : _g_h[key]};
+			var k = _g.key;
+			var v = _g.value;
 			try {
-				if(k == "FULLSCREEN") {
+				if(js_Boot.__cast(k , String) == "FULLSCREEN") {
 					this.fullscreen = js_Boot.__cast(v , Bool);
 				}
-			} catch( _g2 ) {
+			} catch( _g1 ) {
 				continue;
 			}
 		}
@@ -41627,18 +41732,26 @@ save_$data_GraphicsSettings.prototype = {
 	,__class__: save_$data_GraphicsSettings
 };
 var save_$data_InputSettings = function(overrides) {
-	this.mappings = haxe_ds_StringMap.createCopy(save_$data_InputSettings.MAPPINGS_DEFAULTS.h);
-	this.deadzone = 0.0;
+	this.updateListeners = [];
+	this.setDefaults();
 	try {
-		var _g = new haxe_ds__$StringMap_StringMapKeyValueIterator(overrides.h);
-		while(_g.hasNext()) {
-			var _g1 = _g.next();
-			var k = _g1.key;
-			var v = _g1.value;
+		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
+		var _g_h = h;
+		var _g_keys = Object.keys(h);
+		var _g_length = _g_keys.length;
+		var _g_current = 0;
+		while(_g_current < _g_length) {
+			var key = _g_keys[_g_current++];
+			var _g = { key : key, value : _g_h[key]};
+			var k = _g.key;
+			var v = _g.value;
 			try {
-				switch(k) {
+				switch(js_Boot.__cast(k , String)) {
 				case "DEADZONE":
 					this.deadzone = js_Boot.__cast(v , Float);
+					break;
+				case "GAMEPAD_BRAND":
+					this.gamepadBrand = js_Boot.__cast(v , String);
 					break;
 				case "MAPPINGS":
 					var h = (js_Boot.__cast(v , haxe_ds_StringMap)).h;
@@ -41647,17 +41760,17 @@ var save_$data_InputSettings = function(overrides) {
 					var _g2_length = _g2_keys.length;
 					var _g2_current = 0;
 					while(_g2_current < _g2_length) {
-						var key = _g2_keys[_g2_current++];
-						var _g2 = { key : key, value : _g2_h[key]};
-						var kk = _g2.key;
-						var vv = _g2.value;
+						var key1 = _g2_keys[_g2_current++];
+						var _g1 = { key : key1, value : _g2_h[key1]};
+						var kk = _g1.key;
+						var vv = _g1.value;
 						var this1 = this.mappings;
 						var v1 = input_InputMapping.fromString(js_Boot.__cast(vv , String));
 						this1.h[js_Boot.__cast(kk , String)] = v1;
 					}
 					break;
 				}
-			} catch( _g3 ) {
+			} catch( _g2 ) {
 				continue;
 			}
 		}
@@ -41667,8 +41780,10 @@ var save_$data_InputSettings = function(overrides) {
 $hxClasses["save_data.InputSettings"] = save_$data_InputSettings;
 save_$data_InputSettings.__name__ = "save_data.InputSettings";
 save_$data_InputSettings.prototype = {
-	mappings: null
+	updateListeners: null
+	,mappings: null
 	,deadzone: null
+	,gamepadBrand: null
 	,exportOverrides: function() {
 		var overrides = new haxe_ds_StringMap();
 		var wereOverrides = false;
@@ -41694,8 +41809,12 @@ save_$data_InputSettings.prototype = {
 			overrides.h["MAPPINGS"] = mappingOverrides;
 			wereOverrides = true;
 		}
-		if(this.deadzone != 0.0) {
+		if(this.deadzone != 0.5) {
 			overrides.h["DEADZONE"] = this.deadzone;
+			wereOverrides = true;
+		}
+		if(this.gamepadBrand != "DS4") {
+			overrides.h["GAMEPAD_BRAND"] = this.gamepadBrand;
 			wereOverrides = true;
 		}
 		if(wereOverrides) {
@@ -41703,6 +41822,33 @@ save_$data_InputSettings.prototype = {
 		} else {
 			return null;
 		}
+	}
+	,addUpdateListener: function(callback) {
+		this.updateListeners.push(callback);
+		callback();
+	}
+	,notifyListeners: function() {
+		var _g = 0;
+		var _g1 = this.updateListeners;
+		while(_g < _g1.length) {
+			var f = _g1[_g];
+			++_g;
+			f();
+		}
+	}
+	,setDefaults: function() {
+		this.mappings = haxe_ds_StringMap.createCopy(save_$data_InputSettings.MAPPINGS_DEFAULTS.h);
+		this.deadzone = 0.5;
+		this.gamepadBrand = "DS4";
+		this.notifyListeners();
+	}
+	,getButtonSprite: function(action) {
+		return input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[this.gamepadBrand].h[this.mappings.h[action].gamepadButton];
+	}
+	,getAxisSprite: function(action) {
+		var this1 = input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES.h[this.gamepadBrand];
+		var key = this.mappings.h[action].gamepadAxis.hashCode();
+		return this1.h[key];
 	}
 	,__class__: save_$data_InputSettings
 };
@@ -41716,13 +41862,18 @@ var save_$data_PrefsSettings = function(overrides) {
 	this.shadowHighlightOthers = true;
 	this.shadowWillTriggerChain = true;
 	try {
-		var _g = new haxe_ds__$StringMap_StringMapKeyValueIterator(overrides.h);
-		while(_g.hasNext()) {
-			var _g1 = _g.next();
-			var k = _g1.key;
-			var v = _g1.value;
+		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
+		var _g_h = h;
+		var _g_keys = Object.keys(h);
+		var _g_length = _g_keys.length;
+		var _g_current = 0;
+		while(_g_current < _g_length) {
+			var key = _g_keys[_g_current++];
+			var _g = { key : key, value : _g_h[key]};
+			var k = _g.key;
+			var v = _g.value;
 			try {
-				switch(k) {
+				switch(js_Boot.__cast(k , String)) {
 				case "BOARD_BACKGROUND":
 					this.boardBackground = js_Boot.__cast(v , Int);
 					break;
@@ -41736,10 +41887,10 @@ var save_$data_PrefsSettings = function(overrides) {
 					var _g2_length = _g2_keys.length;
 					var _g2_current = 0;
 					while(_g2_current < _g2_length) {
-						var key = _g2_keys[_g2_current++];
-						var _g2 = { key : key, value : _g2_h[key]};
-						var kk = _g2.key;
-						var vv = _g2.value;
+						var key1 = _g2_keys[_g2_current++];
+						var _g1 = { key : key1, value : _g2_h[key1]};
+						var kk = _g1.key;
+						var vv = _g1.value;
 						var v1 = js_Boot.__cast(vv , Int);
 						this.colorTints.h[js_Boot.__cast(kk , Int)] = v1;
 					}
@@ -41751,10 +41902,10 @@ var save_$data_PrefsSettings = function(overrides) {
 					var _g2_length1 = _g2_keys1.length;
 					var _g2_current1 = 0;
 					while(_g2_current1 < _g2_length1) {
-						var key1 = _g2_keys1[_g2_current1++];
-						var _g3 = { key : key1, value : _g2_h1[key1]};
-						var kk1 = _g3.key;
-						var vv1 = _g3.value;
+						var key2 = _g2_keys1[_g2_current1++];
+						var _g2 = { key : key2, value : _g2_h1[key2]};
+						var kk1 = _g2.key;
+						var vv1 = _g2.value;
 						var v2 = js_Boot.__cast(vv1 , Int);
 						this.primaryColors.h[js_Boot.__cast(kk1 , Int)] = v2;
 					}
@@ -41772,7 +41923,7 @@ var save_$data_PrefsSettings = function(overrides) {
 					this.showGroupShadow = js_Boot.__cast(v , Bool);
 					break;
 				}
-			} catch( _g4 ) {
+			} catch( _g3 ) {
 				continue;
 			}
 		}
@@ -41870,30 +42021,35 @@ var save_$data_Profile = function(overrides) {
 	var trainingOverrides = new haxe_ds_StringMap();
 	var endlessOverrides = new haxe_ds_StringMap();
 	try {
-		var _g = new haxe_ds__$StringMap_StringMapKeyValueIterator(overrides.h);
-		while(_g.hasNext()) {
-			var _g1 = _g.next();
-			var k = _g1.key;
-			var v = _g1.value;
+		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
+		var _g_h = h;
+		var _g_keys = Object.keys(h);
+		var _g_length = _g_keys.length;
+		var _g_current = 0;
+		while(_g_current < _g_length) {
+			var key = _g_keys[_g_current++];
+			var _g = { key : key, value : _g_h[key]};
+			var k = _g.key;
+			var v = _g.value;
 			try {
-				switch(k) {
+				switch(js_Boot.__cast(k , String)) {
 				case "ENDLESS_SETTINGS":
-					endlessOverrides = js_Boot.__cast(v , haxe_ds_StringMap);
+					endlessOverrides = v;
 					break;
 				case "INPUT":
-					inputOverrides = js_Boot.__cast(v , haxe_ds_StringMap);
+					inputOverrides = v;
 					break;
 				case "NAME":
 					this.name = js_Boot.__cast(v , String);
 					break;
 				case "PREFS":
-					prefsOverrides = js_Boot.__cast(v , haxe_ds_StringMap);
+					prefsOverrides = v;
 					break;
 				case "TRAINING_SETTINGS":
-					trainingOverrides = js_Boot.__cast(v , haxe_ds_StringMap);
+					trainingOverrides = v;
 					break;
 				}
-			} catch( _g2 ) {
+			} catch( _g1 ) {
 				continue;
 			}
 		}
@@ -41912,9 +42068,6 @@ save_$data_Profile.addOnChangePrimaryCallback = function(callback) {
 };
 save_$data_Profile.changePrimary = function(p) {
 	save_$data_Profile.primary = p;
-	save_$data_Profile.reloadPrimary();
-};
-save_$data_Profile.reloadPrimary = function() {
 	var _g = 0;
 	var _g1 = save_$data_Profile.onChangePrimary;
 	while(_g < _g1.length) {
@@ -41930,7 +42083,7 @@ save_$data_Profile.prototype = {
 	,trainingSettings: null
 	,endlessSettings: null
 	,setInputDefaults: function() {
-		this.input = new save_$data_InputSettings(new haxe_ds_StringMap());
+		this.input.setDefaults();
 	}
 	,setPrefsDefaults: function() {
 		this.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
@@ -41942,7 +42095,7 @@ save_$data_Profile.prototype = {
 		this.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
 	}
 	,setDefaults: function() {
-		this.input = new save_$data_InputSettings(new haxe_ds_StringMap());
+		this.input.setDefaults();
 		this.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
 		this.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
 		this.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
@@ -42056,13 +42209,18 @@ var save_$data_TrainingSettings = function(overrides) {
 	this.minAttackColors = 1;
 	this.maxAttackColors = 1;
 	try {
-		var _g = new haxe_ds__$StringMap_StringMapKeyValueIterator(overrides.h);
-		while(_g.hasNext()) {
-			var _g1 = _g.next();
-			var k = _g1.key;
-			var v = _g1.value;
+		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
+		var _g_h = h;
+		var _g_keys = Object.keys(h);
+		var _g_length = _g_keys.length;
+		var _g_current = 0;
+		while(_g_current < _g_length) {
+			var key = _g_keys[_g_current++];
+			var _g = { key : key, value : _g_h[key]};
+			var k = _g.key;
+			var v = _g.value;
 			try {
-				switch(k) {
+				switch(js_Boot.__cast(k , String)) {
 				case "AUTO_ATTACK":
 					this.autoAttack = js_Boot.__cast(v , Bool);
 					break;
@@ -42097,7 +42255,7 @@ var save_$data_TrainingSettings = function(overrides) {
 					this.minAttackTime = js_Boot.__cast(v , Int);
 					break;
 				}
-			} catch( _g2 ) {
+			} catch( _g1 ) {
 				continue;
 			}
 		}
@@ -42260,6 +42418,58 @@ ui_AnyGamepadDetectWrapperOptions.prototype = {
 	,pageBuilder: null
 	,__class__: ui_AnyGamepadDetectWrapperOptions
 };
+var ui_AreYouSurePage = function(content,callback) {
+	this.font = kha_Assets.fonts.Pixellari;
+	this.content = content;
+	this.header = "Are You Sure?";
+	this.controlDisplays = [new ui_ControlDisplay(["BACK"],"Back"),new ui_ControlDisplay(["CONFIRM"],"Confirm")];
+	this.callback = callback;
+};
+$hxClasses["ui.AreYouSurePage"] = ui_AreYouSurePage;
+ui_AreYouSurePage.__name__ = "ui.AreYouSurePage";
+ui_AreYouSurePage.__interfaces__ = [ui_IMenuPage];
+ui_AreYouSurePage.prototype = {
+	font: null
+	,content: null
+	,callback: null
+	,fontSize: null
+	,menu: null
+	,header: null
+	,controlDisplays: null
+	,onResize: function() {
+		this.fontSize = 64 * ScaleManager.smallerScale | 0;
+	}
+	,onShow: function(menu) {
+		this.menu = menu;
+	}
+	,update: function() {
+		var inputDevice = this.menu.inputDevice;
+		if(inputDevice.getAction("BACK")) {
+			this.menu.popPage();
+			return;
+		}
+		if(inputDevice.getAction("CONFIRM")) {
+			this.callback();
+			this.menu.popPage();
+		}
+	}
+	,render: function(g,x,y) {
+		g.set_font(this.font);
+		g.set_fontSize(this.fontSize);
+		g.drawString(this.content,x,y);
+	}
+	,__class__: ui_AreYouSurePage
+};
+var ui_AreYouSureSubPageWidget = function(opts) {
+	var _g = opts.description;
+	ui_SubPageWidget.call(this,new ui_SubPageWidgetOptions(opts.title,new ui_AreYouSurePage(opts.content,opts.callback),_g));
+};
+$hxClasses["ui.AreYouSureSubPageWidget"] = ui_AreYouSureSubPageWidget;
+ui_AreYouSureSubPageWidget.__name__ = "ui.AreYouSureSubPageWidget";
+ui_AreYouSureSubPageWidget.__super__ = ui_SubPageWidget;
+ui_AreYouSureSubPageWidget.prototype = $extend(ui_SubPageWidget.prototype,{
+	__class__: ui_AreYouSureSubPageWidget
+});
 var ui_ButtonWidgetOptions = function(title,callback,description) {
 	this.title = title;
 	this.callback = callback;
@@ -42273,6 +42483,17 @@ ui_ButtonWidgetOptions.prototype = {
 	,description: null
 	,__class__: ui_ButtonWidgetOptions
 };
+var ui_AreYouSureSubPageWidgetOptions = function(content,title,callback,description) {
+	ui_ButtonWidgetOptions.call(this,title,callback,description);
+	this.content = content;
+};
+$hxClasses["ui.AreYouSureSubPageWidgetOptions"] = ui_AreYouSureSubPageWidgetOptions;
+ui_AreYouSureSubPageWidgetOptions.__name__ = "ui.AreYouSureSubPageWidgetOptions";
+ui_AreYouSureSubPageWidgetOptions.__super__ = ui_ButtonWidgetOptions;
+ui_AreYouSureSubPageWidgetOptions.prototype = $extend(ui_ButtonWidgetOptions.prototype,{
+	content: null
+	,__class__: ui_AreYouSureSubPageWidgetOptions
+});
 var ui_ListMenuPageOptions = function(header,widgetBuilder) {
 	this.header = header;
 	this.widgetBuilder = widgetBuilder;
@@ -42715,111 +42936,111 @@ var game_actions_ActionData_ACTION_DATA = (function($this) {
 	var $r;
 	var _g = new haxe_ds_StringMap();
 	{
-		var value = new game_actions_ActionDataEntry("Pause",["Pause/Unpause The Game"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Pause",["Pause/Unpause The Game"],input_InputType.PRESS,false);
 		_g.h["PAUSE"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Left",["Move Left In Menus"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Left",["Move Left In Menus"],input_InputType.REPEAT,false);
 		_g.h["MENU_LEFT"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Right",["Move Right In Menus"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Right",["Move Right In Menus"],input_InputType.REPEAT,false);
 		_g.h["MENU_RIGHT"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Down",["Move Down In Menus"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Down",["Move Down In Menus"],input_InputType.REPEAT,false);
 		_g.h["MENU_DOWN"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Up",["Move Up In Menus"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Up",["Move Up In Menus"],input_InputType.REPEAT,false);
 		_g.h["MENU_UP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Back",["Go Back One Submenu"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Back",["Go Back One Submenu"],input_InputType.PRESS,false);
 		_g.h["BACK"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Confirm",["Activate A Menu Entry"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Confirm",["Activate A Menu Entry"],input_InputType.PRESS,false);
 		_g.h["CONFIRM"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Shift Left",["Shift The Gelo Group","To The Left"],input_InputType.HOLD);
+		var value = new game_actions_ActionDataEntry("Shift Left",["Shift The Gelo Group","To The Left"],input_InputType.HOLD,false);
 		_g.h["SHIFT_LEFT"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Shift Right",["Shift The Gelo Group","To The Right"],input_InputType.HOLD);
+		var value = new game_actions_ActionDataEntry("Shift Right",["Shift The Gelo Group","To The Right"],input_InputType.HOLD,false);
 		_g.h["SHIFT_RIGHT"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Soft Drop",["Hold To Make The Gelo Group","Fall Faster"],input_InputType.HOLD);
+		var value = new game_actions_ActionDataEntry("Soft Drop",["Hold To Make The Gelo Group","Fall Faster"],input_InputType.HOLD,false);
 		_g.h["SOFT_DROP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Hard Drop",["Press To Make The Gelo Group","Instantly Fall To The Bottom","(Only When Enabled In The Ruleset)"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Hard Drop",["Press To Make The Gelo Group","Instantly Fall To The Bottom","(Only When Enabled In The Ruleset)"],input_InputType.PRESS,false);
 		_g.h["HARD_DROP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Rotate Left",["Rotate The Gelo Group Counterclockwise"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Rotate Left",["Rotate The Gelo Group Counterclockwise"],input_InputType.PRESS,false);
 		_g.h["ROTATE_LEFT"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Rotate Right",["Rotate The Gelo Group Clockwise"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Rotate Right",["Rotate The Gelo Group Clockwise"],input_InputType.PRESS,false);
 		_g.h["ROTATE_RIGHT"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Toggle Edit Mode",["Toggle Between Play Mode And Edit Mode"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Toggle Edit Mode",["Toggle Between Play Mode And Edit Mode"],input_InputType.PRESS,false);
 		_g.h["TOGGLE_EDIT_MODE"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Move Cursor Left",["Move The Editing Cursor Left"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Move Cursor Left",["Move The Editing Cursor Left"],input_InputType.REPEAT,false);
 		_g.h["EDIT_LEFT"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Move Cursor Right",["Move The Editing Cursor Right"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Move Cursor Right",["Move The Editing Cursor Right"],input_InputType.REPEAT,false);
 		_g.h["EDIT_RIGHT"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Move Cursor Down",["Move The Editing Cursor Down"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Move Cursor Down",["Move The Editing Cursor Down"],input_InputType.REPEAT,false);
 		_g.h["EDIT_DOWN"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Move Cursor Up",["Move The Editing Cursor Up"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Move Cursor Up",["Move The Editing Cursor Up"],input_InputType.REPEAT,false);
 		_g.h["EDIT_UP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Place Gelo / Marker",["Set The Selected Gelo","Or Marker At The Cursor"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Place Gelo / Marker",["Set The Selected Gelo","Or Marker At The Cursor"],input_InputType.PRESS,false);
 		_g.h["EDIT_SET"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Clear Gelo / Marker",["Clear The Gelo or Marker At The","Cursor's Location"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Clear Gelo / Marker",["Clear The Gelo or Marker At The","Cursor's Location"],input_InputType.PRESS,false);
 		_g.h["EDIT_CLEAR"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Previous Step",["Select The Previous Chain Step"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Previous Step",["Select The Previous Chain Step"],input_InputType.REPEAT,false);
 		_g.h["PREVIOUS_STEP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Next Step",["Select The Next Chain Step"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Next Step",["Select The Next Chain Step"],input_InputType.REPEAT,false);
 		_g.h["NEXT_STEP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Previous Color / Marker",["Cycle Backwards To The Gelo / Marker You","Want To Place"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Previous Color / Marker",["Cycle Backwards To The Gelo / Marker You","Want To Place"],input_InputType.REPEAT,false);
 		_g.h["PREVIOUS_COLOR"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Next Color / Marker",["Cycle Forwards To The Gelo / Marker You Want to Place"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Next Color / Marker",["Cycle Forwards To The Gelo / Marker You Want to Place"],input_InputType.REPEAT,false);
 		_g.h["NEXT_COLOR"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Undo",["Undo The Last Gelo Group Placement"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Undo",["Undo The Last Gelo Group Placement"],input_InputType.REPEAT,false);
 		_g.h["PREVIOUS_GROUP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Draw Next Group",["Discard The Current Gelo Group","And Draw The Next One From","The Queue"],input_InputType.REPEAT);
+		var value = new game_actions_ActionDataEntry("Draw Next Group",["Discard The Current Gelo Group","And Draw The Next One From","The Queue"],input_InputType.REPEAT,false);
 		_g.h["NEXT_GROUP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Toggle Gelos / Markers",["Alternate Between Editing Gelos And","Editing Markers"],input_InputType.PRESS);
+		var value = new game_actions_ActionDataEntry("Toggle Gelos / Markers",["Alternate Between Editing Gelos And","Editing Markers"],input_InputType.PRESS,false);
 		_g.h["TOGGLE_MARKERS"] = value;
 	}
 	$r = _g;
@@ -43133,100 +43354,292 @@ input_AnyInputDevice.rebindCounter = 0;
 input_AnyInputDevice.lastDeviceID = -1;
 var input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES = (function($this) {
 	var $r;
-	var _g = new haxe_ds_IntMap();
+	var _g = new haxe_ds_StringMap();
 	{
+		var _g1 = new haxe_ds_IntMap();
 		var value = new utils_Geometry(64,64,384,128);
-		_g.h[-1] = value;
-	}
-	{
+		_g1.h[-1] = value;
 		var value = new utils_Geometry(64,64,448,128);
-		_g.h[1] = value;
-	}
-	{
+		_g1.h[1] = value;
 		var value = new utils_Geometry(64,64,512,0);
-		_g.h[15] = value;
-	}
-	{
+		_g1.h[15] = value;
 		var value = new utils_Geometry(64,64,576,0);
-		_g.h[17] = value;
-	}
-	{
+		_g1.h[17] = value;
 		var value = new utils_Geometry(64,64,640,0);
-		_g.h[31] = value;
-	}
-	{
+		_g1.h[31] = value;
 		var value = new utils_Geometry(64,64,512,64);
-		_g.h[33] = value;
-	}
-	{
+		_g1.h[33] = value;
 		var value = new utils_Geometry(64,64,576,64);
-		_g.h[47] = value;
+		_g1.h[47] = value;
+		var value = new utils_Geometry(64,64,640,64);
+		_g1.h[49] = value;
+		_g.h["DS4"] = _g1;
 	}
 	{
+		var _g1 = new haxe_ds_IntMap();
+		var value = new utils_Geometry(64,64,384,128);
+		_g1.h[-1] = value;
+		var value = new utils_Geometry(64,64,448,128);
+		_g1.h[1] = value;
+		var value = new utils_Geometry(64,64,512,0);
+		_g1.h[15] = value;
+		var value = new utils_Geometry(64,64,576,0);
+		_g1.h[17] = value;
+		var value = new utils_Geometry(64,64,640,0);
+		_g1.h[31] = value;
+		var value = new utils_Geometry(64,64,512,64);
+		_g1.h[33] = value;
+		var value = new utils_Geometry(64,64,576,64);
+		_g1.h[47] = value;
 		var value = new utils_Geometry(64,64,640,64);
-		_g.h[49] = value;
+		_g1.h[49] = value;
+		_g.h["SW Pro Controller"] = _g1;
+	}
+	{
+		var _g1 = new haxe_ds_IntMap();
+		var value = new utils_Geometry(64,64,384,128);
+		_g1.h[-1] = value;
+		var value = new utils_Geometry(64,64,448,128);
+		_g1.h[1] = value;
+		var value = new utils_Geometry(64,64,512,0);
+		_g1.h[15] = value;
+		var value = new utils_Geometry(64,64,576,0);
+		_g1.h[17] = value;
+		var value = new utils_Geometry(64,64,640,0);
+		_g1.h[31] = value;
+		var value = new utils_Geometry(64,64,512,64);
+		_g1.h[33] = value;
+		var value = new utils_Geometry(64,64,576,64);
+		_g1.h[47] = value;
+		var value = new utils_Geometry(64,64,640,64);
+		_g1.h[49] = value;
+		_g.h["JOYCON"] = _g1;
+	}
+	{
+		var _g1 = new haxe_ds_IntMap();
+		var value = new utils_Geometry(64,64,640,256);
+		_g1.h[-1] = value;
+		var value = new utils_Geometry(64,64,512,320);
+		_g1.h[1] = value;
+		var value = new utils_Geometry(64,64,576,320);
+		_g1.h[15] = value;
+		var value = new utils_Geometry(64,64,640,320);
+		_g1.h[17] = value;
+		var value = new utils_Geometry(64,64,512,384);
+		_g1.h[31] = value;
+		var value = new utils_Geometry(64,64,576,384);
+		_g1.h[33] = value;
+		var value = new utils_Geometry(64,64,640,384);
+		_g1.h[47] = value;
+		var value = new utils_Geometry(64,64,512,448);
+		_g1.h[49] = value;
+		_g.h["XBONE"] = _g1;
+	}
+	{
+		var _g1 = new haxe_ds_IntMap();
+		var value = new utils_Geometry(64,64,512,128);
+		_g1.h[-1] = value;
+		var value = new utils_Geometry(64,64,576,128);
+		_g1.h[1] = value;
+		var value = new utils_Geometry(64,64,640,128);
+		_g1.h[15] = value;
+		var value = new utils_Geometry(64,64,512,192);
+		_g1.h[17] = value;
+		var value = new utils_Geometry(64,64,576,192);
+		_g1.h[31] = value;
+		var value = new utils_Geometry(64,64,640,192);
+		_g1.h[33] = value;
+		var value = new utils_Geometry(64,64,512,256);
+		_g1.h[47] = value;
+		var value = new utils_Geometry(64,64,576,256);
+		_g1.h[49] = value;
+		_g.h["XB360"] = _g1;
 	}
 	$r = _g;
 	return $r;
 }(this));
 var input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES = (function($this) {
 	var $r;
-	var _g = new haxe_ds_IntMap();
+	var _g = new haxe_ds_StringMap();
 	{
+		var _g1 = new haxe_ds_IntMap();
 		var value = new utils_Geometry(64,64,0,0);
-		_g.h[0] = value;
-	}
-	{
+		_g1.h[0] = value;
 		var value = new utils_Geometry(64,64,64,0);
-		_g.h[1] = value;
-	}
-	{
+		_g1.h[1] = value;
 		var value = new utils_Geometry(64,64,128,0);
-		_g.h[2] = value;
-	}
-	{
+		_g1.h[2] = value;
 		var value = new utils_Geometry(64,64,192,0);
-		_g.h[3] = value;
-	}
-	{
+		_g1.h[3] = value;
 		var value = new utils_Geometry(64,64,256,0);
-		_g.h[4] = value;
-	}
-	{
+		_g1.h[4] = value;
 		var value = new utils_Geometry(64,64,320,0);
-		_g.h[5] = value;
-	}
-	{
+		_g1.h[5] = value;
 		var value = new utils_Geometry(64,64,384,0);
-		_g.h[6] = value;
-	}
-	{
+		_g1.h[6] = value;
 		var value = new utils_Geometry(64,64,448,0);
-		_g.h[7] = value;
-	}
-	{
+		_g1.h[7] = value;
+		var value = new utils_Geometry(64,64,128,64);
+		_g1.h[10] = value;
+		var value = new utils_Geometry(64,64,192,64);
+		_g1.h[11] = value;
 		var value = new utils_Geometry(128,64,384,64);
-		_g.h[8] = value;
-	}
-	{
+		_g1.h[8] = value;
 		var value = new utils_Geometry(128,64,256,64);
-		_g.h[9] = value;
-	}
-	{
+		_g1.h[9] = value;
 		var value = new utils_Geometry(64,64,192,128);
-		_g.h[12] = value;
-	}
-	{
+		_g1.h[12] = value;
 		var value = new utils_Geometry(64,64,256,128);
-		_g.h[13] = value;
-	}
-	{
+		_g1.h[13] = value;
 		var value = new utils_Geometry(64,64,64,128);
-		_g.h[14] = value;
+		_g1.h[14] = value;
+		var value = new utils_Geometry(64,64,128,128);
+		_g1.h[15] = value;
+		_g.h["DS4"] = _g1;
 	}
 	{
-		var value = new utils_Geometry(64,64,128,128);
-		_g.h[15] = value;
+		var _g1 = new haxe_ds_IntMap();
+		var value = new utils_Geometry(64,64,64,192);
+		_g1.h[0] = value;
+		var value = new utils_Geometry(64,64,0,192);
+		_g1.h[1] = value;
+		var value = new utils_Geometry(64,64,192,192);
+		_g1.h[2] = value;
+		var value = new utils_Geometry(64,64,128,192);
+		_g1.h[3] = value;
+		var value = new utils_Geometry(64,64,256,192);
+		_g1.h[4] = value;
+		var value = new utils_Geometry(64,64,320,192);
+		_g1.h[5] = value;
+		var value = new utils_Geometry(64,64,384,192);
+		_g1.h[6] = value;
+		var value = new utils_Geometry(64,64,448,192);
+		_g1.h[7] = value;
+		var value = new utils_Geometry(64,64,0,256);
+		_g1.h[10] = value;
+		var value = new utils_Geometry(64,64,64,256);
+		_g1.h[11] = value;
+		var value = new utils_Geometry(64,64,320,320);
+		_g1.h[8] = value;
+		var value = new utils_Geometry(64,64,384,320);
+		_g1.h[9] = value;
+		var value = new utils_Geometry(64,64,192,320);
+		_g1.h[12] = value;
+		var value = new utils_Geometry(64,64,256,320);
+		_g1.h[13] = value;
+		var value = new utils_Geometry(64,64,64,320);
+		_g1.h[14] = value;
+		var value = new utils_Geometry(64,64,128,320);
+		_g1.h[15] = value;
+		_g.h["SW Pro Controller"] = _g1;
+	}
+	{
+		var _g1 = new haxe_ds_IntMap();
+		var value = new utils_Geometry(64,64,64,192);
+		_g1.h[0] = value;
+		var value = new utils_Geometry(64,64,0,192);
+		_g1.h[1] = value;
+		var value = new utils_Geometry(64,64,192,192);
+		_g1.h[2] = value;
+		var value = new utils_Geometry(64,64,128,192);
+		_g1.h[3] = value;
+		var value = new utils_Geometry(64,64,256,192);
+		_g1.h[4] = value;
+		var value = new utils_Geometry(64,64,320,192);
+		_g1.h[5] = value;
+		var value = new utils_Geometry(64,64,384,192);
+		_g1.h[6] = value;
+		var value = new utils_Geometry(64,64,448,192);
+		_g1.h[7] = value;
+		var value = new utils_Geometry(64,64,0,256);
+		_g1.h[10] = value;
+		var value = new utils_Geometry(64,64,64,256);
+		_g1.h[11] = value;
+		var value = new utils_Geometry(64,64,320,320);
+		_g1.h[8] = value;
+		var value = new utils_Geometry(64,64,384,320);
+		_g1.h[9] = value;
+		var value = new utils_Geometry(64,64,192,384);
+		_g1.h[12] = value;
+		var value = new utils_Geometry(64,64,256,384);
+		_g1.h[13] = value;
+		var value = new utils_Geometry(64,64,64,384);
+		_g1.h[14] = value;
+		var value = new utils_Geometry(64,64,128,384);
+		_g1.h[15] = value;
+		_g.h["JOYCON"] = _g1;
+	}
+	{
+		var _g1 = new haxe_ds_IntMap();
+		var value = new utils_Geometry(64,64,0,640);
+		_g1.h[0] = value;
+		var value = new utils_Geometry(64,64,64,640);
+		_g1.h[1] = value;
+		var value = new utils_Geometry(64,64,128,640);
+		_g1.h[2] = value;
+		var value = new utils_Geometry(64,64,192,640);
+		_g1.h[3] = value;
+		var value = new utils_Geometry(64,64,256,640);
+		_g1.h[4] = value;
+		var value = new utils_Geometry(64,64,320,640);
+		_g1.h[5] = value;
+		var value = new utils_Geometry(64,64,384,640);
+		_g1.h[6] = value;
+		var value = new utils_Geometry(64,64,448,640);
+		_g1.h[7] = value;
+		var value = new utils_Geometry(64,64,0,704);
+		_g1.h[10] = value;
+		var value = new utils_Geometry(64,64,64,704);
+		_g1.h[11] = value;
+		var value = new utils_Geometry(64,64,128,704);
+		_g1.h[8] = value;
+		var value = new utils_Geometry(64,64,192,704);
+		_g1.h[9] = value;
+		var value = new utils_Geometry(64,64,192,768);
+		_g1.h[12] = value;
+		var value = new utils_Geometry(64,64,256,768);
+		_g1.h[13] = value;
+		var value = new utils_Geometry(64,64,64,768);
+		_g1.h[14] = value;
+		var value = new utils_Geometry(64,64,128,768);
+		_g1.h[15] = value;
+		_g.h["XBONE"] = _g1;
+	}
+	{
+		var _g1 = new haxe_ds_IntMap();
+		var value = new utils_Geometry(64,64,0,448);
+		_g1.h[0] = value;
+		var value = new utils_Geometry(64,64,64,448);
+		_g1.h[1] = value;
+		var value = new utils_Geometry(64,64,128,448);
+		_g1.h[2] = value;
+		var value = new utils_Geometry(64,64,192,448);
+		_g1.h[3] = value;
+		var value = new utils_Geometry(64,64,256,448);
+		_g1.h[4] = value;
+		var value = new utils_Geometry(64,64,320,448);
+		_g1.h[5] = value;
+		var value = new utils_Geometry(64,64,384,448);
+		_g1.h[6] = value;
+		var value = new utils_Geometry(64,64,448,448);
+		_g1.h[7] = value;
+		var value = new utils_Geometry(64,64,0,512);
+		_g1.h[10] = value;
+		var value = new utils_Geometry(64,64,64,512);
+		_g1.h[11] = value;
+		var value = new utils_Geometry(64,64,128,512);
+		_g1.h[8] = value;
+		var value = new utils_Geometry(64,64,192,512);
+		_g1.h[9] = value;
+		var value = new utils_Geometry(64,64,192,576);
+		_g1.h[12] = value;
+		var value = new utils_Geometry(64,64,256,576);
+		_g1.h[13] = value;
+		var value = new utils_Geometry(64,64,64,576);
+		_g1.h[14] = value;
+		var value = new utils_Geometry(64,64,128,576);
+		_g1.h[15] = value;
+		_g.h["XB360"] = _g1;
 	}
 	$r = _g;
 	return $r;
@@ -43817,7 +44230,8 @@ save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
 	$r = _g;
 	return $r;
 }(this));
-save_$data_InputSettings.DEADZONE_DEFAULT = 0.0;
+save_$data_InputSettings.DEADZONE_DEFAULT = 0.5;
+save_$data_InputSettings.GAMEPAD_BRAND_DEFAULT = "DS4";
 save_$data_PrefsSettings.COLOR_TINTS_DEFAULT = (function($this) {
 	var $r;
 	var _g = new haxe_ds_IntMap();
@@ -43879,6 +44293,7 @@ save_$data_TrainingSettings.ATTACK_GROUP_DIFF_DEFAULT = 0;
 save_$data_TrainingSettings.ATTACK_COLORS_DEFAULT = 1;
 ui_AnyGamepadDetectWrapper.FONT_SIZE = 64;
 ui_AnyGamepadDetectWrapper.TEXT = ["Press any button on","the gamepad you wish","to use"];
+ui_AreYouSurePage.FONT_SIZE = 64;
 ui_KeyboardConfirmWrapper.FONT_SIZE = 64;
 ui_KeyboardConfirmWrapper.TEXT = "Press any button to continue";
 ui_NumberRangeWidget.FONT_SIZE = 60;
