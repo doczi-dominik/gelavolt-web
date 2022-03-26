@@ -1802,9 +1802,9 @@ game_boardstates_EditingBoardState.prototype = {
 		if(this.inputDevice.getAction("TOGGLE_MARKERS")) {
 			this.switchMode();
 		}
-		if(this.inputDevice.getAction("CONFIRM")) {
+		if(this.inputDevice.getAction("EDIT_SET")) {
 			this.set();
-		} else if(this.inputDevice.getAction("BACK")) {
+		} else if(this.inputDevice.getAction("EDIT_CLEAR")) {
 			this.clear();
 		}
 		this.field.update();
@@ -14249,7 +14249,7 @@ kha_SystemImpl.unlockSound = function() {
 			context.resume().then(function(c) {
 				kha_SystemImpl.soundEnabled = true;
 			}).catch(function(err) {
-				haxe_Log.trace(err,{ fileName : "kha/SystemImpl.hx", lineNumber : 698, className : "kha.SystemImpl", methodName : "unlockSound"});
+				haxe_Log.trace(err,{ fileName : "kha/SystemImpl.hx", lineNumber : 700, className : "kha.SystemImpl", methodName : "unlockSound"});
 			});
 		}
 		kha_audio2_Audio.wakeChannels();
