@@ -226,7 +226,7 @@ Main.setFullHTML5Canvas = function() {
 };
 Main.main = function() {
 	window.onresize = function() {
-		ScaleManager.resize(window.innerWidth,window.innerHeight);
+		ScaleManager.screen.resize(window.innerWidth,window.innerHeight);
 	};
 	Main.setFullHTML5Canvas();
 	kha_System.start(new kha_SystemOptions("Project GelaVolt",1920,1080,null,new kha_FramebufferOptions(60,false,32,16,8,1)),function(_) {
@@ -236,7 +236,7 @@ Main.main = function() {
 			save_$data_SaveManager.loadGraphics();
 			save_$data_Profile.changePrimary(save_$data_SaveManager.profiles[0]);
 			input_AnyInputDevice.init();
-			ScaleManager.resize(kha_System.windowWidth(),kha_System.windowHeight());
+			ScaleManager.screen.resize(kha_System.windowWidth(),kha_System.windowHeight());
 			GlobalScreenSwitcher.switchScreen(new main_$menu_MainMenuScreen());
 			window.ondrop = function(ev) {
 				var fr = new FileReader();
@@ -360,29 +360,37 @@ Reflect.deleteField = function(o,field) {
 	delete(o[field]);
 	return true;
 };
-var ScaleManager = function() { };
+var ScaleManager = function(designWidth,designHeight) {
+	this.designWidth = designWidth;
+	this.designHeight = designHeight;
+	this.onResize = [];
+};
 $hxClasses["ScaleManager"] = ScaleManager;
 ScaleManager.__name__ = "ScaleManager";
-ScaleManager.resize = function(newWidth,newHeight) {
-	ScaleManager.width = newWidth;
-	ScaleManager.height = newHeight;
-	ScaleManager.scaleX = ScaleManager.width / 1920;
-	ScaleManager.scaleY = ScaleManager.height / 1080;
-	ScaleManager.largerScale = Math.max(ScaleManager.scaleX,ScaleManager.scaleY);
-	ScaleManager.smallerScale = Math.min(ScaleManager.scaleX,ScaleManager.scaleY);
-	var _g_current = 0;
-	var _g_array = ScaleManager.onResize;
-	while(_g_current < _g_array.length) {
-		var _g1_value = _g_array[_g_current];
-		var _g1_key = _g_current++;
-		var k = _g1_key;
-		var f = _g1_value;
-		f();
-	}
-};
 ScaleManager.addOnResizeCallback = function(callback) {
-	ScaleManager.onResize.push(callback);
+	ScaleManager.screen.onResize.push(callback);
 	callback();
+};
+ScaleManager.prototype = {
+	designWidth: null
+	,designHeight: null
+	,onResize: null
+	,width: null
+	,height: null
+	,smallerScale: null
+	,resize: function(newWidth,newHeight) {
+		this.width = newWidth;
+		this.height = newHeight;
+		this.smallerScale = Math.min(this.width / this.designWidth,this.height / this.designHeight);
+		var _g = 0;
+		var _g1 = this.onResize;
+		while(_g < _g1.length) {
+			var f = _g1[_g];
+			++_g;
+			f();
+		}
+	}
+	,__class__: ScaleManager
 };
 var GlobalScreenSwitcher = function() { };
 $hxClasses["GlobalScreenSwitcher"] = GlobalScreenSwitcher;
@@ -575,6 +583,194 @@ UInt.toFloat = function(this1) {
 	} else {
 		return int + 0.0;
 	}
+};
+var auto_$attack_AutoAttackLinkData = function() {
+	var _g = new haxe_ds_IntMap();
+	_g.h[0] = 0;
+	_g.h[1] = 0;
+	_g.h[2] = 0;
+	_g.h[3] = 0;
+	_g.h[4] = 0;
+	this.clearsByColor = _g;
+	this.sendsAllClearBonus = false;
+};
+$hxClasses["auto_attack.AutoAttackLinkData"] = auto_$attack_AutoAttackLinkData;
+auto_$attack_AutoAttackLinkData.__name__ = "auto_attack.AutoAttackLinkData";
+auto_$attack_AutoAttackLinkData.prototype = {
+	clearsByColor: null
+	,sendsAllClearBonus: null
+	,__class__: auto_$attack_AutoAttackLinkData
+};
+var auto_$attack_AutoAttackManager = function(opts) {
+	this.rule = opts.rule;
+	this.rng = opts.rng;
+	this.geometries = opts.geometries;
+	this.trainingSettings = opts.trainingSettings;
+	this.prefsSettings = opts.prefsSettings;
+	this.linkBuilder = opts.linkBuilder;
+	this.garbageManager = opts.garbageManager;
+	this.chainCounter = opts.chainCounter;
+	this.particleManager = opts.particleManager;
+	this.links = [];
+	this.linkData = [];
+	this.isPaused = false;
+	this.type = "RANDOM";
+};
+$hxClasses["auto_attack.AutoAttackManager"] = auto_$attack_AutoAttackManager;
+auto_$attack_AutoAttackManager.__name__ = "auto_attack.AutoAttackManager";
+auto_$attack_AutoAttackManager.prototype = {
+	rule: null
+	,rng: null
+	,geometries: null
+	,trainingSettings: null
+	,prefsSettings: null
+	,linkBuilder: null
+	,garbageManager: null
+	,chainCounter: null
+	,particleManager: null
+	,links: null
+	,accumGarbage: null
+	,linkIndex: null
+	,linkData: null
+	,timer: null
+	,chain: null
+	,state: null
+	,isPaused: null
+	,type: null
+	,constructRandomLinks: function() {
+		this.links.length = 0;
+		this.accumGarbage = 0;
+		this.chain = 0;
+		var remainder = 0.0;
+		var _g = 0;
+		var _g1 = this.rng.GetIn(this.trainingSettings.minAttackChain,this.trainingSettings.maxAttackChain);
+		while(_g < _g1) {
+			var _ = _g++;
+			var _g2 = new haxe_ds_IntMap();
+			_g2.h[0] = 0;
+			_g2.h[1] = 0;
+			_g2.h[2] = 0;
+			_g2.h[3] = 0;
+			_g2.h[4] = 0;
+			var clearsByColor = _g2;
+			var colorCount = this.rng.GetIn(this.trainingSettings.minAttackColors,this.trainingSettings.maxAttackColors);
+			var _g3 = 0;
+			var _g4 = colorCount;
+			while(_g3 < _g4) {
+				var i = _g3++;
+				var v = this.rule.popCount + this.rng.GetIn(this.trainingSettings.minAttackGroupDiff,this.trainingSettings.maxAttackGroupDiff);
+				clearsByColor.h[i] = v;
+			}
+			var link = this.linkBuilder.build(new game_simulation_LinkInfoBuildParameters(clearsByColor,++this.chain,0,remainder,false,this.accumGarbage));
+			remainder = link.garbageRemainder;
+			this.accumGarbage = link.accumulatedGarbage;
+			this.links.push(link);
+		}
+	}
+	,onWaitingEnd: function() {
+		this.garbageManager.clear();
+		this.linkIndex = 0;
+		if(this.type == "RANDOM") {
+			this.constructRandomLinks();
+		}
+		if(this.links.length > 0) {
+			this.state = 1;
+		} else {
+			this.reset();
+		}
+	}
+	,onSendingEnd: function() {
+		var link = this.links[this.linkIndex];
+		this.linkIndex++;
+		this.garbageManager.sendGarbage(link.garbage,[new game_gelos_GeloPoint(1,0,800)]);
+		var coords = new utils_Point(112,800);
+		this.chainCounter.startAnimation(link.chain,coords,link.isPowerful);
+		var absCoords = this.geometries.absolutePosition.add(coords);
+		var color = this.prefsSettings.primaryColors.h[1];
+		var _g = 0;
+		while(_g < 48) {
+			var i = _g++;
+			var tmp = this.particleManager;
+			var _g1 = absCoords.x + 32 * this.rng.GetFloatIn(-1,1);
+			var _g2 = absCoords.y + 32 * this.rng.GetFloatIn(-1,1);
+			var _g3 = (i % 2 == 0 ? -8 : 8) * this.rng.GetFloatIn(0.5,1.5);
+			var _g4 = -10 * this.rng.GetFloatIn(0.5,1.5);
+			tmp.add(game_particles_ParticleLayer.FRONT,game_particles_GeloPopParticle.create(new game_particles_GeloPopParticleOptions(_g3,0.75 * this.rng.GetFloatIn(0.5,1.5),color,(30 + i * 6) * this.rng.GetFloatIn(0.5,1.5) | 0,_g1,_g2,_g4)));
+		}
+		if(this.linkIndex == this.links.length) {
+			this.garbageManager.confirmGarbage(this.accumGarbage);
+			this.reset();
+		} else {
+			this.timer = 80;
+		}
+	}
+	,reset: function() {
+		this.timer = this.rng.GetIn(this.trainingSettings.minAttackTime,this.trainingSettings.maxAttackTime) * 60;
+		this.state = 0;
+	}
+	,constructLinks: function() {
+		this.links.length = 0;
+		this.accumGarbage = 0;
+		this.chain = 0;
+		var remainder = 0.0;
+		var _g = 0;
+		var _g1 = this.linkData;
+		while(_g < _g1.length) {
+			var d = _g1[_g];
+			++_g;
+			var link = this.linkBuilder.build(new game_simulation_LinkInfoBuildParameters(d.clearsByColor,++this.chain,0,remainder,d.sendsAllClearBonus,this.accumGarbage));
+			remainder = link.garbageRemainder;
+			this.accumGarbage = link.accumulatedGarbage;
+			this.links.push(link);
+		}
+	}
+	,update: function() {
+		if(!this.trainingSettings.autoAttack) {
+			return;
+		}
+		if(this.timer == 0) {
+			switch(this.state) {
+			case 0:
+				this.onWaitingEnd();
+				break;
+			case 1:
+				this.onSendingEnd();
+				break;
+			}
+			return;
+		}
+		this.timer--;
+		this.chainCounter.update();
+	}
+	,render: function(g,alpha) {
+		this.chainCounter.render(g,alpha);
+	}
+	,__class__: auto_$attack_AutoAttackManager
+};
+var auto_$attack_AutoAttackManagerOptions = function(rule,rng,geometries,trainingSettings,prefsSettings,linkBuilder,garbageManager,chainCounter,particleManager) {
+	this.rule = rule;
+	this.rng = rng;
+	this.geometries = geometries;
+	this.trainingSettings = trainingSettings;
+	this.prefsSettings = prefsSettings;
+	this.linkBuilder = linkBuilder;
+	this.garbageManager = garbageManager;
+	this.chainCounter = chainCounter;
+	this.particleManager = particleManager;
+};
+$hxClasses["auto_attack.AutoAttackManagerOptions"] = auto_$attack_AutoAttackManagerOptions;
+auto_$attack_AutoAttackManagerOptions.__name__ = "auto_attack.AutoAttackManagerOptions";
+auto_$attack_AutoAttackManagerOptions.prototype = {
+	rule: null
+	,rng: null
+	,geometries: null
+	,trainingSettings: null
+	,prefsSettings: null
+	,linkBuilder: null
+	,garbageManager: null
+	,chainCounter: null
+	,particleManager: null
+	,__class__: auto_$attack_AutoAttackManagerOptions
 };
 var kha_Color = {};
 kha_Color.fromValue = function(value) {
@@ -1009,7 +1205,7 @@ game_actionbuffers_ReplayActionBufferOptions.prototype = $extend(game_actionbuff
 });
 var game_actions_Action = {};
 game_actions_Action.getValues = function() {
-	return ["PAUSE","MENU_LEFT","MENU_RIGHT","MENU_DOWN","MENU_UP","BACK","CONFIRM","SHIFT_LEFT","SHIFT_RIGHT","SOFT_DROP","HARD_DROP","ROTATE_LEFT","ROTATE_RIGHT","TOGGLE_EDIT_MODE","EDIT_LEFT","EDIT_RIGHT","EDIT_DOWN","EDIT_UP","EDIT_SET","EDIT_CLEAR","PREVIOUS_STEP","NEXT_STEP","PREVIOUS_COLOR","NEXT_COLOR","PREVIOUS_GROUP","NEXT_GROUP","TOGGLE_MARKERS"];
+	return ["PAUSE","MENU_LEFT","MENU_RIGHT","MENU_DOWN","MENU_UP","BACK","CONFIRM","SHIFT_LEFT","SHIFT_RIGHT","SOFT_DROP","HARD_DROP","ROTATE_LEFT","ROTATE_RIGHT","TOGGLE_EDIT_MODE","EDIT_LEFT","EDIT_RIGHT","EDIT_DOWN","EDIT_UP","EDIT_SET","EDIT_CLEAR","PREVIOUS_STEP","NEXT_STEP","PREVIOUS_COLOR","NEXT_COLOR","PREVIOUS_GROUP","NEXT_GROUP","TOGGLE_MARKERS","QUICK_RESTART"];
 };
 var input_InputType = $hxEnums["input.InputType"] = { __ename__:"input.InputType",__constructs__:null
 	,HOLD: {_hx_name:"HOLD",_hx_index:0,__enum__:"input.InputType",toString:$estr}
@@ -1284,7 +1480,7 @@ game_all_$clear_AllClearManagerOptions.prototype = {
 var game_backgrounds__$NestBackground_BackgroundParticle = function(rng) {
 	this.rng = rng;
 	this.randomizeData();
-	this.y += ScaleManager.height / 8;
+	this.y += ScaleManager.screen.height / 8;
 };
 $hxClasses["game.backgrounds._NestBackground.BackgroundParticle"] = game_backgrounds__$NestBackground_BackgroundParticle;
 game_backgrounds__$NestBackground_BackgroundParticle.__name__ = "game.backgrounds._NestBackground.BackgroundParticle";
@@ -1296,8 +1492,8 @@ game_backgrounds__$NestBackground_BackgroundParticle.prototype = {
 	,dy: null
 	,t: null
 	,randomizeData: function() {
-		this.x = this.rng.GetFloatIn(0,ScaleManager.width);
-		this.y = ScaleManager.height * this.rng.GetFloatIn(1,1.25);
+		this.x = this.rng.GetFloatIn(0,ScaleManager.screen.width);
+		this.y = ScaleManager.screen.height * this.rng.GetFloatIn(1,1.25);
 		this.dy = this.rng.GetFloatIn(0.5,2);
 		this.t = this.rng.GetIn(0,12);
 		this.lastY = this.y;
@@ -1533,6 +1729,38 @@ game_boards_SingleStateBoard.prototype = {
 	}
 	,__class__: game_boards_SingleStateBoard
 };
+var game_boards_EndlessBoard = function(opts) {
+	game_boards_SingleStateBoard.call(this,new game_boards_SingleStateBoardOptions(opts.pauseMediator,opts.inputDevice,opts.actionBuffer,opts.endlessState));
+	this.endlessState = opts.endlessState;
+};
+$hxClasses["game.boards.EndlessBoard"] = game_boards_EndlessBoard;
+game_boards_EndlessBoard.__name__ = "game.boards.EndlessBoard";
+game_boards_EndlessBoard.__super__ = game_boards_SingleStateBoard;
+game_boards_EndlessBoard.prototype = $extend(game_boards_SingleStateBoard.prototype,{
+	endlessState: null
+	,update: function() {
+		if(this.inputDevice.getAction("QUICK_RESTART")) {
+			this.endlessState.onLose();
+		}
+		game_boards_SingleStateBoard.prototype.update.call(this);
+	}
+	,__class__: game_boards_EndlessBoard
+});
+var game_boards_EndlessBoardOptions = function(pauseMediator,inputDevice,actionBuffer,endlessState) {
+	this.pauseMediator = pauseMediator;
+	this.inputDevice = inputDevice;
+	this.actionBuffer = actionBuffer;
+	this.endlessState = endlessState;
+};
+$hxClasses["game.boards.EndlessBoardOptions"] = game_boards_EndlessBoardOptions;
+game_boards_EndlessBoardOptions.__name__ = "game.boards.EndlessBoardOptions";
+game_boards_EndlessBoardOptions.prototype = {
+	pauseMediator: null
+	,inputDevice: null
+	,actionBuffer: null
+	,endlessState: null
+	,__class__: game_boards_EndlessBoardOptions
+};
 var game_boards_SingleStateBoardOptions = function(pauseMediator,inputDevice,actionBuffer,state) {
 	this.pauseMediator = pauseMediator;
 	this.inputDevice = inputDevice;
@@ -1623,6 +1851,9 @@ game_boards_TrainingBoard.prototype = {
 			} else if(this.inputDevice.getAction("NEXT_GROUP")) {
 				this.playState.nextGroup();
 			}
+			if(this.inputDevice.getAction("QUICK_RESTART")) {
+				this.playState.onLose();
+			}
 		} else if(this.inputDevice.getAction("PREVIOUS_STEP")) {
 			this.editState.viewPrevious();
 			this.infoState.onViewChainStep();
@@ -1662,11 +1893,6 @@ game_boards_TrainingBoardOptions.prototype = {
 	,editState: null
 	,__class__: game_boards_TrainingBoardOptions
 };
-var game_boardstates_AutoAttackState = $hxEnums["game.boardstates.AutoAttackState"] = { __ename__:"game.boardstates.AutoAttackState",__constructs__:null
-	,WAITING: {_hx_name:"WAITING",_hx_index:0,__enum__:"game.boardstates.AutoAttackState",toString:$estr}
-	,SENDING: {_hx_name:"SENDING",_hx_index:1,__enum__:"game.boardstates.AutoAttackState",toString:$estr}
-};
-game_boardstates_AutoAttackState.__constructs__ = [game_boardstates_AutoAttackState.WAITING,game_boardstates_AutoAttackState.SENDING];
 var game_boardstates_IBoardState = function() { };
 $hxClasses["game.boardstates.IBoardState"] = game_boardstates_IBoardState;
 game_boardstates_IBoardState.__name__ = "game.boardstates.IBoardState";
@@ -1971,6 +2197,11 @@ game_boardstates_StandardBoardState.prototype = {
 	}
 	,updateControllingState: function() {
 		this.controlGroup();
+		if(this.currentActions.hardDrop) {
+			this.geloGroup.hardDrop();
+			this.lockGroup();
+			return;
+		}
 		if(this.geloGroup.drop(this.currentActions.softDrop)) {
 			this.lockGroup();
 		}
@@ -2136,7 +2367,6 @@ game_boardstates_StandardBoardState.prototype = {
 		} else {
 			this.state = game_boardstates__$StandardBoardState_InnerState.SIM_STEP(game_simulation_SimulationStepType.END);
 		}
-		this.afterEnd();
 	}
 	,handleEndStep: function() {
 		var amount = this.garbageManager.get_droppableGarbage();
@@ -2257,6 +2487,7 @@ var game_boardstates_EndlessBoardState = function(opts) {
 	game_boardstates_StandardBoardState.call(this,opts);
 	this.clearOnXModeContainer = opts.clearOnXModeContainer;
 	this.randomizer = opts.randomizer;
+	this.marginManager = opts.marginManager;
 };
 $hxClasses["game.boardstates.EndlessBoardState"] = game_boardstates_EndlessBoardState;
 game_boardstates_EndlessBoardState.__name__ = "game.boardstates.EndlessBoardState";
@@ -2264,21 +2495,23 @@ game_boardstates_EndlessBoardState.__super__ = game_boardstates_StandardBoardSta
 game_boardstates_EndlessBoardState.prototype = $extend(game_boardstates_StandardBoardState.prototype,{
 	clearOnXModeContainer: null
 	,randomizer: null
+	,marginManager: null
 	,onLose: function() {
 		this.eraseField();
 		this.garbageManager.clear();
+		this.marginManager.reset();
+		this.allClearManager.stopAnimation();
 		switch(this.clearOnXModeContainer.clearOnXMode) {
 		case "CLEAR":
 			break;
 		case "NEW":
 			this.regenerateQueue();
-			this.initSimStepState();
 			break;
 		case "RESTART":
 			this.queue.setIndex(0);
-			this.initSimStepState();
 			break;
 		}
+		this.initSimStepState();
 	}
 	,eraseField: function() {
 		var _gthis = this;
@@ -2336,10 +2569,11 @@ game_boardstates_StandardBoardStateOptions.prototype = {
 	,garbageManager: null
 	,__class__: game_boardstates_StandardBoardStateOptions
 };
-var game_boardstates_EndlessBoardStateOptions = function(clearOnXModeContainer,randomizer,rule,prefsSettings,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager) {
+var game_boardstates_EndlessBoardStateOptions = function(clearOnXModeContainer,randomizer,marginManager,rule,prefsSettings,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager) {
 	game_boardstates_StandardBoardStateOptions.call(this,rule,prefsSettings,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager);
 	this.clearOnXModeContainer = clearOnXModeContainer;
 	this.randomizer = randomizer;
+	this.marginManager = marginManager;
 };
 $hxClasses["game.boardstates.EndlessBoardStateOptions"] = game_boardstates_EndlessBoardStateOptions;
 game_boardstates_EndlessBoardStateOptions.__name__ = "game.boardstates.EndlessBoardStateOptions";
@@ -2347,6 +2581,7 @@ game_boardstates_EndlessBoardStateOptions.__super__ = game_boardstates_StandardB
 game_boardstates_EndlessBoardStateOptions.prototype = $extend(game_boardstates_StandardBoardStateOptions.prototype,{
 	clearOnXModeContainer: null
 	,randomizer: null
+	,marginManager: null
 	,__class__: game_boardstates_EndlessBoardStateOptions
 });
 var game_boardstates__$StandardBoardState_InnerState = $hxEnums["game.boardstates._StandardBoardState.InnerState"] = { __ename__:"game.boardstates._StandardBoardState.InnerState",__constructs__:null
@@ -2360,6 +2595,7 @@ var game_boardstates_TrainingBoardState = function(opts) {
 	game_boardstates_EndlessBoardState.call(this,opts);
 	this.trainingSettings = opts.trainingSettings;
 	this.infoState = opts.infoState;
+	this.autoAttackManager = opts.autoAttackManager;
 };
 $hxClasses["game.boardstates.TrainingBoardState"] = game_boardstates_TrainingBoardState;
 game_boardstates_TrainingBoardState.__name__ = "game.boardstates.TrainingBoardState";
@@ -2367,10 +2603,13 @@ game_boardstates_TrainingBoardState.__super__ = game_boardstates_EndlessBoardSta
 game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_EndlessBoardState.prototype,{
 	trainingSettings: null
 	,infoState: null
+	,autoAttackManager: null
 	,lockGroup: function() {
 		game_boardstates_EndlessBoardState.prototype.lockGroup.call(this);
 		this.infoState.loadChain();
 		this.infoState.startSplitTimer();
+		++this.infoState.groupCounter;
+		this.infoState.shouldUpdatePPST = false;
 	}
 	,afterDrop: function() {
 		this.infoState.stopSplitTimer();
@@ -2385,13 +2624,25 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Endless
 	}
 	,afterEnd: function() {
 		this.infoState.saveSplitCategory();
+		this.infoState.shouldUpdatePPST = true;
 	}
 	,onLose: function() {
 		game_boardstates_EndlessBoardState.prototype.onLose.call(this);
 		this.infoState.resetCurrentSplitStatistics();
+		this.autoAttackManager.reset();
 	}
 	,regenerateQueue: function() {
-		game_boardstates_EndlessBoardState.prototype.regenerateQueue.call(this);
+		this.randomizer.generatePools(game_randomizers_RandomizerType.TSU);
+		var data = this.randomizer.createQueueData(game_Dropsets.CLASSICAL);
+		var _g = 0;
+		var _g1 = this.trainingSettings.keepGroupCount;
+		while(_g < _g1) {
+			var i = _g++;
+			data[i] = this.queue.get(i);
+		}
+		var _this = this.queue;
+		_this.groups = data;
+		_this.currentIndex = 0;
 	}
 	,getField: function() {
 		return this.field;
@@ -2424,10 +2675,11 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Endless
 	}
 	,__class__: game_boardstates_TrainingBoardState
 });
-var game_boardstates_TrainingBoardStateOptions = function(trainingSettings,infoState,clearOnXModeContainer,randomizer,rule,prefsSettings,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager) {
-	game_boardstates_EndlessBoardStateOptions.call(this,clearOnXModeContainer,randomizer,rule,prefsSettings,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager);
+var game_boardstates_TrainingBoardStateOptions = function(trainingSettings,infoState,autoAttackManager,clearOnXModeContainer,randomizer,marginManager,rule,prefsSettings,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager) {
+	game_boardstates_EndlessBoardStateOptions.call(this,clearOnXModeContainer,randomizer,marginManager,rule,prefsSettings,transformMediator,rng,geometries,particleManager,geloGroup,queue,preview,allClearManager,scoreManager,actionBuffer,chainCounter,chainSim,field,garbageManager);
 	this.trainingSettings = trainingSettings;
 	this.infoState = infoState;
+	this.autoAttackManager = autoAttackManager;
 };
 $hxClasses["game.boardstates.TrainingBoardStateOptions"] = game_boardstates_TrainingBoardStateOptions;
 game_boardstates_TrainingBoardStateOptions.__name__ = "game.boardstates.TrainingBoardStateOptions";
@@ -2435,19 +2687,20 @@ game_boardstates_TrainingBoardStateOptions.__super__ = game_boardstates_EndlessB
 game_boardstates_TrainingBoardStateOptions.prototype = $extend(game_boardstates_EndlessBoardStateOptions.prototype,{
 	trainingSettings: null
 	,infoState: null
+	,autoAttackManager: null
 	,__class__: game_boardstates_TrainingBoardStateOptions
 });
 var game_boardstates_TrainingInfoBoardState = function(opts) {
 	this.geometries = opts.geometries;
 	this.marginManager = opts.marginManager;
 	this.rule = opts.rule;
-	this.rng = opts.rng;
 	this.linkBuilder = opts.linkBuilder;
 	this.trainingSettings = opts.trainingSettings;
 	this.chainAdvantageDisplay = opts.chainAdvantageDisplay;
 	this.afterCounterDisplay = opts.afterCounterDisplay;
-	this.autoChainCounter = opts.autoChainCounter;
 	this.garbageManager = opts.garbageManager;
+	this.prefsSettings = opts.prefsSettings;
+	this.autoAttackManager = opts.autoAttackManager;
 	this.playerScoreManager = opts.playerScoreManager;
 	this.playerChainSim = opts.playerChainSim;
 	this.font = kha_Assets.fonts.Pixellari;
@@ -2463,6 +2716,8 @@ var game_boardstates_TrainingInfoBoardState = function(opts) {
 	this.chainAdvantage = 0;
 	this.toCounterChain = 1;
 	this.counterDifference = 0;
+	this.groupCounter = 0;
+	this.ppsT = 0;
 	this.splitT = 0;
 	this.resetCurrentSplitStatistics();
 	this.overallGreatSplits = 0;
@@ -2471,8 +2726,8 @@ var game_boardstates_TrainingInfoBoardState = function(opts) {
 	this.overallSplitCounter = 0;
 	this.updateSplitT = false;
 	this.showSteps = false;
-	this.resetAutoAttackWaitingState();
 	this.viewMin = 0;
+	this.shouldUpdatePPST = true;
 };
 $hxClasses["game.boardstates.TrainingInfoBoardState"] = game_boardstates_TrainingInfoBoardState;
 game_boardstates_TrainingInfoBoardState.__name__ = "game.boardstates.TrainingInfoBoardState";
@@ -2481,13 +2736,13 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 	geometries: null
 	,marginManager: null
 	,rule: null
-	,rng: null
 	,linkBuilder: null
 	,trainingSettings: null
 	,chainAdvantageDisplay: null
 	,afterCounterDisplay: null
-	,autoChainCounter: null
 	,garbageManager: null
+	,prefsSettings: null
+	,autoAttackManager: null
 	,playerScoreManager: null
 	,playerChainSim: null
 	,font: null
@@ -2504,6 +2759,8 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 	,chainAdvantage: null
 	,toCounterChain: null
 	,counterDifference: null
+	,groupCounter: null
+	,ppsT: null
 	,splitT: null
 	,currentGreatSplits: null
 	,currentOkaySplits: null
@@ -2515,13 +2772,8 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 	,overallSplitCounter: null
 	,updateSplitT: null
 	,showSteps: null
-	,autoAttackState: null
-	,autoAttackT: null
-	,autoAttackChain: null
-	,autoAttackMaxChain: null
-	,autoAttackGarbage: null
-	,autoAttackRemainder: null
 	,viewMin: null
+	,shouldUpdatePPST: null
 	,gameRow: function(index) {
 		return this.titleFontHeight * index;
 	}
@@ -2534,72 +2786,32 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 		}
 		return game_boardstates_TrainingInfoSplitCategory.SLOW;
 	}
-	,updateWaitingAutoAttack: function() {
-		if(this.autoAttackT == 0) {
-			this.garbageManager.clear();
-			this.autoAttackState = game_boardstates_AutoAttackState.SENDING;
-			this.autoAttackT = 0;
-			this.autoAttackChain = 0;
-			this.autoAttackMaxChain = this.rng.GetIn(this.trainingSettings.minAttackChain,this.trainingSettings.maxAttackChain);
-		} else {
-			--this.autoAttackT;
-		}
-	}
-	,updateSendingAutoAttack: function() {
-		if(this.autoAttackT == 0) {
-			var _g = new haxe_ds_IntMap();
-			_g.h[0] = 0;
-			_g.h[1] = 0;
-			_g.h[2] = 0;
-			_g.h[3] = 0;
-			_g.h[4] = 0;
-			var clearsByColor = _g;
-			var colorCount = this.rng.GetIn(this.trainingSettings.minAttackColors,this.trainingSettings.maxAttackColors);
-			var _g = 0;
-			var _g1 = colorCount;
-			while(_g < _g1) {
-				var i = _g++;
-				var v = this.rule.popCount + this.rng.GetIn(this.trainingSettings.minAttackGroupDiff,this.trainingSettings.maxAttackGroupDiff);
-				clearsByColor.h[i] = v;
-			}
-			var link = this.linkBuilder.build(new game_simulation_LinkInfoBuildParameters(clearsByColor,++this.autoAttackChain,0,this.autoAttackRemainder,false,this.autoAttackGarbage));
-			this.autoAttackGarbage = link.accumulatedGarbage;
-			this.autoAttackRemainder = link.garbageRemainder;
-			this.garbageManager.sendGarbage(link.garbage,[new game_gelos_GeloPoint(0,0,this.gameRow(20) | 0)]);
-			this.autoAttackT = 80;
-			this.autoChainCounter.startAnimation(this.autoAttackChain,new utils_Point(112,this.gameRow(20)),link.isPowerful);
-			if(this.autoAttackChain == this.autoAttackMaxChain) {
-				this.garbageManager.confirmGarbage(this.autoAttackGarbage);
-				this.resetAutoAttackWaitingState();
-			}
-		} else {
-			--this.autoAttackT;
-		}
-	}
 	,renderSplitPercentage: function(g,x,y,color,value) {
 		utils_Utils.shadowDrawString(g,3,-16777216,color,StringTools.lpad("" + value + "% "," ",5),x,y);
 	}
 	,renderSplitStatistics: function(g,title,y,splitCounter,great,okay,slow) {
 		var titleWidth = this.font.width(40,title);
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,title,0,y);
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,title,-64,y);
 		if(splitCounter == 0) {
-			this.renderSplitPercentage(g,titleWidth,y,-16711936,0);
-			this.renderSplitPercentage(g,titleWidth + this.splitPercentageWidth,y,-256,0);
-			this.renderSplitPercentage(g,titleWidth + this.splitPercentageWidth * 2,y,-65536,0);
+			this.renderSplitPercentage(g,-64 + titleWidth,y,-16711936,0);
+			this.renderSplitPercentage(g,-64 + titleWidth + this.splitPercentageWidth,y,-256,0);
+			this.renderSplitPercentage(g,-64 + titleWidth + this.splitPercentageWidth * 2,y,-65536,0);
 			return;
 		}
-		this.renderSplitPercentage(g,titleWidth,y,-16711936,Math.round(great / splitCounter * 100));
-		this.renderSplitPercentage(g,titleWidth + this.splitPercentageWidth,y,-256,Math.round(okay / splitCounter * 100));
-		this.renderSplitPercentage(g,titleWidth + this.splitPercentageWidth * 2,y,-65536,Math.round(slow / splitCounter * 100));
+		this.renderSplitPercentage(g,-64 + titleWidth,y,-16711936,Math.round(great / splitCounter * 100));
+		this.renderSplitPercentage(g,-64 + titleWidth + this.splitPercentageWidth,y,-256,Math.round(okay / splitCounter * 100));
+		this.renderSplitPercentage(g,-64 + titleWidth + this.splitPercentageWidth * 2,y,-65536,Math.round(slow / splitCounter * 100));
 		g.set_color(-1);
 	}
 	,renderGameInfo: function(g,alpha) {
 		g.set_fontSize(40);
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Chain: " + this.chain + " / " + this.chainLength,0,this.gameRow(-3));
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Remainder: " + this.linkRemainder,0,this.gameRow(0));
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Damage: " + this.chainDamage + " / " + this.totalDamage,0,this.gameRow(1));
-		this.renderSplitStatistics(g,"Splits (ALL):  ",this.gameRow(3),this.overallSplitCounter,this.overallGreatSplits,this.overallOkaySplits,this.overallSlowSplits);
-		this.renderSplitStatistics(g,"Splits (NOW): ",this.gameRow(4),this.currentSplitCounter,this.currentGreatSplits,this.currentOkaySplits,this.currentSlowSplits);
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Chain: " + this.chain + " / " + this.chainLength,-64,this.gameRow(-3));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Remainder: " + this.linkRemainder,-64,this.gameRow(0));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Damage: " + this.chainDamage + " / " + this.totalDamage,-64,this.gameRow(1));
+		var multiplier = Math.pow(10,2);
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Speed (PPS): " + Math.round(this.groupCounter / (this.ppsT / 60) * multiplier) / multiplier,-64,this.gameRow(3));
+		this.renderSplitStatistics(g,"Splits (ALL):  ",this.gameRow(4),this.overallSplitCounter,this.overallGreatSplits,this.overallOkaySplits,this.overallSlowSplits);
+		this.renderSplitStatistics(g,"Splits (NOW): ",this.gameRow(5),this.currentSplitCounter,this.currentGreatSplits,this.currentOkaySplits,this.currentSlowSplits);
 		var splitColor;
 		switch(this.getSplitCategory()._hx_index) {
 		case 0:
@@ -2612,32 +2824,32 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 			splitColor = g.set_color(-65536);
 			break;
 		}
-		utils_Utils.shadowDrawString(g,3,-16777216,splitColor,StringTools.lpad("" + this.splitT," ",3),0,this.gameRow(5));
-		g.fillRect(64,this.gameRow(5),this.splitT * 4,32);
+		utils_Utils.shadowDrawString(g,3,-16777216,splitColor,StringTools.lpad("" + this.splitT," ",3),-64,this.gameRow(6));
+		g.fillRect(0,this.gameRow(6),this.splitT * 4,32);
 		g.set_color(-1);
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Chain Standard Advantage: " + this.chainAdvantage,0,this.gameRow(8));
-		this.chainAdvantageDisplay.render(g,0,this.gameRow(9),alpha);
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,"To Counter: " + this.toCounterChain + " (" + this.counterDifference + " remains)",0,this.gameRow(11));
-		this.afterCounterDisplay.render(g,0,this.gameRow(12),alpha);
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Chain Standard Advantage: " + this.chainAdvantage,-64,this.gameRow(9));
+		this.chainAdvantageDisplay.render(g,-64,this.gameRow(10),alpha);
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"To Counter: " + this.toCounterChain + " (" + this.counterDifference + " remains)",-64,this.gameRow(12));
+		this.afterCounterDisplay.render(g,-64,this.gameRow(13),alpha);
 		var targetPoints = this.marginManager.targetPoints;
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Target Points: " + targetPoints,0,this.gameRow(14));
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Margin Time: " + (this.marginManager.marginTime / 60 | 0),0,this.gameRow(15));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Target Pts (Margin T): " + targetPoints + " (" + (this.marginManager.marginTime / 60 | 0) + ")",-64,this.gameRow(15));
 		var dropBonus = this.playerScoreManager.dropBonus | 0;
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Drop bonus: " + dropBonus + " (" + (dropBonus / targetPoints | 0) + " garbo)",0,this.gameRow(16));
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Drop bonus: " + dropBonus + " (" + (dropBonus / targetPoints | 0) + " garbo)",-64,this.gameRow(16));
 		if(this.trainingSettings.autoAttack) {
 			var autoAttackString;
-			switch(this.autoAttackState._hx_index) {
+			switch(this.autoAttackManager.state) {
 			case 0:
-				autoAttackString = "Auto-Attack WAITING: " + (this.autoAttackT / 60 + 1 | 0);
+				autoAttackString = "Auto-Attack WAITING: " + (this.autoAttackManager.timer / 60 + 1 | 0);
 				break;
 			case 1:
-				autoAttackString = "Auto-Attack SENDING: " + this.autoAttackMaxChain + "-CHAIN!";
+				autoAttackString = "Auto-Attack SENDING: " + this.autoAttackManager.chain + "-CHAIN!";
 				break;
 			}
-			utils_Utils.shadowDrawString(g,3,-16777216,-1,autoAttackString,0,this.gameRow(17));
+			utils_Utils.shadowDrawString(g,3,-16777216,-1,autoAttackString,-64,this.gameRow(18));
 		} else {
-			utils_Utils.shadowDrawString(g,3,-16777216,-1,"Auto-Attack DISABLED",0,this.gameRow(17));
+			utils_Utils.shadowDrawString(g,3,-16777216,-1,"Auto-Attack DISABLED",-64,this.gameRow(18));
 		}
+		this.autoAttackManager.render(g,alpha);
 	}
 	,renderEditInfo: function(g,alpha) {
 		var steps = this.playerChainSim.steps;
@@ -2662,17 +2874,15 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 		g.set_fontSize(32);
 		utils_Utils.shadowDrawString(g,3,-16777216,-1,"" + (viewIndex + 1) + " / " + steps.length,0,game_geometries_BoardGeometries.HEIGHT);
 	}
-	,resetAutoAttackWaitingState: function() {
-		this.autoAttackState = game_boardstates_AutoAttackState.WAITING;
-		this.autoAttackT = this.rng.GetIn(this.trainingSettings.minAttackTime,this.trainingSettings.maxAttackTime) * 60;
-		this.autoAttackGarbage = 0;
-		this.autoAttackRemainder = 0;
-	}
 	,resetCurrentSplitStatistics: function() {
 		this.currentGreatSplits = 0;
 		this.currentOkaySplits = 0;
 		this.currentSlowSplits = 0;
 		this.currentSplitCounter = 0;
+		this.stopSplitTimer();
+	}
+	,incrementGroupCounter: function() {
+		++this.groupCounter;
 	}
 	,startSplitTimer: function() {
 		this.splitT = 0;
@@ -2769,17 +2979,10 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 		if(this.updateSplitT) {
 			this.splitT++;
 		}
-		if(this.trainingSettings.autoAttack && !this.showSteps) {
-			switch(this.autoAttackState._hx_index) {
-			case 0:
-				this.updateWaitingAutoAttack();
-				break;
-			case 1:
-				this.updateSendingAutoAttack();
-				break;
-			}
+		if(this.shouldUpdatePPST) {
+			this.ppsT++;
 		}
-		this.autoChainCounter.update();
+		this.autoAttackManager.update();
 		this.garbageManager.update();
 	}
 	,renderScissored: function(g,g4,alpha) {
@@ -2792,21 +2995,20 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 			this.renderGameInfo(g,alpha);
 		}
 		var garbageTrayPos = this.geometries.garbageTray;
-		this.autoChainCounter.render(g,alpha);
 		this.garbageManager.render(g,garbageTrayPos.x,garbageTrayPos.y,alpha);
 	}
 	,__class__: game_boardstates_TrainingInfoBoardState
 };
-var game_boardstates_TrainingInfoBoardStateOptions = function(geometries,marginManager,rule,rng,linkBuilder,trainingSettings,chainAdvantageDisplay,afterCounterDisplay,autoChainCounter,playerScoreManager,playerChainSim,garbageManager) {
+var game_boardstates_TrainingInfoBoardStateOptions = function(geometries,marginManager,rule,linkBuilder,trainingSettings,chainAdvantageDisplay,afterCounterDisplay,prefsSettings,autoAttackManager,playerScoreManager,playerChainSim,garbageManager) {
 	this.geometries = geometries;
 	this.marginManager = marginManager;
 	this.rule = rule;
-	this.rng = rng;
 	this.linkBuilder = linkBuilder;
 	this.trainingSettings = trainingSettings;
 	this.chainAdvantageDisplay = chainAdvantageDisplay;
 	this.afterCounterDisplay = afterCounterDisplay;
-	this.autoChainCounter = autoChainCounter;
+	this.prefsSettings = prefsSettings;
+	this.autoAttackManager = autoAttackManager;
 	this.playerScoreManager = playerScoreManager;
 	this.playerChainSim = playerChainSim;
 	this.garbageManager = garbageManager;
@@ -2817,12 +3019,12 @@ game_boardstates_TrainingInfoBoardStateOptions.prototype = {
 	geometries: null
 	,marginManager: null
 	,rule: null
-	,rng: null
 	,linkBuilder: null
 	,trainingSettings: null
 	,chainAdvantageDisplay: null
 	,afterCounterDisplay: null
-	,autoChainCounter: null
+	,prefsSettings: null
+	,autoAttackManager: null
 	,playerScoreManager: null
 	,playerChainSim: null
 	,garbageManager: null
@@ -3613,10 +3815,10 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 		var _g5 = this.geloGroup;
 		var _g6 = this.field;
 		var _g7 = game_garbage_NullGarbageManager.get_instance();
-		this.boardState = new game_boardstates_EndlessBoardState(new game_boardstates_EndlessBoardStateOptions(save_$data_Profile.primary.endlessSettings,this.randomizer,_g,_g1,_g2,_g3,game_geometries_BoardGeometries.CENTERED,_g4,_g5,this.queue,new game_previews_VerticalPreview(this.queue),this.allClearManager,this.scoreManager,this.actionBuffer,this.chainCounter,this.chainSim,_g6,_g7));
+		this.boardState = new game_boardstates_EndlessBoardState(new game_boardstates_EndlessBoardStateOptions(save_$data_Profile.primary.endlessSettings,this.randomizer,this.marginManager,_g,_g1,_g2,_g3,game_geometries_BoardGeometries.CENTERED,_g4,_g5,this.queue,new game_previews_VerticalPreview(this.queue),this.allClearManager,this.scoreManager,this.actionBuffer,this.chainCounter,this.chainSim,_g6,_g7));
 	}
 	,buildBoard: function() {
-		this.board = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.inputDevice,this.actionBuffer,this.boardState));
+		this.board = new game_boards_EndlessBoard(new game_boards_EndlessBoardOptions(this.pauseMediator,this.inputDevice,this.actionBuffer,this.boardState));
 	}
 	,buildPauseMenu: function() {
 		if(this.gameMode.replayData == null) {
@@ -3660,8 +3862,8 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 		var _g5 = this.geloGroup;
 		var _g6 = this.field;
 		var _g7 = game_garbage_NullGarbageManager.get_instance();
-		this.boardState = new game_boardstates_EndlessBoardState(new game_boardstates_EndlessBoardStateOptions(save_$data_Profile.primary.endlessSettings,this.randomizer,_g,_g1,_g2,_g3,game_geometries_BoardGeometries.CENTERED,_g4,_g5,this.queue,new game_previews_VerticalPreview(this.queue),this.allClearManager,this.scoreManager,this.actionBuffer,this.chainCounter,this.chainSim,_g6,_g7));
-		this.board = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.inputDevice,this.actionBuffer,this.boardState));
+		this.boardState = new game_boardstates_EndlessBoardState(new game_boardstates_EndlessBoardStateOptions(save_$data_Profile.primary.endlessSettings,this.randomizer,this.marginManager,_g,_g1,_g2,_g3,game_geometries_BoardGeometries.CENTERED,_g4,_g5,this.queue,new game_previews_VerticalPreview(this.queue),this.allClearManager,this.scoreManager,this.actionBuffer,this.chainCounter,this.chainSim,_g6,_g7));
+		this.board = new game_boards_EndlessBoard(new game_boards_EndlessBoardOptions(this.pauseMediator,this.inputDevice,this.actionBuffer,this.boardState));
 		this.pauseMenu = this.gameMode.replayData == null ? new game_ui_EndlessPauseMenu(new game_ui_EndlessPauseMenuOptions(this.gameMode,save_$data_Profile.primary.endlessSettings,this.actionBuffer,save_$data_Profile.primary.prefs,this.pauseMediator)) : new game_ui_ReplayPauseMenu(new game_ui_ReplayPauseMenuOptions(js_Boot.__cast(this.actionBuffer , game_actionbuffers_ReplayActionBuffer),save_$data_Profile.primary.prefs,this.pauseMediator));
 		var _g = this.marginManager;
 		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.CENTERED,this.board)),_g,this.pauseMenu,this.frameCounter));
@@ -3714,6 +3916,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	,playerGeloGroup: null
 	,playerAllClearManager: null
 	,infoGarbageManager: null
+	,autoAttackManager: null
 	,infoState: null
 	,playState: null
 	,editState: null
@@ -3748,7 +3951,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
 	}
 	,buildPlayerTargetMediator: function() {
-		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT,null);
+		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.INFO,null);
 	}
 	,buildInfoTargetMediator: function() {
 		this.infoTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT,null);
@@ -3779,22 +3982,25 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	}
 	,buildPlayerGeloGroup: function() {
 		var prefsSettings = save_$data_Profile.primary.prefs;
-		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSettings,this.gameMode.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
+		this.playerGeloGroup = new game_gelogroups_TrainingGeloGroup(new game_gelogroups_TrainingGeloGroupOptions(save_$data_Profile.primary.trainingSettings,prefsSettings,this.gameMode.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
 	}
 	,buildPlayerAllClearManager: function() {
 		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
 	}
 	,buildInfoGarbageManager: function() {
-		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.gameMode.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.infoTargetMediator));
+		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.gameMode.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.INFO,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.infoTargetMediator));
+	}
+	,buildAutoAttackManager: function() {
+		this.autoAttackManager = new auto_$attack_AutoAttackManager(new auto_$attack_AutoAttackManagerOptions(this.gameMode.rule,this.rng,game_geometries_BoardGeometries.INFO,save_$data_Profile.primary.trainingSettings,save_$data_Profile.primary.prefs,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),this.infoGarbageManager,new game_ChainCounter(),this.particleManager));
 	}
 	,buildInfoState: function() {
 		var prefsSettings = save_$data_Profile.primary.prefs;
-		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.RIGHT,this.marginManager,this.gameMode.rule,this.rng,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),save_$data_Profile.primary.trainingSettings,game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings),new game_ChainCounter(),this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
+		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.INFO,this.marginManager,this.gameMode.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),save_$data_Profile.primary.trainingSettings,game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings),prefsSettings,this.autoAttackManager,this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
 	}
 	,buildPlayState: function() {
 		var _g = this.playerField;
 		var _g1 = this.playerGarbageManager;
-		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(save_$data_Profile.primary.trainingSettings,this.infoState,save_$data_Profile.primary.trainingSettings,this.randomizer,this.gameMode.rule,save_$data_Profile.primary.prefs,this.transformMediator,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,new game_previews_VerticalPreview(this.playerQueue),this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerChainSim,_g,_g1));
+		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(save_$data_Profile.primary.trainingSettings,this.infoState,this.autoAttackManager,save_$data_Profile.primary.trainingSettings,this.randomizer,this.marginManager,this.gameMode.rule,save_$data_Profile.primary.prefs,this.transformMediator,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,new game_previews_VerticalPreview(this.playerQueue),this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerChainSim,_g,_g1));
 	}
 	,buildEditState: function() {
 		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputDevice,game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5)),this.playerChainSim,this.playerChainCounter,save_$data_Profile.primary.prefs));
@@ -3806,11 +4012,11 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputDevice,game_actionbuffers_NullActionBuffer.get_instance(),this.infoState));
 	}
 	,buildPauseMenu: function() {
-		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,this.controlDisplayContainer,save_$data_Profile.primary.prefs,this.pauseMediator));
+		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,this.controlDisplayContainer,this.autoAttackManager,save_$data_Profile.primary.prefs,this.pauseMediator));
 	}
 	,buildGameState: function() {
 		var _g = this.marginManager;
-		this.gameState = new game_states_ControlDisplayGameState(new game_states_ControlDisplayGameStateOptions(this.controlDisplayContainer,this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
+		this.gameState = new game_states_ControlDisplayGameState(new game_states_ControlDisplayGameStateOptions(this.controlDisplayContainer,this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.INFO,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
 	}
 	,wireMediators: function() {
 		this.pauseMediator.gameState = this.gameState;
@@ -3829,7 +4035,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.controlDisplayContainer = new game_mediators_ControlDisplayContainer();
 		this.pauseMediator = new game_mediators_PauseMediator();
 		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
-		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT,null);
+		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.INFO,null);
 		this.infoTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT,null);
 		this.playerGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.gameMode.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.playerTargetMediator));
 		this.playerScoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.gameMode.rule,game_geometries_BoardOrientation.LEFT));
@@ -3840,20 +4046,21 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerInputDevice = input_AnyInputDevice.instance;
 		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputDevice));
 		var prefsSettings = save_$data_Profile.primary.prefs;
-		this.playerGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(prefsSettings,this.gameMode.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
+		this.playerGeloGroup = new game_gelogroups_TrainingGeloGroup(new game_gelogroups_TrainingGeloGroupOptions(save_$data_Profile.primary.trainingSettings,prefsSettings,this.gameMode.rule,this.playerScoreManager,this.playerField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.gameMode.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
 		this.playerAllClearManager = new game_all_$clear_AllClearManager(new game_all_$clear_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
-		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.gameMode.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.infoTargetMediator));
+		this.infoGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.gameMode.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.INFO,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.infoTargetMediator));
+		this.autoAttackManager = new auto_$attack_AutoAttackManager(new auto_$attack_AutoAttackManagerOptions(this.gameMode.rule,this.rng,game_geometries_BoardGeometries.INFO,save_$data_Profile.primary.trainingSettings,save_$data_Profile.primary.prefs,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),this.infoGarbageManager,new game_ChainCounter(),this.particleManager));
 		var prefsSettings = save_$data_Profile.primary.prefs;
-		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.RIGHT,this.marginManager,this.gameMode.rule,this.rng,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),save_$data_Profile.primary.trainingSettings,game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings),new game_ChainCounter(),this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
+		this.infoState = new game_boardstates_TrainingInfoBoardState(new game_boardstates_TrainingInfoBoardStateOptions(game_geometries_BoardGeometries.INFO,this.marginManager,this.gameMode.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.gameMode.rule,this.marginManager)),save_$data_Profile.primary.trainingSettings,game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings),prefsSettings,this.autoAttackManager,this.playerScoreManager,this.playerChainSim,this.infoGarbageManager));
 		var _g = this.playerField;
 		var _g1 = this.playerGarbageManager;
-		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(save_$data_Profile.primary.trainingSettings,this.infoState,save_$data_Profile.primary.trainingSettings,this.randomizer,this.gameMode.rule,save_$data_Profile.primary.prefs,this.transformMediator,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,new game_previews_VerticalPreview(this.playerQueue),this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerChainSim,_g,_g1));
+		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(save_$data_Profile.primary.trainingSettings,this.infoState,this.autoAttackManager,save_$data_Profile.primary.trainingSettings,this.randomizer,this.marginManager,this.gameMode.rule,save_$data_Profile.primary.prefs,this.transformMediator,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,new game_previews_VerticalPreview(this.playerQueue),this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerChainSim,_g,_g1));
 		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputDevice,game_fields_Field.create(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,1,5)),this.playerChainSim,this.playerChainCounter,save_$data_Profile.primary.prefs));
 		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputDevice,this.playerActionBuffer,this.infoState,this.controlDisplayContainer,this.playState,this.editState));
 		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputDevice,game_actionbuffers_NullActionBuffer.get_instance(),this.infoState));
-		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.infoState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,this.controlDisplayContainer,save_$data_Profile.primary.prefs,this.pauseMediator));
+		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.gameMode.rule,this.randomizer,this.playerQueue,this.playState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,this.controlDisplayContainer,this.autoAttackManager,save_$data_Profile.primary.prefs,this.pauseMediator));
 		var _g = this.marginManager;
-		this.gameState = new game_states_ControlDisplayGameState(new game_states_ControlDisplayGameStateOptions(this.controlDisplayContainer,this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.RIGHT,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
+		this.gameState = new game_states_ControlDisplayGameState(new game_states_ControlDisplayGameStateOptions(this.controlDisplayContainer,this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.INFO,this.infoBoard)))),_g,this.pauseMenu,this.frameCounter));
 		this.pauseMediator.gameState = this.gameState;
 		this.playerBorderColorMediator.boardState = this.playState;
 		this.playerTargetMediator.garbageManager = this.infoGarbageManager;
@@ -4656,6 +4863,23 @@ game_gelogroups_GeloGroup.prototype = {
 		}
 		return false;
 	}
+	,hardDrop: function() {
+		var mainCell = this.field.screenToCell(this.mainShadow.x,this.mainShadow.y);
+		this.field.newGelo(mainCell.x,mainCell.y,this.mainShadow.color,false).startSplitting();
+		var _g = 0;
+		var _g1 = this.otherShadows;
+		while(_g < _g1.length) {
+			var o = _g1[_g];
+			++_g;
+			var otherCell = this.field.screenToCell(o.x,o.y);
+			this.field.newGelo(otherCell.x,otherCell.y,o.color,false).startSplitting();
+		}
+		this.isShadowVisible = false;
+		this.isVisible = false;
+	}
+	,getPrimaryColor: function(geloColor) {
+		return this.prefsSettings.primaryColors.h[geloColor];
+	}
 	,renderShadow: function(g,g4,alpha) {
 		if(!this.prefsSettings.showGroupShadow || !this.isShadowVisible) {
 			return;
@@ -4669,7 +4893,7 @@ game_gelogroups_GeloGroup.prototype = {
 		while(_g < _g1.length) {
 			var o = _g1[_g];
 			++_g;
-			g.set_color(this.prefsSettings.primaryColors.h[o.color]);
+			g.set_color(this.getPrimaryColor(o.color));
 			kha_graphics2_GraphicsExtension.fillCircle(g,o.x,o.y,radius,16);
 		}
 		g.popOpacity();
@@ -4685,10 +4909,13 @@ game_gelogroups_GeloGroup.prototype = {
 			}
 		}
 		g.pushOpacity(shadowOpacity);
-		g.set_color(this.prefsSettings.primaryColors.h[this.mainShadow.color]);
+		g.set_color(this.getPrimaryColor(this.mainShadow.color));
 		kha_graphics2_GraphicsExtension.fillCircle(g,this.mainShadow.x,this.mainShadow.y,radius,16);
 		g.popOpacity();
 		g.set_color(-1);
+	}
+	,renderGelo: function(g,g4,x,y,alpha,gelo) {
+		gelo.render(g,g4,x,y,alpha);
 	}
 	,update: function() {
 		if(this.main == null) {
@@ -4731,9 +4958,9 @@ game_gelogroups_GeloGroup.prototype = {
 		while(_g < _g1.length) {
 			var o = _g1[_g];
 			++_g;
-			o.render(g,g4,lerpDisplayX + lerpCos * 64,lerpDisplayY + lerpSin * 64,alpha);
+			this.renderGelo(g,g4,lerpDisplayX + lerpCos * 64,lerpDisplayY + lerpSin * 64,alpha,o);
 		}
-		this.main.render(g,g4,lerpDisplayX,lerpDisplayY,alpha);
+		this.renderGelo(g,g4,lerpDisplayX,lerpDisplayY,alpha,this.main);
 		g.set_color(-1);
 	}
 	,__class__: game_gelogroups_GeloGroup
@@ -4777,6 +5004,44 @@ game_gelogroups_GeloGroupOptions.prototype = {
 	,chainSim: null
 	,__class__: game_gelogroups_GeloGroupOptions
 };
+var game_gelogroups_TrainingGeloGroup = function(opts) {
+	game_gelogroups_GeloGroup.call(this,opts);
+	this.trainingSettings = opts.trainingSettings;
+};
+$hxClasses["game.gelogroups.TrainingGeloGroup"] = game_gelogroups_TrainingGeloGroup;
+game_gelogroups_TrainingGeloGroup.__name__ = "game.gelogroups.TrainingGeloGroup";
+game_gelogroups_TrainingGeloGroup.__super__ = game_gelogroups_GeloGroup;
+game_gelogroups_TrainingGeloGroup.prototype = $extend(game_gelogroups_GeloGroup.prototype,{
+	trainingSettings: null
+	,getPrimaryColor: function(geloColor) {
+		if(this.trainingSettings.groupBlindMode) {
+			return game_gelogroups_TrainingGeloGroup.BLIND_MODE_COLOR;
+		} else {
+			return game_gelogroups_GeloGroup.prototype.getPrimaryColor.call(this,geloColor);
+		}
+	}
+	,renderGelo: function(g,g4,x,y,alpha,gelo) {
+		if(this.trainingSettings.groupBlindMode) {
+			g.set_color(game_gelogroups_TrainingGeloGroup.BLIND_MODE_COLOR);
+			kha_graphics2_GraphicsExtension.fillCircle(g,x,y,32,16);
+			g.set_color(-1);
+			return;
+		}
+		game_gelogroups_GeloGroup.prototype.renderGelo.call(this,g,g4,x,y,alpha,gelo);
+	}
+	,__class__: game_gelogroups_TrainingGeloGroup
+});
+var game_gelogroups_TrainingGeloGroupOptions = function(trainingSettings,prefsSettings,rule,scoreManager,field,chainSim) {
+	game_gelogroups_GeloGroupOptions.call(this,prefsSettings,rule,scoreManager,field,chainSim);
+	this.trainingSettings = trainingSettings;
+};
+$hxClasses["game.gelogroups.TrainingGeloGroupOptions"] = game_gelogroups_TrainingGeloGroupOptions;
+game_gelogroups_TrainingGeloGroupOptions.__name__ = "game.gelogroups.TrainingGeloGroupOptions";
+game_gelogroups_TrainingGeloGroupOptions.__super__ = game_gelogroups_GeloGroupOptions;
+game_gelogroups_TrainingGeloGroupOptions.prototype = $extend(game_gelogroups_GeloGroupOptions.prototype,{
+	trainingSettings: null
+	,__class__: game_gelogroups_TrainingGeloGroupOptions
+});
 var game_gelos_FieldGeloState = $hxEnums["game.gelos.FieldGeloState"] = { __ename__:"game.gelos.FieldGeloState",__constructs__:null
 	,IDLE: {_hx_name:"IDLE",_hx_index:0,__enum__:"game.gelos.FieldGeloState",toString:$estr}
 	,FALLING: {_hx_name:"FALLING",_hx_index:1,__enum__:"game.gelos.FieldGeloState",toString:$estr}
@@ -5322,11 +5587,12 @@ game_mediators_TransformationMediator.prototype = {
 	translationX: null
 	,translationY: null
 	,onResize: function() {
-		this.translationX = (ScaleManager.width - game_mediators_TransformationMediator.PLAY_AREA_DESIGN_WIDTH * ScaleManager.smallerScale) / 2;
-		this.translationY = (ScaleManager.height - game_mediators_TransformationMediator.PLAY_AREA_DESIGN_HEIGHT * ScaleManager.smallerScale) / 2;
+		var scr = ScaleManager.screen;
+		this.translationX = (scr.width - game_mediators_TransformationMediator.PLAY_AREA_DESIGN_WIDTH * scr.smallerScale) / 2;
+		this.translationY = (scr.height - game_mediators_TransformationMediator.PLAY_AREA_DESIGN_HEIGHT * scr.smallerScale) / 2;
 	}
 	,setTransformedScissor: function(g,x,y,w,h) {
-		var scale = ScaleManager.smallerScale;
+		var scale = ScaleManager.screen.smallerScale;
 		var tx = this.translationX + x * scale | 0;
 		var ty = this.translationY + y * scale | 0;
 		var tw = w * scale | 0;
@@ -5334,7 +5600,7 @@ game_mediators_TransformationMediator.prototype = {
 		g.scissor(tx,ty,tw,th);
 	}
 	,pushTransformation: function(g) {
-		var scale = ScaleManager.smallerScale;
+		var scale = ScaleManager.screen.smallerScale;
 		var _this__00 = 1;
 		var _this__10 = 0;
 		var _this__20 = this.translationX;
@@ -7009,7 +7275,7 @@ game_simulation_LinkInfoBuilder.prototype = {
 		var colorBonus = colorBonusTable[colorCount - 1];
 		var chainPower = powerTable.get(chain);
 		var bonuses = groupBonus + colorBonus;
-		var score = 10 * clearCount * (Math.min(99,Math.max(chainPower + bonuses,1)) | 0);
+		var score = 10 * clearCount * (Math.min(999,Math.max(chainPower + bonuses,1)) | 0);
 		var garbageScore = this.rule.dropBonusGarbage ? score + params.dropBonus : score;
 		var garbageFloat = garbageScore / this.marginManager.targetPoints + params.garbageRemainder;
 		if(params.sendsAllClearBonus) {
@@ -7184,14 +7450,14 @@ game_states_ControlDisplayGameState.prototype = $extend(game_states_GameState.pr
 	,fontHeight: null
 	,lastIsVisible: null
 	,onResize: function() {
-		this.fontSize = 32 * ScaleManager.smallerScale | 0;
+		this.fontSize = 32 * ScaleManager.screen.smallerScale | 0;
 		this.fontHeight = this.font.height(this.fontSize);
 	}
 	,render: function(g,g4,alpha) {
 		if(this.container.isVisible) {
 			g.set_font(this.font);
 			g.set_fontSize(this.fontSize);
-			input_AnyInputDevice.instance.renderControls(g,0,this.container.value);
+			input_AnyInputDevice.instance.renderControls(g,0,ScaleManager.screen.width,0,this.container.value);
 		}
 		game_states_GameState.prototype.render.call(this,g,g4,alpha);
 	}
@@ -7243,8 +7509,6 @@ var ui_ListMenuPage = function(opts) {
 	this.widgetBuilder = opts.widgetBuilder;
 	this.font = kha_Assets.fonts.Pixellari;
 	this.widgets = [];
-	this.widgetIndex = 0;
-	this.minIndex = 0;
 };
 $hxClasses["ui.ListMenuPage"] = ui_ListMenuPage;
 ui_ListMenuPage.__name__ = "ui.ListMenuPage";
@@ -7262,6 +7526,9 @@ ui_ListMenuPage.prototype = {
 	,minIndex: null
 	,header: null
 	,controlDisplays: null
+	,setControlDisplays: function() {
+		this.controlDisplays = ui_ListMenuPage.DEFAULT_CONTROL_DISPLAYS.concat(this.widgets[this.widgetIndex].controlDisplays);
+	}
 	,onSelect: function() {
 		this.widgetIndex = Math.min(this.widgets.length - 1,Math.max(this.widgetIndex,0)) | 0;
 		this.controlDisplays = ui_ListMenuPage.DEFAULT_CONTROL_DISPLAYS.concat(this.widgets[this.widgetIndex].controlDisplays);
@@ -7273,11 +7540,11 @@ ui_ListMenuPage.prototype = {
 		g.drawScaledSubImage(kha_Assets.images.Arrows,spriteX,0,64,64,x,y,this.scrollArrowSize,this.scrollArrowSize);
 	}
 	,onResize: function() {
-		var smallerScale = ScaleManager.smallerScale;
+		var smallerScale = this.menu.scaleManager.smallerScale;
 		this.widgetBottomPadding = 16 * smallerScale;
 		this.descFontSize = 48 * smallerScale | 0;
 		this.descFontHeight = this.font.height(this.descFontSize);
-		this.scrollArrowSize = 64 * ScaleManager.smallerScale;
+		this.scrollArrowSize = 64 * smallerScale;
 		var _g = 0;
 		var _g1 = this.widgets;
 		while(_g < _g1.length) {
@@ -7320,7 +7587,9 @@ ui_ListMenuPage.prototype = {
 			++_g;
 			w.onShow(menu);
 		}
-		this.onSelect();
+		this.widgetIndex = 0;
+		this.minIndex = 0;
+		this.controlDisplays = ui_ListMenuPage.DEFAULT_CONTROL_DISPLAYS.concat(this.widgets[this.widgetIndex].controlDisplays);
 	}
 	,update: function() {
 		var inputDevice = this.menu.inputDevice;
@@ -7376,18 +7645,58 @@ ui_ListMenuPage.prototype = {
 			this.renderArrow(g,x,drawY,0);
 		}
 		var desc = this.widgets[this.widgetIndex].description;
-		var rightBorder = ScaleManager.width - this.menu.padding;
 		var _g = 0;
 		var _g1 = desc.length;
 		while(_g < _g1) {
 			var i = _g++;
 			var row = desc[i];
 			var rowWidth = this.font.width(this.descFontSize,row);
-			g.drawString(row,rightBorder - rowWidth,y + this.descFontHeight * i);
+			g.drawString(row,x + this.menu.scaleManager.width - this.menu.padding * 2 - rowWidth,y + this.descFontHeight * i);
 		}
 	}
 	,__class__: ui_ListMenuPage
 };
+var game_ui_AutoAttackLinkPage = function(autoAttackManager,data) {
+	var _gthis = this;
+	this.autoAttackManager = autoAttackManager;
+	this.data = data;
+	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions("Edit Link",function(_) {
+		var widgets = [new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Clears For Color 1",["Set The Number Of Color 1 Gelos","That Popped In The Link"],0,72,1,_gthis.data.clearsByColor.h[0],function(value) {
+			_gthis.setColor(0,value);
+		})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Clears For Color 2",["Set The Number Of Color 2 Gelos","That Popped In The Link"],0,72,1,_gthis.data.clearsByColor.h[1],function(value) {
+			_gthis.setColor(1,value);
+		})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Clears For Color 3",["Set The Number Of Color 3 Gelos","That Popped In The Link"],0,72,1,_gthis.data.clearsByColor.h[2],function(value) {
+			_gthis.setColor(2,value);
+		})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Clears For Color 4",["Set The Number Of Color 4 Gelos","That Popped In The Link"],0,72,1,_gthis.data.clearsByColor.h[3],function(value) {
+			_gthis.setColor(3,value);
+		})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Clears For Color 5",["Set The Number Of Color 5 Gelos","That Popped In The Link"],0,72,1,_gthis.data.clearsByColor.h[4],function(value) {
+			_gthis.setColor(4,value);
+		}))];
+		if(data == autoAttackManager.linkData[0]) {
+			widgets.push(new ui_YesNoWidget(new ui_YesNoWidgetOptions("Send All Clear Bonus",["Whether To Send All Clear Bonus On This Link"],false,function(value) {
+				data.sendsAllClearBonus = value;
+				autoAttackManager.constructLinks();
+			})));
+		}
+		return widgets;
+	}));
+};
+$hxClasses["game.ui.AutoAttackLinkPage"] = game_ui_AutoAttackLinkPage;
+game_ui_AutoAttackLinkPage.__name__ = "game.ui.AutoAttackLinkPage";
+game_ui_AutoAttackLinkPage.__super__ = ui_ListMenuPage;
+game_ui_AutoAttackLinkPage.prototype = $extend(ui_ListMenuPage.prototype,{
+	autoAttackManager: null
+	,data: null
+	,getColor: function(color) {
+		return this.data.clearsByColor.h[color];
+	}
+	,setColor: function(color,value) {
+		var v = value | 0;
+		this.data.clearsByColor.h[color] = v;
+		this.autoAttackManager.constructLinks();
+	}
+	,__class__: game_ui_AutoAttackLinkPage
+});
 var ui_InputLimitedListPage = function(opts) {
 	ui_ListMenuPage.call(this,opts);
 	this.inputDevice = opts.inputDevice;
@@ -7484,7 +7793,7 @@ ui_ButtonWidget.prototype = {
 		this.menu = menu;
 	}
 	,onResize: function() {
-		this.fontSize = 60 * ScaleManager.smallerScale | 0;
+		this.fontSize = 60 * this.menu.scaleManager.smallerScale | 0;
 		this.height = this.font.height(this.fontSize);
 	}
 	,update: function() {
@@ -7540,13 +7849,51 @@ game_ui_ControlsPageWidgetOptions.prototype = {
 	,inputDevice: null
 	,__class__: game_ui_ControlsPageWidgetOptions
 };
-var ui_Menu = function(initialPage) {
+var game_ui_CustomAutoAttackPage = function(autoAttackManager,linkBuilder) {
+	var _gthis = this;
+	this.autoAttackManager = autoAttackManager;
+	this.linkBuilder = linkBuilder;
+	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions("Configure",function(_) {
+		var data = autoAttackManager.linkData;
+		var widgets = [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Add Link",function() {
+			data.push(new auto_$attack_AutoAttackLinkData());
+			_gthis.rebuild();
+		},["Add A New Chain Link"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Clear Links",function() {
+			data.length = 0;
+			_gthis.rebuild();
+		},["Delete All Chain Links"]))];
+		var _g = 0;
+		var _g1 = data.length;
+		while(_g < _g1) {
+			var i = _g++;
+			var title = "Link " + (i + 1);
+			widgets.push(new ui_SubPageWidget(new ui_SubPageWidgetOptions(title,new game_ui_AutoAttackLinkPage(autoAttackManager,data[i]),["Edit " + title])));
+		}
+		return widgets;
+	}));
+};
+$hxClasses["game.ui.CustomAutoAttackPage"] = game_ui_CustomAutoAttackPage;
+game_ui_CustomAutoAttackPage.__name__ = "game.ui.CustomAutoAttackPage";
+game_ui_CustomAutoAttackPage.__super__ = ui_ListMenuPage;
+game_ui_CustomAutoAttackPage.prototype = $extend(ui_ListMenuPage.prototype,{
+	autoAttackManager: null
+	,linkBuilder: null
+	,rebuild: function() {
+		this.onShow(this.menu);
+		this.onResize();
+	}
+	,__class__: game_ui_CustomAutoAttackPage
+});
+var ui_Menu = function(opts) {
 	this.pages = new haxe_ds_GenericStack();
 	var _this = this.pages;
-	_this.head = new haxe_ds_GenericCell(initialPage,_this.head);
+	_this.head = new haxe_ds_GenericCell(opts.initialPage,_this.head);
 	this.inputDevices = new haxe_ds_GenericStack();
 	this.headerFont = kha_Assets.fonts.DigitalDisco;
 	this.controlsFont = kha_Assets.fonts.Pixellari;
+	this.positionFactor = opts.positionFactor;
+	this.widthFactor = opts.widthFactor;
+	this.scaleManager = new ScaleManager(1920,1080);
 	ScaleManager.addOnResizeCallback($bind(this,this.resize));
 };
 $hxClasses["ui.Menu"] = ui_Menu;
@@ -7556,16 +7903,22 @@ ui_Menu.prototype = {
 	,inputDevices: null
 	,headerFont: null
 	,controlsFont: null
+	,positionFactor: null
+	,widthFactor: null
 	,headerFontSize: null
 	,headerFontHeight: null
 	,controlsFontSize: null
 	,warningFontSize: null
 	,warningFontHeight: null
 	,warningFontWidths: null
+	,renderX: null
+	,scaleManager: null
 	,padding: null
 	,inputDevice: null
 	,resize: function() {
-		var ssc = ScaleManager.smallerScale;
+		var scr = ScaleManager.screen;
+		this.scaleManager.resize(scr.width * this.widthFactor,scr.height);
+		var ssc = this.scaleManager.smallerScale;
 		this.headerFontSize = 128 * ssc | 0;
 		this.headerFontHeight = this.headerFont.height(this.headerFontSize);
 		this.controlsFontSize = 48 * ssc | 0;
@@ -7579,10 +7932,12 @@ ui_Menu.prototype = {
 			++_g;
 			this.warningFontWidths.push(this.controlsFont.width(this.warningFontSize,line));
 		}
+		this.renderX = scr.width * this.positionFactor;
 		this.padding = 64 * ssc;
 		var p = this.pages.iterator();
 		while(p.hasNext()) {
 			var p1 = p.next();
+			p1.onShow(this);
 			p1.onResize();
 		}
 	}
@@ -7619,6 +7974,10 @@ ui_Menu.prototype = {
 			var _this = this.pages;
 			_this.head = new haxe_ds_GenericCell(poppedPage,_this.head);
 		}
+		var _this = this.pages;
+		var firstPage = _this.head == null ? null : _this.head.elt;
+		firstPage.onShow(this);
+		firstPage.onResize();
 	}
 	,pushInputDevice: function(inputDevice) {
 		var _this = this.inputDevices;
@@ -7640,28 +7999,31 @@ ui_Menu.prototype = {
 	,render: function(g,alpha) {
 		var _this = this.pages;
 		var currentPage = _this.head == null ? null : _this.head.elt;
+		var paddedX = this.renderX + this.padding;
+		var width = this.scaleManager.width;
+		g.scissor(this.renderX | 0,0,width | 0,this.scaleManager.height | 0);
 		g.set_font(this.headerFont);
 		g.set_fontSize(this.headerFontSize);
-		g.drawString(currentPage.header,this.padding,this.padding);
+		g.drawString(currentPage.header,paddedX,this.padding);
 		var topLineY = this.padding + this.headerFontHeight;
-		g.drawLine(this.padding,topLineY,ScaleManager.width - this.padding,topLineY,4);
-		currentPage.render(g,this.padding,topLineY + this.padding * 0.375);
+		g.drawLine(paddedX,topLineY,this.renderX + width - this.padding,topLineY,4);
+		currentPage.render(g,paddedX,topLineY + this.padding * 0.375);
 		g.set_font(this.controlsFont);
 		g.set_fontSize(this.warningFontSize);
 		g.set_color(kha_Color._new(-8947849));
-		var warningBaseline = ScaleManager.height - this.headerFontHeight * 1.5;
+		var warningBaseline = this.scaleManager.height - this.headerFontHeight * 1.5;
 		var invertedIndex = 3;
-		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 0 * this.warningFontHeight);
+		g.drawString(ui_Menu.WARNING[invertedIndex],this.renderX + width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 0 * this.warningFontHeight);
 		var invertedIndex = 2;
-		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - this.warningFontHeight);
+		g.drawString(ui_Menu.WARNING[invertedIndex],this.renderX + width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - this.warningFontHeight);
 		var invertedIndex = 1;
-		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 2 * this.warningFontHeight);
+		g.drawString(ui_Menu.WARNING[invertedIndex],this.renderX + width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 2 * this.warningFontHeight);
 		var invertedIndex = 0;
-		g.drawString(ui_Menu.WARNING[invertedIndex],ScaleManager.width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 3 * this.warningFontHeight);
+		g.drawString(ui_Menu.WARNING[invertedIndex],this.renderX + width - this.padding - this.warningFontWidths[invertedIndex],warningBaseline - 3 * this.warningFontHeight);
 		g.set_color(-1);
 		g.set_fontSize(this.controlsFontSize);
-		var _this = this.pages;
-		this.inputDevice.renderControls(g,this.padding,(_this.head == null ? null : _this.head.elt).controlDisplays);
+		this.inputDevice.renderControls(g,this.renderX,width,this.padding,currentPage.controlDisplays);
+		g.disableScissor();
 	}
 	,__class__: ui_Menu
 };
@@ -7669,7 +8031,7 @@ var game_ui_PauseMenu = function(opts) {
 	this.updateGameState = false;
 	this.prefsSettings = opts.prefsSettings;
 	this.pauseMediator = opts.pauseMediator;
-	ui_Menu.call(this,new ui_ListMenuPage(new ui_ListMenuPageOptions("Paused",$bind(this,this.generateInitalPage))));
+	ui_Menu.call(this,new ui_MenuOptions(0,1,new ui_ListMenuPage(new ui_ListMenuPageOptions("Paused",$bind(this,this.generateInitalPage)))));
 };
 $hxClasses["game.ui.PauseMenu"] = game_ui_PauseMenu;
 game_ui_PauseMenu.__name__ = "game.ui.PauseMenu";
@@ -7698,7 +8060,12 @@ game_ui_PauseMenu.prototype = $extend(ui_Menu.prototype,{
 			var _this = this.pages;
 			_this.head = new haxe_ds_GenericCell(poppedPage,_this.head);
 			this.pauseMediator.resume();
+			return;
 		}
+		var _this = this.pages;
+		var firstPage = _this.head == null ? null : _this.head.elt;
+		firstPage.onShow(this);
+		firstPage.onResize();
 	}
 	,update: function() {
 		if(this.inputDevice.getAction("PAUSE")) {
@@ -7707,9 +8074,10 @@ game_ui_PauseMenu.prototype = $extend(ui_Menu.prototype,{
 		ui_Menu.prototype.update.call(this);
 	}
 	,render: function(g,alpha) {
+		var scr = ScaleManager.screen;
 		g.pushOpacity(0.90);
 		g.set_color(-16777216);
-		g.fillRect(0,0,ScaleManager.width,ScaleManager.height);
+		g.fillRect(0,0,scr.width,scr.height);
 		g.set_color(-1);
 		g.popOpacity();
 		ui_Menu.prototype.render.call(this,g,alpha);
@@ -7817,7 +8185,7 @@ game_ui_GroupEditorPage.prototype = {
 		this.selectionY = (r < 0 ? r + 2 : r) | 0;
 	}
 	,onResize: function() {
-		this.scale = ScaleManager.smallerScale * 4;
+		this.scale = this.menu.scaleManager.smallerScale * 4;
 	}
 	,onShow: function(menu) {
 		this.menu = menu;
@@ -7957,7 +8325,7 @@ game_ui_InputWidget.prototype = {
 		this.menu = menu;
 	}
 	,onResize: function() {
-		this.fontSize = 60 * ScaleManager.smallerScale | 0;
+		this.fontSize = 60 * this.menu.scaleManager.smallerScale | 0;
 		this.height = this.font.height(this.fontSize);
 	}
 	,update: function() {
@@ -7990,7 +8358,7 @@ game_ui_InputWidget.prototype = {
 		g.set_color(isSelected ? -23296 : -1);
 		g.set_font(this.font);
 		g.set_fontSize(this.fontSize);
-		this.menu.inputDevice.renderBinding(g,x,y,this.action);
+		this.menu.inputDevice.renderBinding(g,x,y,this.menu.scaleManager.smallerScale,this.action);
 		g.set_color(-1);
 	}
 	,__class__: game_ui_InputWidget
@@ -8060,7 +8428,7 @@ game_ui_QueueEditorPage.prototype = {
 		this.selectionY = (r < 0 ? r + d : r) | 0;
 	}
 	,onResize: function() {
-		this.scale = ScaleManager.smallerScale;
+		this.scale = this.menu.scaleManager.smallerScale;
 		this.fontSize = 72 * this.scale | 0;
 	}
 	,onShow: function(menu) {
@@ -8238,7 +8606,6 @@ var game_ui_TrainingPauseMenu = function(opts) {
 	this.randomizer = opts.randomizer;
 	this.queue = opts.queue;
 	this.playState = opts.playState;
-	this.infoState = opts.infoState;
 	this.trainingBoard = opts.trainingBoard;
 	this.allClearManager = opts.allClearManager;
 	this.chainSim = opts.chainSim;
@@ -8247,6 +8614,7 @@ var game_ui_TrainingPauseMenu = function(opts) {
 	this.playerGarbageManager = opts.playerGarbageManager;
 	this.infoGarbageManager = opts.infoGarbageManager;
 	this.controlDisplayContainer = opts.controlDisplayContainer;
+	this.autoAttackManager = opts.autoAttackManager;
 	game_ui_PauseMenu.call(this,opts);
 };
 $hxClasses["game.ui.TrainingPauseMenu"] = game_ui_TrainingPauseMenu;
@@ -8257,7 +8625,6 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 	,randomizer: null
 	,queue: null
 	,playState: null
-	,infoState: null
 	,trainingBoard: null
 	,allClearManager: null
 	,chainSim: null
@@ -8266,6 +8633,7 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 	,playerGarbageManager: null
 	,infoGarbageManager: null
 	,controlDisplayContainer: null
+	,autoAttackManager: null
 	,generateInitalPage: function(_) {
 		var _gthis = this;
 		var trainingSettings = new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Training Options",["Change Various Options And Settings","To Help Elevate Your Practice!"],function(_) {
@@ -8292,36 +8660,66 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 					_gthis.trainingSettings.autoClear = value;
 					save_$data_SaveManager.saveProfiles();
 				})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Auto-Attack Options",["Practice Your Neutral Skills","By Defending Against"," Periodically Sent Chains!"],function(_) {
-					return [new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable",["Enable Or Disable","Auto-Attacking"],_gthis.trainingSettings.autoAttack,function(value) {
+					var trainingSettings = new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable",["Enable Or Disable","Auto-Attacking"],_gthis.trainingSettings.autoAttack,function(value) {
 						_gthis.trainingSettings.autoAttack = value;
+						_gthis.autoAttackManager.reset();
 						save_$data_SaveManager.saveProfiles();
-					})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Timer",($_=_gthis.infoState,$bind($_,$_.resetAutoAttackWaitingState)),["Reset The Auto-Attack","Timer"])),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Min. Delay",["Set The Minimum Delay Before","The Chain Is Triggered","In Seconds"],1,90,1,_gthis.trainingSettings.minAttackTime,function(value) {
+					}));
+					var trainingSettings1 = new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Timer",($_=_gthis.autoAttackManager,$bind($_,$_.reset)),["Reset The Auto-Attack","Timer"]));
+					var trainingSettings2 = new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Min. Delay",["Set The Minimum Delay Before","The Chain Is Triggered","In Seconds"],1,90,1,_gthis.trainingSettings.minAttackTime,function(value) {
 						_gthis.trainingSettings.minAttackTime = value | 0;
-						_gthis.infoState.resetAutoAttackWaitingState();
+						_gthis.autoAttackManager.reset();
 						save_$data_SaveManager.saveProfiles();
-					})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Max. Delay",["Set The Maximum Delay Before","The Chain Is Triggered","In Seconds"],1,90,1,_gthis.trainingSettings.maxAttackTime,function(value) {
+					}));
+					var trainingSettings3 = new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Max. Delay",["Set The Maximum Delay Before","The Chain Is Triggered","In Seconds"],1,90,1,_gthis.trainingSettings.maxAttackTime,function(value) {
 						_gthis.trainingSettings.maxAttackTime = value | 0;
-						_gthis.infoState.resetAutoAttackWaitingState();
+						_gthis.autoAttackManager.reset();
 						save_$data_SaveManager.saveProfiles();
-					})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Min. Chain",["Set The Smallest Chain","That Can Be Sent"],1,50,1,_gthis.trainingSettings.minAttackChain,function(value) {
-						_gthis.trainingSettings.minAttackChain = value | 0;
-						save_$data_SaveManager.saveProfiles();
-					})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Max. Chain",["Set The Largest Chain","That Can Be Sent"],1,50,1,_gthis.trainingSettings.maxAttackChain,function(value) {
-						_gthis.trainingSettings.maxAttackChain = value | 0;
-						save_$data_SaveManager.saveProfiles();
-					})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Min. Colors",["Set The Minimum Number of","Colors That Can Be Used","In The Chain"],1,5,1,_gthis.trainingSettings.minAttackColors,function(value) {
-						_gthis.trainingSettings.minAttackColors = value | 0;
-						save_$data_SaveManager.saveProfiles();
-					})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Max. Colors",["Set The Maximum Number of","Colors That Can Be Used","In the Chain"],1,5,1,_gthis.trainingSettings.maxAttackColors,function(value) {
-						_gthis.trainingSettings.maxAttackColors = value | 0;
-						save_$data_SaveManager.saveProfiles();
-					})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Min. Plus Gelos/Color",["Set The Minimum"," Number of Gelos That","Can Be Added To","The Pop Count"],0,14,1,_gthis.trainingSettings.minAttackGroupDiff,function(value) {
-						_gthis.trainingSettings.minAttackGroupDiff = value | 0;
-						save_$data_SaveManager.saveProfiles();
-					})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Max. Plus Gelos/Color",["Set The Maximum"," Number Of Gelos That","Can Be Added To","The Pop Count"],0,14,1,_gthis.trainingSettings.maxAttackGroupDiff,function(value) {
-						_gthis.trainingSettings.maxAttackGroupDiff = value | 0;
-						save_$data_SaveManager.saveProfiles();
-					}))];
+					}));
+					var trainingSettings4;
+					switch(_gthis.autoAttackManager.type) {
+					case "CUSTOM":
+						trainingSettings4 = 1;
+						break;
+					case "RANDOM":
+						trainingSettings4 = 0;
+						break;
+					}
+					return [trainingSettings,trainingSettings1,trainingSettings2,trainingSettings3,new ui_OptionListWidget(new ui_OptionListWidgetOptions("Auto-Attack Type",["Alternate Between RANDOM And CUSTOM","Auto-Attack Types.","","CUSTOM Enables You To Specify","Settings For Each Chain Link"],["RANDOM","CUSTOM"],trainingSettings4,function(value) {
+						_gthis.autoAttackManager.type = value;
+					})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Configure",function() {
+						var _gthis1 = _gthis;
+						var trainingSettings;
+						switch(_gthis.autoAttackManager.type) {
+						case "CUSTOM":
+							trainingSettings = new game_ui_CustomAutoAttackPage(_gthis.autoAttackManager,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(_gthis.rule,_gthis.marginManager)));
+							break;
+						case "RANDOM":
+							trainingSettings = new ui_ListMenuPage(new ui_ListMenuPageOptions("Configure",function(_) {
+								return [new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Min. Chain",["Set The Smallest Chain","That Can Be Sent"],1,50,1,_gthis.trainingSettings.minAttackChain,function(value) {
+									_gthis.trainingSettings.minAttackChain = value | 0;
+									save_$data_SaveManager.saveProfiles();
+								})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Max. Chain",["Set The Largest Chain","That Can Be Sent"],1,50,1,_gthis.trainingSettings.maxAttackChain,function(value) {
+									_gthis.trainingSettings.maxAttackChain = value | 0;
+									save_$data_SaveManager.saveProfiles();
+								})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Min. Colors",["Set The Minimum Number of","Colors That Can Be Used","In The Chain"],1,5,1,_gthis.trainingSettings.minAttackColors,function(value) {
+									_gthis.trainingSettings.minAttackColors = value | 0;
+									save_$data_SaveManager.saveProfiles();
+								})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Max. Colors",["Set The Maximum Number of","Colors That Can Be Used","In the Chain"],1,5,1,_gthis.trainingSettings.maxAttackColors,function(value) {
+									_gthis.trainingSettings.maxAttackColors = value | 0;
+									save_$data_SaveManager.saveProfiles();
+								})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Min. Plus Gelos/Color",["Set The Minimum"," Number of Gelos That","Can Be Added To","The Pop Count"],0,14,1,_gthis.trainingSettings.minAttackGroupDiff,function(value) {
+									_gthis.trainingSettings.minAttackGroupDiff = value | 0;
+									save_$data_SaveManager.saveProfiles();
+								})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Max. Plus Gelos/Color",["Set The Maximum"," Number Of Gelos That","Can Be Added To","The Pop Count"],0,14,1,_gthis.trainingSettings.maxAttackGroupDiff,function(value) {
+									_gthis.trainingSettings.maxAttackGroupDiff = value | 0;
+									save_$data_SaveManager.saveProfiles();
+								}))];
+							}));
+							break;
+						}
+						_gthis1.pushPage(trainingSettings);
+					},["Configure Chain Steps According","To The Selected Type"]))];
 				}))];
 			})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Queue Options",["Change Options Related To The NEXT Queue"],function(_) {
 				return [new ui_SubPageWidget(new ui_SubPageWidgetOptions("Edit Queue",new game_ui_QueueEditorPage(new game_ui_QueueEditorPageOptions(_gthis.queue,new game_ui_GroupEditorPage(_gthis.queue))),["View And Edit Gelo Groups","In The Current Queue"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Randomizer: TSU",$bind(_gthis,_gthis.doNothing),["Change The Randomizer Algorithm","(Sorry, Only TSU For Now)"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Dropset: CLASSICAL",$bind(_gthis,_gthis.doNothing),["Change The Dropset Used For","Queue Generation","(Sorry, Only CLASSICAL For Now)"])),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Colors",["Change The Number Of Possible","Gelo Colors"],3,5,1,_gthis.randomizer.currentPool,function(value) {
@@ -8329,7 +8727,10 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 				})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Regenerate Queue",function() {
 					_gthis.playState.regenerateQueue();
 					_gthis.playState.previousGroup();
-				},["Regenerate Groups Based On","The Settings Above"]))];
+				},["Regenerate Groups Based On","The Settings Above"])),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Keep Groups",["Set The Number Of Gelo Groups","To Keep From The Start Of The","Previous Queue After Randomization"],0,128,1,_gthis.trainingSettings.keepGroupCount,function(value) {
+					_gthis.trainingSettings.keepGroupCount = value | 0;
+					save_$data_SaveManager.saveProfiles();
+				}))];
 			})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Field Options",["Change Options Related to the Field"],function(_) {
 				return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Trigger All Clear",function() {
 					_gthis.allClearManager.startAnimation();
@@ -8354,6 +8755,9 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 					_gthis.rule.dropSpeed = value;
 				})),new ui_OptionListWidget(new ui_OptionListWidgetOptions("Physics Type",["Alternate Between 'TSU' And 'FEVER'","Physics Types. 'FEVER' Physics Allow","You To Climb Over Adjacent","Gelos More Freely!"],["TSU","FEVER"],0,function(value) {
 					_gthis.rule.physics = value == "FEVER" ? game_rules_PhysicsType.FEVER : game_rules_PhysicsType.TSU;
+				})),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable Blind Mode",["Blind Mode Grays Out Your Active","Gelo Group To Encourage Looking At","The Preview And Planning","Ahead!"],_gthis.trainingSettings.groupBlindMode,function(value) {
+					_gthis.trainingSettings.groupBlindMode = value;
+					save_$data_SaveManager.saveProfiles();
 				}))];
 			})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Ruleset Options",["Change Options Related to the Ruleset"],function(_) {
 				var trainingSettings;
@@ -8413,13 +8817,12 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 	}
 	,__class__: game_ui_TrainingPauseMenu
 });
-var game_ui_TrainingPauseMenuOptions = function(rule,randomizer,queue,playState,infoState,trainingBoard,allClearManager,chainSim,marginManager,trainingSettings,playerGarbageManager,infoGarbageManager,controlDisplayContainer,prefsSettings,pauseMediator) {
+var game_ui_TrainingPauseMenuOptions = function(rule,randomizer,queue,playState,trainingBoard,allClearManager,chainSim,marginManager,trainingSettings,playerGarbageManager,infoGarbageManager,controlDisplayContainer,autoAttackManager,prefsSettings,pauseMediator) {
 	game_ui_PauseMenuOptions.call(this,prefsSettings,pauseMediator);
 	this.rule = rule;
 	this.randomizer = randomizer;
 	this.queue = queue;
 	this.playState = playState;
-	this.infoState = infoState;
 	this.trainingBoard = trainingBoard;
 	this.allClearManager = allClearManager;
 	this.chainSim = chainSim;
@@ -8428,6 +8831,7 @@ var game_ui_TrainingPauseMenuOptions = function(rule,randomizer,queue,playState,
 	this.playerGarbageManager = playerGarbageManager;
 	this.infoGarbageManager = infoGarbageManager;
 	this.controlDisplayContainer = controlDisplayContainer;
+	this.autoAttackManager = autoAttackManager;
 };
 $hxClasses["game.ui.TrainingPauseMenuOptions"] = game_ui_TrainingPauseMenuOptions;
 game_ui_TrainingPauseMenuOptions.__name__ = "game.ui.TrainingPauseMenuOptions";
@@ -8437,7 +8841,6 @@ game_ui_TrainingPauseMenuOptions.prototype = $extend(game_ui_PauseMenuOptions.pr
 	,randomizer: null
 	,queue: null
 	,playState: null
-	,infoState: null
 	,trainingBoard: null
 	,allClearManager: null
 	,chainSim: null
@@ -8446,6 +8849,7 @@ game_ui_TrainingPauseMenuOptions.prototype = $extend(game_ui_PauseMenuOptions.pr
 	,playerGarbageManager: null
 	,infoGarbageManager: null
 	,controlDisplayContainer: null
+	,autoAttackManager: null
 	,__class__: game_ui_TrainingPauseMenuOptions
 });
 var haxe_IMap = function() { };
@@ -10239,14 +10643,14 @@ input_AnyInputDevice.prototype = {
 	,getKeyboard: function() {
 		return js_Boot.__cast(this.devices.h[-1] , input_KeyboardInputDevice);
 	}
-	,renderBinding: function(g,x,y,action) {
+	,renderBinding: function(g,x,y,scale,action) {
 	}
-	,renderControls: function(g,padding,controls) {
+	,renderControls: function(g,x,width,padding,controls) {
 		var lastDevice = this.devices.h[input_AnyInputDevice.lastDeviceID];
 		if(lastDevice == null) {
 			return;
 		}
-		lastDevice.renderControls(g,padding,controls);
+		lastDevice.renderControls(g,x,width,padding,controls);
 	}
 	,__class__: input_AnyInputDevice
 };
@@ -10387,9 +10791,9 @@ input_InputDevice.prototype = {
 	,getRawAction: function(action) {
 		return this.holdActionHandler(this.counters.h[action]);
 	}
-	,renderBinding: function(g,x,y,action) {
+	,renderBinding: function(g,x,y,scale,action) {
 	}
-	,renderControls: function(g,padding,controls) {
+	,renderControls: function(g,x,width,padding,controls) {
 	}
 	,__class__: input_InputDevice
 };
@@ -10602,8 +11006,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		this.latestRebindAction = action;
 		this.gamepad.notify(this.latestAxisRebindFunction,this.latestButtonRebindFunction);
 	}
-	,renderBinding: function(g,x,y,action) {
-		input_InputDevice.prototype.renderBinding.call(this,g,x,y,action);
+	,renderBinding: function(g,x,y,scale,action) {
 		var title = game_actions_ActionData_ACTION_DATA.h[action].title;
 		if(action == this.latestRebindAction && this.isRebinding) {
 			g.drawString("Press any button / stick for [ " + title + " ]",x,y);
@@ -10632,7 +11035,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			var key = this.get_inputSettings().gamepadBrand;
 			var buttonSpr = input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES.h[key].h[buttonMapping];
 			input_GamepadInputDevice.renderButton(g,x,y,fontHeight / buttonSpr.height,buttonSpr);
-			x += buttonSpr.width * ScaleManager.smallerScale;
+			x += buttonSpr.width * scale;
 		}
 		var axisMapping = mapping.gamepadAxis;
 		if(!(axisMapping.axis == null && axisMapping.direction == null)) {
@@ -10647,11 +11050,10 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			}
 		}
 	}
-	,renderControls: function(g,padding,controls) {
+	,renderControls: function(g,x,width,padding,controls) {
 		var fontHeight = g.get_font().height(g.get_fontSize());
-		var y = ScaleManager.height - padding - fontHeight;
-		var paddedScreenWidth = ScaleManager.width - padding * 2;
-		var x = padding;
+		var y = ScaleManager.screen.height - padding - fontHeight;
+		var paddedScreenWidth = width - padding * 2;
 		var totalWidth = 0.0;
 		var _g = 0;
 		while(_g < controls.length) {
@@ -10874,8 +11276,7 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		this.latestRebindAction = action;
 		this.keyboard.notify(this.latestRebindFunction);
 	}
-	,renderBinding: function(g,x,y,action) {
-		input_InputDevice.prototype.renderBinding.call(this,g,x,y,action);
+	,renderBinding: function(g,x,y,scale,action) {
 		var title = game_actions_ActionData_ACTION_DATA.h[action].title;
 		if(action == this.latestRebindAction && this.isRebinding) {
 			g.drawString("[ Press any key for " + title + " ]",x,y);
@@ -10885,7 +11286,7 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		var binding = kbInput == null ? "[ UNBOUND ]" : input_KeyCodeToString_KEY_CODE_TO_STRING.h[kbInput];
 		g.drawString("" + title + ": " + binding,x,y);
 	}
-	,renderControls: function(g,padding,controls) {
+	,renderControls: function(g,x,width,padding,controls) {
 		var str = "";
 		var _g = 0;
 		while(_g < controls.length) {
@@ -10905,8 +11306,8 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 			str += " : " + d.description + "    ";
 		}
 		var strWidth = g.get_font().width(g.get_fontSize(),str);
-		var paddedScreenWidth = ScaleManager.width - padding * 2;
-		utils_Utils.shadowDrawString(g,3,-16777216,-1,str,padding - this.getScrollX(strWidth,paddedScreenWidth),ScaleManager.height - padding - g.get_font().height(g.get_fontSize()));
+		var paddedScreenWidth = width - padding * 2;
+		utils_Utils.shadowDrawString(g,3,-16777216,-1,str,x + padding - this.getScrollX(strWidth,paddedScreenWidth),ScaleManager.screen.height - padding - g.get_font().height(g.get_fontSize()));
 	}
 	,resetIsAnyKeyDown: function() {
 		this.anyKeyCounter = 0;
@@ -11150,11 +11551,15 @@ js_lib__$ArrayBuffer_ArrayBufferCompat.sliceImpl = function(begin,end) {
 	return resultArray.buffer;
 };
 var kha__$Assets_ImageList = function() {
-	this.names = ["Arrows","Border","Buttons","Particles","pixel"];
+	this.names = ["Arrows","Border","Buttons","Particles","candy","pixel"];
 	this.pixelSize = 37680;
 	this.pixelDescription = { name : "pixel", original_height : 1024, file_sizes : [37680], original_width : 1024, files : ["pixel.png"], type : "image"};
 	this.pixelName = "pixel";
 	this.pixel = null;
+	this.candySize = 87171;
+	this.candyDescription = { name : "candy", original_height : 1024, file_sizes : [87171], original_width : 1024, files : ["candy.png"], type : "image"};
+	this.candyName = "candy";
+	this.candy = null;
 	this.ParticlesSize = 9253;
 	this.ParticlesDescription = { name : "Particles", original_height : 1024, file_sizes : [9253], original_width : 1024, files : ["Particles.png"], type : "image"};
 	this.ParticlesName = "Particles";
@@ -11229,6 +11634,19 @@ kha__$Assets_ImageList.prototype = {
 	,ParticlesUnload: function() {
 		this.Particles.unload();
 		this.Particles = null;
+	}
+	,candy: null
+	,candyName: null
+	,candyDescription: null
+	,candySize: null
+	,candyLoad: function(done,failure) {
+		kha_Assets.loadImage("candy",function(image) {
+			done();
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 143, className : "kha._Assets.ImageList", methodName : "candyLoad"});
+	}
+	,candyUnload: function() {
+		this.candy.unload();
+		this.candy = null;
 	}
 	,pixel: null
 	,pixelName: null
@@ -13843,19 +14261,6 @@ kha_SystemImpl.init2 = function(defaultWidth,defaultHeight,backbufferFormat) {
 			}
 		}
 	}
-	if(kha_SystemImpl.ie) {
-		kha_SystemImpl.pressedKeys = [];
-		var _g = 0;
-		while(_g < 256) {
-			var i = _g++;
-			kha_SystemImpl.pressedKeys.push(false);
-		}
-		var _g = 0;
-		while(_g < 256) {
-			var i = _g++;
-			kha_SystemImpl.pressedKeys.push(null);
-		}
-	}
 	var onCopy = function(e) {
 		if(kha_System.copyListener != null) {
 			var data = kha_System.copyListener();
@@ -13975,7 +14380,7 @@ kha_SystemImpl.loadFinished = function(defaultWidth,defaultHeight) {
 		kha_SystemImpl.gl2 = true;
 		kha_Shaders.init();
 	} catch( _g ) {
-		haxe_Log.trace("Could not initialize WebGL 2, falling back to WebGL.",{ fileName : "kha/SystemImpl.hx", lineNumber : 378, className : "kha.SystemImpl", methodName : "loadFinished"});
+		haxe_Log.trace("Could not initialize WebGL 2, falling back to WebGL.",{ fileName : "kha/SystemImpl.hx", lineNumber : 382, className : "kha.SystemImpl", methodName : "loadFinished"});
 	}
 	if(!kha_SystemImpl.gl2) {
 		try {
@@ -13997,7 +14402,7 @@ kha_SystemImpl.loadFinished = function(defaultWidth,defaultHeight) {
 			gl = true;
 			kha_Shaders.init();
 		} catch( _g ) {
-			haxe_Log.trace("Could not initialize WebGL, falling back to <canvas>.",{ fileName : "kha/SystemImpl.hx", lineNumber : 406, className : "kha.SystemImpl", methodName : "loadFinished"});
+			haxe_Log.trace("Could not initialize WebGL, falling back to <canvas>.",{ fileName : "kha/SystemImpl.hx", lineNumber : 410, className : "kha.SystemImpl", methodName : "loadFinished"});
 		}
 	}
 	kha_SystemImpl.setCanvas(canvas);
@@ -14249,7 +14654,7 @@ kha_SystemImpl.unlockSound = function() {
 			context.resume().then(function(c) {
 				kha_SystemImpl.soundEnabled = true;
 			}).catch(function(err) {
-				haxe_Log.trace(err,{ fileName : "kha/SystemImpl.hx", lineNumber : 700, className : "kha.SystemImpl", methodName : "unlockSound"});
+				haxe_Log.trace(err,{ fileName : "kha/SystemImpl.hx", lineNumber : 704, className : "kha.SystemImpl", methodName : "unlockSound"});
 			});
 		}
 		kha_audio2_Audio.wakeChannels();
@@ -14694,13 +15099,7 @@ kha_SystemImpl.keyDown = function(event) {
 		break;
 	}
 	event.stopPropagation();
-	if(kha_SystemImpl.ie) {
-		if(kha_SystemImpl.pressedKeys[event.keyCode]) {
-			event.preventDefault();
-			return;
-		}
-		kha_SystemImpl.pressedKeys[event.keyCode] = true;
-	} else if(event.repeat) {
+	if(event.repeat) {
 		event.preventDefault();
 		return;
 	}
@@ -14746,9 +15145,6 @@ kha_SystemImpl.keyUp = function(event) {
 	kha_SystemImpl.unlockSound();
 	event.preventDefault();
 	event.stopPropagation();
-	if(kha_SystemImpl.ie) {
-		kha_SystemImpl.pressedKeys[event.keyCode] = false;
-	}
 	var keyCode = kha_SystemImpl.fixedKeyCode(event);
 	kha_SystemImpl.keyboard.sendUpEvent(keyCode);
 	kha_SystemImpl.insideInputEvent = false;
@@ -41431,7 +41827,7 @@ kha_vr_TimeWarpParms.prototype = {
 	,__class__: kha_vr_TimeWarpParms
 };
 var main_$menu_MainMenuScreen = function() {
-	this.menu = new ui_Menu(new main_$menu_ui_MainMenuPage(save_$data_Profile.primary.prefs));
+	this.menu = new ui_Menu(new ui_MenuOptions(0,1,new main_$menu_ui_MainMenuPage(save_$data_Profile.primary.prefs)));
 	this.menu.onShow(input_AnyInputDevice.instance);
 };
 $hxClasses["main_menu.MainMenuScreen"] = main_$menu_MainMenuScreen;
@@ -41553,7 +41949,7 @@ main_$menu_ui_OptionsPage.prototype = $extend(ui_ListMenuPage.prototype,{
 		},["Reset Input Settings"]))];
 	}
 	,buildControls: function(inputDevice) {
-		return [new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Menu Controls",["Change Controls Related To","Menu Navigation"],["PAUSE","MENU_LEFT","MENU_RIGHT","MENU_UP","MENU_DOWN","BACK","CONFIRM"],inputDevice)),new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Game Controls",["Change Controls Related To","Gameplay"],["SHIFT_LEFT","SHIFT_RIGHT","SOFT_DROP","HARD_DROP","ROTATE_LEFT","ROTATE_RIGHT"],inputDevice)),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Training Controls",["Change Controls Specific To","Training Mode"],function(_) {
+		return [new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Menu Controls",["Change Controls Related To","Menu Navigation"],["PAUSE","MENU_LEFT","MENU_RIGHT","MENU_UP","MENU_DOWN","BACK","CONFIRM"],inputDevice)),new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Game Controls",["Change Controls Related To","Gameplay"],["SHIFT_LEFT","SHIFT_RIGHT","SOFT_DROP","HARD_DROP","ROTATE_LEFT","ROTATE_RIGHT","QUICK_RESTART"],inputDevice)),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Training Controls",["Change Controls Specific To","Training Mode"],function(_) {
 			return [new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Universal Controls",["Change Controls That Are Used","Both In Play Mode And","Edit Mode"],["TOGGLE_EDIT_MODE"],inputDevice)),new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Play Mode Controls",["Change Controls That Are Only","Available In Play Mode"],["PREVIOUS_GROUP","NEXT_GROUP"],inputDevice)),new game_ui_ControlsPageWidget(new game_ui_ControlsPageWidgetOptions("Edit Mode Controls",["Change Controls That Are Only","Available In Edit Mode"],["EDIT_LEFT","EDIT_RIGHT","EDIT_UP","EDIT_DOWN","EDIT_CLEAR","EDIT_SET","PREVIOUS_STEP","NEXT_STEP","PREVIOUS_COLOR","NEXT_COLOR","TOGGLE_MARKERS"],inputDevice))];
 		}))];
 	}
@@ -42208,6 +42604,8 @@ var save_$data_TrainingSettings = function(overrides) {
 	this.maxAttackGroupDiff = 0;
 	this.minAttackColors = 1;
 	this.maxAttackColors = 1;
+	this.groupBlindMode = false;
+	this.keepGroupCount = 0;
 	try {
 		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
 		var _g_h = h;
@@ -42229,6 +42627,12 @@ var save_$data_TrainingSettings = function(overrides) {
 					break;
 				case "CLEAR_ON_X_MODE":
 					this.clearOnXMode = js_Boot.__cast(v , String);
+					break;
+				case "GROUP_BLIND_MODE":
+					this.groupBlindMode = js_Boot.__cast(v , Bool);
+					break;
+				case "KEEP_GROUP_COUNT":
+					this.keepGroupCount = js_Boot.__cast(v , Int);
 					break;
 				case "MAX_ATTACK_CHAIN":
 					this.maxAttackChain = js_Boot.__cast(v , Int);
@@ -42277,6 +42681,8 @@ save_$data_TrainingSettings.prototype = {
 	,maxAttackGroupDiff: null
 	,minAttackColors: null
 	,maxAttackColors: null
+	,groupBlindMode: null
+	,keepGroupCount: null
 	,exportOverrides: function() {
 		var overrides = new haxe_ds_StringMap();
 		var wereOverrides = false;
@@ -42320,6 +42726,14 @@ save_$data_TrainingSettings.prototype = {
 			overrides.h["MAX_ATTACK_COLORS"] = this.maxAttackColors;
 			wereOverrides = true;
 		}
+		if(this.groupBlindMode != false) {
+			overrides.h["GROUP_BLIND_MODE"] = this.groupBlindMode;
+			wereOverrides = true;
+		}
+		if(this.keepGroupCount != 0) {
+			overrides.h["KEEP_GROUP_COUNT"] = this.keepGroupCount;
+			wereOverrides = true;
+		}
 		if(wereOverrides) {
 			return overrides;
 		} else {
@@ -42328,6 +42742,191 @@ save_$data_TrainingSettings.prototype = {
 	}
 	,__class__: save_$data_TrainingSettings
 };
+var side_$setup_InputDeviceIcon = function(name,device) {
+	this.font = kha_Assets.fonts.Pixellari;
+	this.name = name;
+	this.device = device;
+	this.slot = 2;
+};
+$hxClasses["side_setup.InputDeviceIcon"] = side_$setup_InputDeviceIcon;
+side_$setup_InputDeviceIcon.__name__ = "side_setup.InputDeviceIcon";
+side_$setup_InputDeviceIcon.prototype = {
+	font: null
+	,fontSize: null
+	,nameTextHalfWidth: null
+	,name: null
+	,device: null
+	,height: null
+	,slot: null
+	,getLeftAction: function() {
+		return this.device.getAction("MENU_LEFT");
+	}
+	,getRightAction: function() {
+		return this.device.getAction("MENU_RIGHT");
+	}
+	,getControlsAction: function() {
+		return this.device.getAction("MENU_UP");
+	}
+	,getReadyAction: function() {
+		return this.device.getAction("CONFIRM");
+	}
+	,onResize: function() {
+		this.fontSize = 56 * ScaleManager.screen.smallerScale | 0;
+		this.nameTextHalfWidth = this.font.width(this.fontSize,this.name) / 2;
+		this.height = this.font.height(this.fontSize);
+	}
+	,render: function(g,y) {
+		g.set_font(this.font);
+		g.set_fontSize(this.fontSize);
+		g.drawString(this.name,ScaleManager.screen.width / 4 * this.slot - this.nameTextHalfWidth,y);
+	}
+	,__class__: side_$setup_InputDeviceIcon
+};
+var side_$setup_SideSetupScreen = function(onReady) {
+	this.font = kha_Assets.fonts.DigitalDisco;
+	this.onReady = onReady;
+	ScaleManager.addOnResizeCallback($bind(this,this.onResize));
+};
+$hxClasses["side_setup.SideSetupScreen"] = side_$setup_SideSetupScreen;
+side_$setup_SideSetupScreen.__name__ = "side_setup.SideSetupScreen";
+side_$setup_SideSetupScreen.__interfaces__ = [IScreen];
+side_$setup_SideSetupScreen.prototype = {
+	font: null
+	,onReady: null
+	,fontSize: null
+	,leftBoardTextCenter: null
+	,rightBoardTextCenter: null
+	,leftSlot: null
+	,rightSlot: null
+	,devices: null
+	,onResize: function() {
+		this.fontSize = 80 * ScaleManager.screen.smallerScale | 0;
+		this.leftBoardTextCenter = this.font.width(this.fontSize,"Left Board") / 2;
+		this.rightBoardTextCenter = this.font.width(this.fontSize,"Right Board") / 2;
+		var _g = 0;
+		var _g1 = this.devices;
+		while(_g < _g1.length) {
+			var d = _g1[_g];
+			++_g;
+			d.onResize();
+		}
+	}
+	,onLeft: function(d) {
+		if(d.slot == 2 && this.leftSlot == null) {
+			d.slot = 1;
+			this.leftSlot = d;
+			return;
+		}
+		if(d.slot == 3) {
+			d.slot = 2;
+			this.rightSlot = null;
+		}
+	}
+	,onRight: function(d) {
+		if(d.slot == 2 && this.rightSlot == null) {
+			d.slot = 3;
+			this.rightSlot = d;
+			return;
+		}
+		if(d.slot == 1) {
+			d.slot = 2;
+			this.leftSlot = null;
+		}
+	}
+	,update: function() {
+		var _g = 0;
+		var _g1 = this.devices;
+		while(_g < _g1.length) {
+			var d = _g1[_g];
+			++_g;
+			if(d.device.getAction("MENU_LEFT")) {
+				if(d.slot == 2 && this.leftSlot == null) {
+					d.slot = 1;
+					this.leftSlot = d;
+				} else if(d.slot == 3) {
+					d.slot = 2;
+					this.rightSlot = null;
+				}
+			} else if(d.device.getAction("MENU_RIGHT")) {
+				if(d.slot == 2 && this.rightSlot == null) {
+					d.slot = 3;
+					this.rightSlot = d;
+				} else if(d.slot == 1) {
+					d.slot = 2;
+					this.leftSlot = null;
+				}
+			}
+		}
+	}
+	,render: function(g,g4,alpha) {
+		g.set_font(this.font);
+		g.set_fontSize(this.fontSize);
+		var quarterW = ScaleManager.screen.width / 4;
+		var eightH = ScaleManager.screen.height / 8;
+		g.drawString("Left Board",quarterW - this.leftBoardTextCenter,eightH);
+		g.drawString("Right Board",quarterW * 3 - this.rightBoardTextCenter,eightH);
+		var _g = 0;
+		var _g1 = this.devices.length;
+		while(_g < _g1) {
+			var i = _g++;
+			var d = this.devices[i];
+			if(d.slot == 2) {
+				d.render(g,eightH + (i + 2) * d.height);
+			}
+		}
+		if(this.leftSlot != null) {
+			this.leftSlot.render(g,eightH + this.leftSlot.height * 2);
+		}
+		if(this.rightSlot != null) {
+			this.rightSlot.render(g,eightH + this.rightSlot.height * 2);
+		}
+	}
+	,__class__: side_$setup_SideSetupScreen
+};
+var side_$setup_VersusSideSetupScreen = function(onReady) {
+	this.isLeftReady = false;
+	this.isRightReady = false;
+	var tmp = new side_$setup_InputDeviceIcon("Keyboard (Arrows)",new input_KeyboardInputDevice(new save_$data_InputSettings(new haxe_ds_StringMap())));
+	var _g = new haxe_ds_StringMap();
+	var _g1 = new haxe_ds_StringMap();
+	var value = new input_InputMapping(65,14,new input_AxisMapping(0,-1)).asString();
+	_g1.h["MENU_LEFT"] = value;
+	var value = new input_InputMapping(68,15,new input_AxisMapping(0,1)).asString();
+	_g1.h["MENU_RIGHT"] = value;
+	var value = new input_InputMapping(83,13,new input_AxisMapping(1,1)).asString();
+	_g1.h["MENU_DOWN"] = value;
+	var value = new input_InputMapping(87,12,new input_AxisMapping(1,-1)).asString();
+	_g1.h["MENU_UP"] = value;
+	var value = new input_InputMapping(9,1,new input_AxisMapping(null,null)).asString();
+	_g1.h["CONFIRM"] = value;
+	_g.h["MAPPINGS"] = _g1;
+	this.devices = [tmp,new side_$setup_InputDeviceIcon("Keyboard (WASD)",new input_KeyboardInputDevice(new save_$data_InputSettings(_g)))];
+	side_$setup_SideSetupScreen.call(this,onReady);
+};
+$hxClasses["side_setup.VersusSideSetupScreen"] = side_$setup_VersusSideSetupScreen;
+side_$setup_VersusSideSetupScreen.__name__ = "side_setup.VersusSideSetupScreen";
+side_$setup_VersusSideSetupScreen.__super__ = side_$setup_SideSetupScreen;
+side_$setup_VersusSideSetupScreen.prototype = $extend(side_$setup_SideSetupScreen.prototype,{
+	isLeftReady: null
+	,isRightReady: null
+	,update: function() {
+		side_$setup_SideSetupScreen.prototype.update.call(this);
+		if(this.leftSlot != null) {
+			if(this.leftSlot.device.getAction("CONFIRM")) {
+				this.isLeftReady = !this.isLeftReady;
+			}
+		}
+		if(this.rightSlot != null) {
+			if(this.rightSlot.device.getAction("CONFIRM")) {
+				this.isRightReady = !this.isRightReady;
+			}
+		}
+		if(this.isLeftReady && this.isRightReady) {
+			this.onReady(this.leftSlot.device,this.rightSlot.device);
+		}
+	}
+	,__class__: side_$setup_VersusSideSetupScreen
+});
 var ui_AnyGamepadDetectWrapper = function(opts) {
 	this.font = kha_Assets.fonts.Pixellari;
 	this.keyboardDevice = opts.keyboardDevice;
@@ -42358,7 +42957,7 @@ ui_AnyGamepadDetectWrapper.prototype = {
 		this.menu.popPage();
 	}
 	,onResize: function() {
-		this.fontSize = 64 * ScaleManager.smallerScale | 0;
+		this.fontSize = 64 * this.menu.scaleManager.smallerScale | 0;
 		this.fontHeight = this.font.height(this.fontSize);
 	}
 	,onShow: function(menu) {
@@ -42437,7 +43036,7 @@ ui_AreYouSurePage.prototype = {
 	,header: null
 	,controlDisplays: null
 	,onResize: function() {
-		this.fontSize = 64 * ScaleManager.smallerScale | 0;
+		this.fontSize = 64 * this.menu.scaleManager.smallerScale | 0;
 	}
 	,onShow: function(menu) {
 		this.menu = menu;
@@ -42536,7 +43135,7 @@ ui_KeyboardConfirmWrapper.prototype = {
 	,header: null
 	,controlDisplays: null
 	,onResize: function() {
-		this.fontSize = 64 * ScaleManager.smallerScale | 0;
+		this.fontSize = 64 * this.menu.scaleManager.smallerScale | 0;
 		this.fontHeight = this.font.height(this.fontSize);
 	}
 	,onShow: function(menu) {
@@ -42570,6 +43169,19 @@ ui_KeyboardConfirmWrapperOptions.prototype = {
 	keyboardDevice: null
 	,pageBuilder: null
 	,__class__: ui_KeyboardConfirmWrapperOptions
+};
+var ui_MenuOptions = function(positionFactor,widthFactor,initialPage) {
+	this.positionFactor = positionFactor;
+	this.widthFactor = widthFactor;
+	this.initialPage = initialPage;
+};
+$hxClasses["ui.MenuOptions"] = ui_MenuOptions;
+ui_MenuOptions.__name__ = "ui.MenuOptions";
+ui_MenuOptions.prototype = {
+	positionFactor: null
+	,widthFactor: null
+	,initialPage: null
+	,__class__: ui_MenuOptions
 };
 var ui_NumberRangeWidget = function(opts) {
 	this.controlDisplays = [new ui_ControlDisplay(["MENU_LEFT","MENU_RIGHT"],"Change")];
@@ -42608,7 +43220,7 @@ ui_NumberRangeWidget.prototype = {
 		this.menu = menu;
 	}
 	,onResize: function() {
-		this.fontSize = 60 * ScaleManager.smallerScale | 0;
+		this.fontSize = 60 * this.menu.scaleManager.smallerScale | 0;
 		this.height = this.font.height(this.fontSize);
 	}
 	,update: function() {
@@ -42705,7 +43317,7 @@ ui_OptionListWidget.prototype = {
 		this.menu = menu;
 	}
 	,onResize: function() {
-		this.fontSize = 60 * ScaleManager.smallerScale | 0;
+		this.fontSize = 60 * this.menu.scaleManager.smallerScale | 0;
 		this.height = this.font.height(this.fontSize);
 	}
 	,update: function() {
@@ -42881,12 +43493,11 @@ DateTools.MONTH_SHORT_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","
 DateTools.MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 Main.FIXED_UPDATE_DELTA = 0.0166666666666666664;
 Main.accumulator = 0.0;
-ScaleManager.DESIGN_WIDTH = 1920;
-ScaleManager.DESIGN_HEIGHT = 1080;
-ScaleManager.onResize = [];
-ScaleManager.width = 1920;
-ScaleManager.height = 1080;
+ScaleManager.SCREEN_DESIGN_WIDTH = 1920;
+ScaleManager.SCREEN_DESIGN_HEIGHT = 1080;
+ScaleManager.screen = new ScaleManager(1920,1080);
 GlobalScreenSwitcher.currentScreen = NullScreen.get_instance();
+auto_$attack_AutoAttackManager.EFFECT_Y = 800;
 kha_Color.Black = -16777216;
 kha_Color.White = -1;
 kha_Color.Red = -65536;
@@ -42932,6 +43543,7 @@ game_actions_Action.NEXT_COLOR = "NEXT_COLOR";
 game_actions_Action.PREVIOUS_GROUP = "PREVIOUS_GROUP";
 game_actions_Action.NEXT_GROUP = "NEXT_GROUP";
 game_actions_Action.TOGGLE_MARKERS = "TOGGLE_MARKERS";
+game_actions_Action.QUICK_RESTART = "QUICK_RESTART";
 var game_actions_ActionData_ACTION_DATA = (function($this) {
 	var $r;
 	var _g = new haxe_ds_StringMap();
@@ -42988,7 +43600,7 @@ var game_actions_ActionData_ACTION_DATA = (function($this) {
 		_g.h["ROTATE_RIGHT"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Toggle Edit Mode",["Toggle Between Play Mode And Edit Mode"],input_InputType.PRESS,false);
+		var value = new game_actions_ActionDataEntry("Toggle Edit Mode",["Toggle Between Play Mode And Edit Mode"],input_InputType.PRESS,true);
 		_g.h["TOGGLE_EDIT_MODE"] = value;
 	}
 	{
@@ -43032,16 +43644,20 @@ var game_actions_ActionData_ACTION_DATA = (function($this) {
 		_g.h["NEXT_COLOR"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Undo",["Undo The Last Gelo Group Placement"],input_InputType.REPEAT,false);
+		var value = new game_actions_ActionDataEntry("Undo",["Undo The Last Gelo Group Placement"],input_InputType.REPEAT,true);
 		_g.h["PREVIOUS_GROUP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Draw Next Group",["Discard The Current Gelo Group","And Draw The Next One From","The Queue"],input_InputType.REPEAT,false);
+		var value = new game_actions_ActionDataEntry("Draw Next Group",["Discard The Current Gelo Group","And Draw The Next One From","The Queue"],input_InputType.REPEAT,true);
 		_g.h["NEXT_GROUP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Toggle Gelos / Markers",["Alternate Between Editing Gelos And","Editing Markers"],input_InputType.PRESS,false);
+		var value = new game_actions_ActionDataEntry("Toggle Gelos / Markers",["Alternate Between Editing Gelos And","Editing Markers"],input_InputType.PRESS,true);
 		_g.h["TOGGLE_MARKERS"] = value;
+	}
+	{
+		var value = new game_actions_ActionDataEntry("Quick Restart",["Clear The Field And Reset According","To The 'Clear On X Mode' Settings","(Endless/Training Mode ONLY)"],input_InputType.REPEAT,true);
+		_g.h["QUICK_RESTART"] = value;
 	}
 	$r = _g;
 	return $r;
@@ -43053,6 +43669,7 @@ game_boardstates_EditingBoardState.COLORS = [0,1,2,3,4,6];
 game_boardstates_TrainingInfoBoardState.TITLE_FONT_SIZE = 40;
 game_boardstates_TrainingInfoBoardState.CARD_FONT_SIZE = 32;
 game_boardstates_TrainingInfoBoardState.CARD_SIZE = 512;
+game_boardstates_TrainingInfoBoardState.GAME_INFO_X = -64;
 game_fields_ChainFieldMarker.SPRITE_X = 770;
 game_fields_ChainFieldMarker.SPRITE_Y = 455;
 game_fields_ChainFieldMarker.FONTSIZE = 30;
@@ -43071,6 +43688,7 @@ var game_garbage_GarbageIcon_GARBAGE_ICON_GEOMETRIES = (function($this) {
 	$r = _g;
 	return $r;
 }(this));
+game_gelogroups_TrainingGeloGroup.BLIND_MODE_COLOR = kha_Color._new(-10066330);
 game_gelos_Gelo.SIZE = 64;
 game_gelos_Gelo.HALFSIZE = 32;
 var game_gelos_GeloBounceTables_GELO_TSU_SHORT_BOUNCE_TABLE = [new utils_Point(1,0.80),new utils_Point(1,1),new utils_Point(0.80,1),new utils_Point(0.80,1),new utils_Point(0.80,1),new utils_Point(1,1),new utils_Point(1,0.80),new utils_Point(1,0.80),new utils_Point(1,1),new utils_Point(0.80,1),new utils_Point(0.80,1)];
@@ -43286,6 +43904,7 @@ game_geometries_BoardGeometries.CENTER = new utils_Point(game_geometries_BoardGe
 game_geometries_BoardGeometries.LEFT = new game_geometries_BoardGeometries(new utils_Point(168,160),1,game_geometries_BoardOrientation.LEFT,new utils_Point(game_geometries_BoardGeometries.WIDTH + 48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(0,-77),new utils_Point(game_geometries_BoardGeometries.WIDTH + 48,game_geometries_BoardGeometries.HEIGHT - 64));
 game_geometries_BoardGeometries.RIGHT = new game_geometries_BoardGeometries(new utils_Point(888,160),1,game_geometries_BoardOrientation.RIGHT,new utils_Point(-48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(0,-77),new utils_Point(-48,game_geometries_BoardGeometries.HEIGHT - 64));
 game_geometries_BoardGeometries.CENTERED = new game_geometries_BoardGeometries(new utils_Point(528,160),1,game_geometries_BoardOrientation.LEFT,new utils_Point(game_geometries_BoardGeometries.WIDTH + 48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(0,-77),new utils_Point(game_geometries_BoardGeometries.WIDTH + 48,game_geometries_BoardGeometries.HEIGHT - 64));
+game_geometries_BoardGeometries.INFO = new game_geometries_BoardGeometries(new utils_Point(888,160),1,game_geometries_BoardOrientation.RIGHT,new utils_Point(-48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(-64,-77),new utils_Point(-48,game_geometries_BoardGeometries.HEIGHT - 64));
 game_mediators_TransformationMediator.PLAY_AREA_DESIGN_WIDTH = 1440;
 game_mediators_TransformationMediator.PLAY_AREA_DESIGN_HEIGHT = 1080;
 var game_rules_ColorBonusTables_COLOR_BONUS_TABLES = (function($this) {
@@ -43653,7 +44272,7 @@ var input_KeyCodeToString_KEY_CODE_TO_STRING = (function($this) {
 	_g.h[1] = "Back";
 	_g.h[3] = "Cancel";
 	_g.h[6] = "Help";
-	_g.h[8] = "Backspace";
+	_g.h[8] = "BKSP";
 	_g.h[9] = "Tab";
 	_g.h[12] = "Clear";
 	_g.h[13] = "Return";
@@ -43667,7 +44286,7 @@ var input_KeyCodeToString_KEY_CODE_TO_STRING = (function($this) {
 	_g.h[23] = "Junja";
 	_g.h[24] = "Final";
 	_g.h[25] = "Hanja / Kanji";
-	_g.h[27] = "Escape";
+	_g.h[27] = "ESC";
 	_g.h[28] = "Convert";
 	_g.h[29] = "NonConvert";
 	_g.h[30] = "Accept";
@@ -43733,16 +44352,16 @@ var input_KeyCodeToString_KEY_CODE_TO_STRING = (function($this) {
 	_g.h[91] = "Win";
 	_g.h[93] = "ContextMenu";
 	_g.h[95] = "Sleep";
-	_g.h[96] = "Numpad0";
-	_g.h[97] = "Numpad1";
-	_g.h[98] = "Numpad2";
-	_g.h[99] = "Numpad3";
-	_g.h[100] = "Numpad4";
-	_g.h[101] = "Numpad5";
-	_g.h[102] = "Numpad6";
-	_g.h[103] = "Numpad7";
-	_g.h[104] = "Numpad8";
-	_g.h[105] = "Numpad9";
+	_g.h[96] = "Num0";
+	_g.h[97] = "Num1";
+	_g.h[98] = "Num2";
+	_g.h[99] = "Num3";
+	_g.h[100] = "Num4";
+	_g.h[101] = "Num5";
+	_g.h[102] = "Num6";
+	_g.h[103] = "Num7";
+	_g.h[104] = "Num8";
+	_g.h[105] = "Num9";
 	_g.h[106] = "Multiply";
 	_g.h[107] = "Add";
 	_g.h[108] = "Separator";
@@ -44227,6 +44846,10 @@ save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
 		var value = new input_InputMapping(66,5,new input_AxisMapping(null,null));
 		_g.h["TOGGLE_MARKERS"] = value;
 	}
+	{
+		var value = new input_InputMapping(82,4,new input_AxisMapping(null,null));
+		_g.h["QUICK_RESTART"] = value;
+	}
 	$r = _g;
 	return $r;
 }(this));
@@ -44291,6 +44914,12 @@ save_$data_TrainingSettings.ATTACK_TIME_DEFAULT = 10;
 save_$data_TrainingSettings.ATTACK_CHAIN_DEFAULT = 3;
 save_$data_TrainingSettings.ATTACK_GROUP_DIFF_DEFAULT = 0;
 save_$data_TrainingSettings.ATTACK_COLORS_DEFAULT = 1;
+save_$data_TrainingSettings.GROUP_BLIND_MODE_DEFAULT = false;
+save_$data_TrainingSettings.KEEP_GROUP_COUNT_DEFAULT = 0;
+side_$setup_InputDeviceIcon.FONT_SIZE = 56;
+side_$setup_SideSetupScreen.FONT_SIZE = 80;
+side_$setup_SideSetupScreen.LEFT_BOARD_STR = "Left Board";
+side_$setup_SideSetupScreen.RIGHT_BOARD_STR = "Right Board";
 ui_AnyGamepadDetectWrapper.FONT_SIZE = 64;
 ui_AnyGamepadDetectWrapper.TEXT = ["Press any button on","the gamepad you wish","to use"];
 ui_AreYouSurePage.FONT_SIZE = 64;
