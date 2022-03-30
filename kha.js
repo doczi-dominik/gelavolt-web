@@ -8041,10 +8041,9 @@ game_ui_PauseMenu.prototype = $extend(ui_Menu.prototype,{
 	,pauseMediator: null
 	,updateGameState: null
 	,generateInitalPage: function(menu) {
-		var _gthis = this;
-		return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Resume",($_=this.pauseMediator,$bind($_,$_.resume)),["Continue Chaining!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(this.prefsSettings),["Change Various Options and Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Show Main Menu",function() {
-			_gthis.pushPage(new main_$menu_ui_MainMenuPage(_gthis.prefsSettings));
-		},["Display The Main Menu"]))];
+		return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Resume",($_=this.pauseMediator,$bind($_,$_.resume)),["Continue Chaining!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(this.prefsSettings),["Change Various Options and Settings"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("Return To The Main Menu?","Exit To Main Menu",function() {
+			GlobalScreenSwitcher.switchScreen(new main_$menu_MainMenuScreen());
+		},["Return To The Main Menu"]))];
 	}
 	,popPage: function() {
 		var _this = this.pages;
