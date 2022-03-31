@@ -2661,17 +2661,18 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Endless
 		this.initSimStepState();
 	}
 	,previousGroup: function() {
-		this.queue.currentIndex--;
-		this.queue.currentIndex--;
+		if(this.chainSim.viewIndex < 3) {
+			return;
+		}
 		this.chainSim.rewindToPreviousEndStep();
+		this.resume();
+	}
+	,nextGroup: function() {
+		this.chainSim.jumpToBeginStep();
 		var _this = this.chainSim;
 		this.field.copyFrom(_this.steps[_this.viewIndex].fieldSnapshot);
 		this.geloGroup.isVisible = false;
-		this.initSimStepState();
-	}
-	,nextGroup: function() {
-		this.geloGroup.isVisible = false;
-		this.lockGroup();
+		this.beginChainSimulation();
 	}
 	,__class__: game_boardstates_TrainingBoardState
 });
@@ -7045,12 +7046,20 @@ game_simulation_ChainSimulator.prototype = {
 			}
 			if(this.steps[this.viewIndex].type == game_simulation_SimulationStepType.END) {
 				if(passedOne) {
-					this.editViewed();
+					this.stepIndex = this.viewIndex + 1;
 					return;
 				}
 				passedOne = true;
 			}
 			this.view(-1);
+		}
+	}
+	,jumpToBeginStep: function() {
+		var i = this.viewIndex;
+		while(++i < this.steps.length) if(this.steps[i].type == game_simulation_SimulationStepType.BEGIN) {
+			this.viewIndex = i;
+			this.editViewed();
+			return;
 		}
 	}
 	,findBeginStep: function() {
@@ -7509,6 +7518,8 @@ var ui_ListMenuPage = function(opts) {
 	this.widgetBuilder = opts.widgetBuilder;
 	this.font = kha_Assets.fonts.Pixellari;
 	this.widgets = [];
+	this.widgetIndex = 0;
+	this.minIndex = 0;
 };
 $hxClasses["ui.ListMenuPage"] = ui_ListMenuPage;
 ui_ListMenuPage.__name__ = "ui.ListMenuPage";
@@ -7587,8 +7598,10 @@ ui_ListMenuPage.prototype = {
 			++_g;
 			w.onShow(menu);
 		}
-		this.widgetIndex = 0;
-		this.minIndex = 0;
+		if(!menu.prefsSettings.menuRememberCursor) {
+			this.widgetIndex = 0;
+			this.minIndex = 0;
+		}
 		this.controlDisplays = ui_ListMenuPage.DEFAULT_CONTROL_DISPLAYS.concat(this.widgets[this.widgetIndex].controlDisplays);
 	}
 	,update: function() {
@@ -7893,6 +7906,7 @@ var ui_Menu = function(opts) {
 	this.controlsFont = kha_Assets.fonts.Pixellari;
 	this.positionFactor = opts.positionFactor;
 	this.widthFactor = opts.widthFactor;
+	this.prefsSettings = opts.prefsSettings;
 	this.scaleManager = new ScaleManager(1920,1080);
 	ScaleManager.addOnResizeCallback($bind(this,this.resize));
 };
@@ -7912,6 +7926,7 @@ ui_Menu.prototype = {
 	,warningFontHeight: null
 	,warningFontWidths: null
 	,renderX: null
+	,prefsSettings: null
 	,scaleManager: null
 	,padding: null
 	,inputDevice: null
@@ -8029,16 +8044,14 @@ ui_Menu.prototype = {
 };
 var game_ui_PauseMenu = function(opts) {
 	this.updateGameState = false;
-	this.prefsSettings = opts.prefsSettings;
 	this.pauseMediator = opts.pauseMediator;
-	ui_Menu.call(this,new ui_MenuOptions(0,1,new ui_ListMenuPage(new ui_ListMenuPageOptions("Paused",$bind(this,this.generateInitalPage)))));
+	ui_Menu.call(this,new ui_MenuOptions(opts.prefsSettings,0,1,new ui_ListMenuPage(new ui_ListMenuPageOptions("Paused",$bind(this,this.generateInitalPage)))));
 };
 $hxClasses["game.ui.PauseMenu"] = game_ui_PauseMenu;
 game_ui_PauseMenu.__name__ = "game.ui.PauseMenu";
 game_ui_PauseMenu.__super__ = ui_Menu;
 game_ui_PauseMenu.prototype = $extend(ui_Menu.prototype,{
-	prefsSettings: null
-	,pauseMediator: null
+	pauseMediator: null
 	,updateGameState: null
 	,generateInitalPage: function(menu) {
 		return [new ui_ButtonWidget(new ui_ButtonWidgetOptions("Resume",($_=this.pauseMediator,$bind($_,$_.resume)),["Continue Chaining!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(this.prefsSettings),["Change Various Options and Settings"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("Return To The Main Menu?","Exit To Main Menu",function() {
@@ -41826,7 +41839,8 @@ kha_vr_TimeWarpParms.prototype = {
 	,__class__: kha_vr_TimeWarpParms
 };
 var main_$menu_MainMenuScreen = function() {
-	this.menu = new ui_Menu(new ui_MenuOptions(0,1,new main_$menu_ui_MainMenuPage(save_$data_Profile.primary.prefs)));
+	var prefs = save_$data_Profile.primary.prefs;
+	this.menu = new ui_Menu(new ui_MenuOptions(prefs,0,1,new main_$menu_ui_MainMenuPage(prefs)));
 	this.menu.onShow(input_AnyInputDevice.instance);
 };
 $hxClasses["main_menu.MainMenuScreen"] = main_$menu_MainMenuScreen;
@@ -41888,20 +41902,27 @@ var main_$menu_ui_OptionsPage = function(prefsSettings) {
 				break;
 			}
 			return _gthis.buildUniversalTop(inputDevice).concat(middle).concat(_gthis.buildUniversalBottom(inputDevice));
-		})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Personalization",["Change Various Options Related","To Appearance And Game Mechanics"],function(_) {
-			return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Gelo Group Shadow Options",["Change Various Options Related","To the Gelo Group Shadow Appearance"],function(_) {
-				return [new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable",["Enable Or Disable The Shadow","That Shows Where Gelo","Groups Will Fall"],prefsSettings.showGroupShadow,function(value) {
-					prefsSettings.showGroupShadow = value;
+		})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Personalization",["Change Various Options Related","To Appearance, Menu Navigation","And Game Mechanics"],function(_) {
+			return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Menu Preferences",["Change Various Options Related To","Menu Navigation And Appearance"],function(menu) {
+				return [new ui_YesNoWidget(new ui_YesNoWidgetOptions("Remember Cursor Position",["Whether To Remember","The Cursor's Position","When Entering/Leaving","A Submenu","","If Disabled, The Initial","Selection Will Always Be","The First Item"],menu.prefsSettings.menuRememberCursor,function(value) {
+					menu.prefsSettings.menuRememberCursor = value;
 					save_$data_SaveManager.saveProfiles();
-				})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Opacity",["Change The Transparency Of The","Gelo Group Shadow"],0,1,0.1,prefsSettings.shadowOpacity,function(value) {
-					prefsSettings.shadowOpacity = value;
-					save_$data_SaveManager.saveProfiles();
-				})),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Highlight Rotating Shadows",["Alter The Appearance Of Rotating","Gelos' Shadow"],prefsSettings.shadowHighlightOthers,function(value) {
-					prefsSettings.shadowHighlightOthers = value;
-					save_$data_SaveManager.saveProfiles();
-				})),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Show Potential Chain Triggering",["Animate The Gelo Group Shadow","If A Chain Is About To Be","Triggered"],prefsSettings.shadowWillTriggerChain,function(value) {
-					prefsSettings.shadowWillTriggerChain = value;
-					save_$data_SaveManager.saveProfiles();
+				}))];
+			})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Game Preferences",["Change Various Options Related To","Game Appearance And Mechanics"],function(_) {
+				return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Gelo Group Shadow Options",["Change Various Options Related","To the Gelo Group Shadow Appearance"],function(_) {
+					return [new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable",["Enable Or Disable The Shadow","That Shows Where Gelo","Groups Will Fall"],prefsSettings.showGroupShadow,function(value) {
+						prefsSettings.showGroupShadow = value;
+						save_$data_SaveManager.saveProfiles();
+					})),new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Opacity",["Change The Transparency Of The","Gelo Group Shadow"],0,1,0.1,prefsSettings.shadowOpacity,function(value) {
+						prefsSettings.shadowOpacity = value;
+						save_$data_SaveManager.saveProfiles();
+					})),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Highlight Rotating Shadows",["Alter The Appearance Of Rotating","Gelos' Shadow"],prefsSettings.shadowHighlightOthers,function(value) {
+						prefsSettings.shadowHighlightOthers = value;
+						save_$data_SaveManager.saveProfiles();
+					})),new ui_YesNoWidget(new ui_YesNoWidgetOptions("Show Potential Chain Triggering",["Animate The Gelo Group Shadow","If A Chain Is About To Be","Triggered"],prefsSettings.shadowWillTriggerChain,function(value) {
+						prefsSettings.shadowWillTriggerChain = value;
+						save_$data_SaveManager.saveProfiles();
+					}))];
 				}))];
 			}))];
 		})),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Profiles",new main_$menu_ui_ProfileListPage(),["View and Edit Profiles"]))];
@@ -42251,6 +42272,7 @@ var save_$data_PrefsSettings = function(overrides) {
 	this.colorTints = save_$data_PrefsSettings.COLOR_TINTS_DEFAULT.copy();
 	this.primaryColors = save_$data_PrefsSettings.PRIMARY_COLORS_DEFAULT.copy();
 	this.boardBackground = save_$data_PrefsSettings.BOARD_BACKGROUND_DEFAULT;
+	this.menuRememberCursor = true;
 	this.capAtCrowns = true;
 	this.showGroupShadow = true;
 	this.shadowOpacity = 0.5;
@@ -42289,6 +42311,9 @@ var save_$data_PrefsSettings = function(overrides) {
 						var v1 = js_Boot.__cast(vv , Int);
 						this.colorTints.h[js_Boot.__cast(kk , Int)] = v1;
 					}
+					break;
+				case "MENU_REMEMBER_CURSOR":
+					this.menuRememberCursor = js_Boot.__cast(v , Bool);
 					break;
 				case "PRIMARY_COLORS":
 					var h1 = (js_Boot.__cast(v , haxe_ds_StringMap)).h;
@@ -42331,6 +42356,7 @@ save_$data_PrefsSettings.prototype = {
 	colorTints: null
 	,primaryColors: null
 	,boardBackground: null
+	,menuRememberCursor: null
 	,capAtCrowns: null
 	,showGroupShadow: null
 	,shadowOpacity: null
@@ -42379,6 +42405,10 @@ save_$data_PrefsSettings.prototype = {
 		}
 		if(this.boardBackground != save_$data_PrefsSettings.BOARD_BACKGROUND_DEFAULT) {
 			overrides.h["BOARD_BACKGROUND"] = this.boardBackground;
+			wereOverrides = true;
+		}
+		if(this.menuRememberCursor != true) {
+			overrides.h["MENU_REMEMBER_CURSOR"] = this.menuRememberCursor;
 			wereOverrides = true;
 		}
 		if(this.capAtCrowns != true) {
@@ -43169,7 +43199,8 @@ ui_KeyboardConfirmWrapperOptions.prototype = {
 	,pageBuilder: null
 	,__class__: ui_KeyboardConfirmWrapperOptions
 };
-var ui_MenuOptions = function(positionFactor,widthFactor,initialPage) {
+var ui_MenuOptions = function(prefsSettings,positionFactor,widthFactor,initialPage) {
+	this.prefsSettings = prefsSettings;
 	this.positionFactor = positionFactor;
 	this.widthFactor = widthFactor;
 	this.initialPage = initialPage;
@@ -43177,7 +43208,8 @@ var ui_MenuOptions = function(positionFactor,widthFactor,initialPage) {
 $hxClasses["ui.MenuOptions"] = ui_MenuOptions;
 ui_MenuOptions.__name__ = "ui.MenuOptions";
 ui_MenuOptions.prototype = {
-	positionFactor: null
+	prefsSettings: null
+	,positionFactor: null
 	,widthFactor: null
 	,initialPage: null
 	,__class__: ui_MenuOptions
@@ -43647,7 +43679,7 @@ var game_actions_ActionData_ACTION_DATA = (function($this) {
 		_g.h["PREVIOUS_GROUP"] = value;
 	}
 	{
-		var value = new game_actions_ActionDataEntry("Draw Next Group",["Discard The Current Gelo Group","And Draw The Next One From","The Queue"],input_InputType.REPEAT,true);
+		var value = new game_actions_ActionDataEntry("Redo",["Redo The Last Undone Placement Or Get","The Next Gelo Group From","The Queue If There Is Nothing","To Undo"],input_InputType.REPEAT,true);
 		_g.h["NEXT_GROUP"] = value;
 	}
 	{
@@ -44896,6 +44928,7 @@ save_$data_PrefsSettings.PRIMARY_COLORS_DEFAULT = (function($this) {
 	return $r;
 }(this));
 save_$data_PrefsSettings.BOARD_BACKGROUND_DEFAULT = kha_Color.fromBytes(64,32,32);
+save_$data_PrefsSettings.MENU_REMEMBER_CURSOR_DEFAULT = true;
 save_$data_PrefsSettings.CAP_AT_CROWNS_DEFAULT = true;
 save_$data_PrefsSettings.SHOW_GROUP_SHADOW_DEFAULT = true;
 save_$data_PrefsSettings.SHADOW_OPACITY_DEFAULT = 0.5;
