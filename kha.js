@@ -2672,6 +2672,7 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Endless
 		var _this = this.chainSim;
 		this.field.copyFrom(_this.steps[_this.viewIndex].fieldSnapshot);
 		this.geloGroup.isVisible = false;
+		this.geloGroup.isShadowVisible = false;
 		this.beginChainSimulation();
 	}
 	,__class__: game_boardstates_TrainingBoardState
@@ -43694,7 +43695,7 @@ var game_actions_ActionData_ACTION_DATA = (function($this) {
 	return $r;
 }(this));
 game_all_$clear_AllClearManager.SHORT_STR = "AC!";
-game_boards_TrainingBoard.GAME_CONTROL_DISPLAY = [new ui_ControlDisplay(["TOGGLE_EDIT_MODE"],"Edit Mode"),new ui_ControlDisplay(["PREVIOUS_GROUP"],"Undo"),new ui_ControlDisplay(["NEXT_GROUP"],"Get Next Group")];
+game_boards_TrainingBoard.GAME_CONTROL_DISPLAY = [new ui_ControlDisplay(["TOGGLE_EDIT_MODE"],"Edit Mode"),new ui_ControlDisplay(["PREVIOUS_GROUP"],"Undo"),new ui_ControlDisplay(["NEXT_GROUP"],"Redo / Get Next Group")];
 game_boards_TrainingBoard.EDIT_CONTROL_DISPLAY = [new ui_ControlDisplay(["TOGGLE_EDIT_MODE"],"Play Mode"),new ui_ControlDisplay(["EDIT_SET"],"Set"),new ui_ControlDisplay(["EDIT_CLEAR"],"Clear"),new ui_ControlDisplay(["PREVIOUS_STEP","NEXT_STEP"],"Cycle Chain Steps"),new ui_ControlDisplay(["PREVIOUS_COLOR","NEXT_COLOR"],"Cycle Gelos / Markers"),new ui_ControlDisplay(["TOGGLE_MARKERS"],"Toggle Gelos / Markers")];
 game_boardstates_EditingBoardState.COLORS = [0,1,2,3,4,6];
 game_boardstates_TrainingInfoBoardState.TITLE_FONT_SIZE = 40;
