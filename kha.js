@@ -14393,7 +14393,7 @@ kha_SystemImpl.loadFinished = function(defaultWidth,defaultHeight) {
 		kha_SystemImpl.gl2 = true;
 		kha_Shaders.init();
 	} catch( _g ) {
-		haxe_Log.trace("Could not initialize WebGL 2, falling back to WebGL.",{ fileName : "kha/SystemImpl.hx", lineNumber : 382, className : "kha.SystemImpl", methodName : "loadFinished"});
+		haxe_Log.trace("Could not initialize WebGL 2, falling back to WebGL.",{ fileName : "kha/SystemImpl.hx", lineNumber : 384, className : "kha.SystemImpl", methodName : "loadFinished"});
 	}
 	if(!kha_SystemImpl.gl2) {
 		try {
@@ -14415,7 +14415,7 @@ kha_SystemImpl.loadFinished = function(defaultWidth,defaultHeight) {
 			gl = true;
 			kha_Shaders.init();
 		} catch( _g ) {
-			haxe_Log.trace("Could not initialize WebGL, falling back to <canvas>.",{ fileName : "kha/SystemImpl.hx", lineNumber : 410, className : "kha.SystemImpl", methodName : "loadFinished"});
+			haxe_Log.trace("Could not initialize WebGL, falling back to <canvas>.",{ fileName : "kha/SystemImpl.hx", lineNumber : 412, className : "kha.SystemImpl", methodName : "loadFinished"});
 		}
 	}
 	kha_SystemImpl.setCanvas(canvas);
@@ -14667,7 +14667,7 @@ kha_SystemImpl.unlockSound = function() {
 			context.resume().then(function(c) {
 				kha_SystemImpl.soundEnabled = true;
 			}).catch(function(err) {
-				haxe_Log.trace(err,{ fileName : "kha/SystemImpl.hx", lineNumber : 704, className : "kha.SystemImpl", methodName : "unlockSound"});
+				haxe_Log.trace(err,{ fileName : "kha/SystemImpl.hx", lineNumber : 706, className : "kha.SystemImpl", methodName : "unlockSound"});
 			});
 		}
 		kha_audio2_Audio.wakeChannels();
@@ -15094,23 +15094,7 @@ kha_SystemImpl.keycodeToChar = function(key,keycode,shift) {
 kha_SystemImpl.keyDown = function(event) {
 	kha_SystemImpl.insideInputEvent = true;
 	kha_SystemImpl.unlockSound();
-	var _g = kha_input_Keyboard.keyBehavior;
-	switch(_g._hx_index) {
-	case 0:
-		kha_SystemImpl.defaultKeyBlock(event);
-		break;
-	case 1:
-		event.preventDefault();
-		break;
-	case 2:
-		break;
-	case 3:
-		var func = _g.func;
-		if(func(event.keyCode)) {
-			event.preventDefault();
-		}
-		break;
-	}
+	kha_SystemImpl.preventDefaultKeyBehavior(event);
 	event.stopPropagation();
 	if(event.repeat) {
 		event.preventDefault();
@@ -15132,6 +15116,25 @@ kha_SystemImpl.fixedKeyCode = function(event) {
 		return 173;
 	default:
 		return event.keyCode;
+	}
+};
+kha_SystemImpl.preventDefaultKeyBehavior = function(event) {
+	var _g = kha_input_Keyboard.keyBehavior;
+	switch(_g._hx_index) {
+	case 0:
+		kha_SystemImpl.defaultKeyBlock(event);
+		break;
+	case 1:
+		event.preventDefault();
+		break;
+	case 2:
+		break;
+	case 3:
+		var func = _g.func;
+		if(func(event.keyCode)) {
+			event.preventDefault();
+		}
+		break;
 	}
 };
 kha_SystemImpl.defaultKeyBlock = function(e) {
@@ -15156,7 +15159,7 @@ kha_SystemImpl.defaultKeyBlock = function(e) {
 kha_SystemImpl.keyUp = function(event) {
 	kha_SystemImpl.insideInputEvent = true;
 	kha_SystemImpl.unlockSound();
-	event.preventDefault();
+	kha_SystemImpl.preventDefaultKeyBehavior(event);
 	event.stopPropagation();
 	var keyCode = kha_SystemImpl.fixedKeyCode(event);
 	kha_SystemImpl.keyboard.sendUpEvent(keyCode);
@@ -15168,7 +15171,7 @@ kha_SystemImpl.keyPress = function(event) {
 	if(event.which == 0) {
 		return;
 	}
-	event.preventDefault();
+	kha_SystemImpl.preventDefaultKeyBehavior(event);
 	event.stopPropagation();
 	var code = event.which;
 	kha_SystemImpl.keyboard.sendPressEvent(String.fromCodePoint(code));
@@ -22490,6 +22493,9 @@ kha_graphics2_Graphics.prototype = {
 	}
 	,popTransformation: function() {
 		this.transformationIndex--;
+		if(this.transformationIndex == -1) {
+			throw haxe_Exception.thrown("There is no transformation matrix to remove, check your push/popTransformation code");
+		}
 		this.setTransformation(this.transformations[this.transformationIndex]);
 		return this.transformations[this.transformationIndex + 1];
 	}
