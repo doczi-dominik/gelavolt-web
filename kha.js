@@ -613,7 +613,7 @@ var auto_$attack_AutoAttackManager = function(opts) {
 	this.particleManager = opts.particleManager;
 	this.links = [];
 	this.linkData = [];
-	this.isPaused = false;
+	this.isPaused = true;
 	this.type = "RANDOM";
 };
 $hxClasses["auto_attack.AutoAttackManager"] = auto_$attack_AutoAttackManager;
@@ -725,7 +725,7 @@ auto_$attack_AutoAttackManager.prototype = {
 		}
 	}
 	,update: function() {
-		if(!this.trainingSettings.autoAttack) {
+		if(this.isPaused) {
 			return;
 		}
 		if(this.timer == 0) {
@@ -2618,7 +2618,7 @@ game_boardstates_TrainingBoardState.prototype = $extend(game_boardstates_Endless
 		this.infoState.updateChain(this.currentPopStep);
 	}
 	,beforeEnd: function() {
-		if(!this.trainingSettings.autoAttack) {
+		if(this.autoAttackManager.isPaused) {
 			this.garbageManager.clear();
 		}
 	}
@@ -2837,7 +2837,7 @@ game_boardstates_TrainingInfoBoardState.prototype = {
 		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Target Pts (Margin T): " + targetPoints + " (" + (this.marginManager.marginTime / 60 | 0) + ")",-64,this.gameRow(15));
 		var dropBonus = this.playerScoreManager.dropBonus | 0;
 		utils_Utils.shadowDrawString(g,3,-16777216,-1,"Drop bonus: " + dropBonus + " (" + (dropBonus / targetPoints | 0) + " garbo)",-64,this.gameRow(16));
-		if(this.trainingSettings.autoAttack) {
+		if(!this.autoAttackManager.isPaused) {
 			var autoAttackString;
 			switch(this.autoAttackManager.state) {
 			case 0:
@@ -3755,6 +3755,7 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 	,boardState: null
 	,board: null
 	,pauseMenu: null
+	,controlDisplayContainer: null
 	,gameState: null
 	,buildRNG: function() {
 		this.rng = new kha_math_Random(this.gameMode.rngSeed);
@@ -3772,6 +3773,11 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 	}
 	,buildFrameCounter: function() {
 		this.frameCounter = new game_mediators_FrameCounter();
+	}
+	,buildControlDisplayContainer: function() {
+		this.controlDisplayContainer = new game_mediators_ControlDisplayContainer();
+		this.controlDisplayContainer.isVisible = save_$data_Profile.primary.endlessSettings.showControlHints;
+		this.controlDisplayContainer.value = [new ui_ControlDisplay(["QUICK_RESTART"],"Quick Restart")];
 	}
 	,buildPauseMediator: function() {
 		this.pauseMediator = new game_mediators_PauseMediator();
@@ -3824,14 +3830,14 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 	}
 	,buildPauseMenu: function() {
 		if(this.gameMode.replayData == null) {
-			this.pauseMenu = new game_ui_EndlessPauseMenu(new game_ui_EndlessPauseMenuOptions(this.gameMode,save_$data_Profile.primary.endlessSettings,this.actionBuffer,save_$data_Profile.primary.prefs,this.pauseMediator));
+			this.pauseMenu = new game_ui_EndlessPauseMenu(new game_ui_EndlessPauseMenuOptions(this.gameMode,save_$data_Profile.primary.endlessSettings,this.controlDisplayContainer,this.actionBuffer,save_$data_Profile.primary.prefs,this.pauseMediator));
 			return;
 		}
 		this.pauseMenu = new game_ui_ReplayPauseMenu(new game_ui_ReplayPauseMenuOptions(js_Boot.__cast(this.actionBuffer , game_actionbuffers_ReplayActionBuffer),save_$data_Profile.primary.prefs,this.pauseMediator));
 	}
 	,buildGameState: function() {
 		var _g = this.marginManager;
-		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.CENTERED,this.board)),_g,this.pauseMenu,this.frameCounter));
+		this.gameState = new game_states_ControlDisplayGameState(new game_states_ControlDisplayGameStateOptions(this.controlDisplayContainer,this.particleManager,new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.CENTERED,this.board)),_g,this.pauseMenu,this.frameCounter));
 	}
 	,wireMediators: function() {
 		this.pauseMediator.gameState = this.gameState;
@@ -3845,6 +3851,9 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 		this.particleManager = new game_particles_ParticleManager();
 		this.marginManager = new game_rules_MarginTimeManager(this.gameMode.rule);
 		this.frameCounter = new game_mediators_FrameCounter();
+		this.controlDisplayContainer = new game_mediators_ControlDisplayContainer();
+		this.controlDisplayContainer.isVisible = save_$data_Profile.primary.endlessSettings.showControlHints;
+		this.controlDisplayContainer.value = [new ui_ControlDisplay(["QUICK_RESTART"],"Quick Restart")];
 		this.pauseMediator = new game_mediators_PauseMediator();
 		this.borderColorMediator = new game_mediators_BorderColorMediator();
 		this.scoreManager = new game_score_ScoreManager(new game_score_ScoreManagerOptions(this.gameMode.rule,game_geometries_BoardOrientation.LEFT));
@@ -3866,9 +3875,9 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 		var _g7 = game_garbage_NullGarbageManager.get_instance();
 		this.boardState = new game_boardstates_EndlessBoardState(new game_boardstates_EndlessBoardStateOptions(save_$data_Profile.primary.endlessSettings,this.randomizer,this.marginManager,_g,_g1,_g2,_g3,game_geometries_BoardGeometries.CENTERED,_g4,_g5,this.queue,new game_previews_VerticalPreview(this.queue),this.allClearManager,this.scoreManager,this.actionBuffer,this.chainCounter,this.chainSim,_g6,_g7));
 		this.board = new game_boards_EndlessBoard(new game_boards_EndlessBoardOptions(this.pauseMediator,this.inputDevice,this.actionBuffer,this.boardState));
-		this.pauseMenu = this.gameMode.replayData == null ? new game_ui_EndlessPauseMenu(new game_ui_EndlessPauseMenuOptions(this.gameMode,save_$data_Profile.primary.endlessSettings,this.actionBuffer,save_$data_Profile.primary.prefs,this.pauseMediator)) : new game_ui_ReplayPauseMenu(new game_ui_ReplayPauseMenuOptions(js_Boot.__cast(this.actionBuffer , game_actionbuffers_ReplayActionBuffer),save_$data_Profile.primary.prefs,this.pauseMediator));
+		this.pauseMenu = this.gameMode.replayData == null ? new game_ui_EndlessPauseMenu(new game_ui_EndlessPauseMenuOptions(this.gameMode,save_$data_Profile.primary.endlessSettings,this.controlDisplayContainer,this.actionBuffer,save_$data_Profile.primary.prefs,this.pauseMediator)) : new game_ui_ReplayPauseMenu(new game_ui_ReplayPauseMenuOptions(js_Boot.__cast(this.actionBuffer , game_actionbuffers_ReplayActionBuffer),save_$data_Profile.primary.prefs,this.pauseMediator));
 		var _g = this.marginManager;
-		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.CENTERED,this.board)),_g,this.pauseMenu,this.frameCounter));
+		this.gameState = new game_states_ControlDisplayGameState(new game_states_ControlDisplayGameStateOptions(this.controlDisplayContainer,this.particleManager,new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(this.transformMediator,game_geometries_BoardGeometries.CENTERED,this.board)),_g,this.pauseMenu,this.frameCounter));
 		this.pauseMediator.gameState = this.gameState;
 		this.borderColorMediator.boardState = this.boardState;
 		return this.gameState;
@@ -3945,6 +3954,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 	}
 	,buildControlDisplayContainer: function() {
 		this.controlDisplayContainer = new game_mediators_ControlDisplayContainer();
+		this.controlDisplayContainer.isVisible = save_$data_Profile.primary.trainingSettings.showControlHints;
 	}
 	,buildPauseMediator: function() {
 		this.pauseMediator = new game_mediators_PauseMediator();
@@ -4035,6 +4045,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.marginManager = new game_rules_MarginTimeManager(this.gameMode.rule);
 		this.frameCounter = new game_mediators_FrameCounter();
 		this.controlDisplayContainer = new game_mediators_ControlDisplayContainer();
+		this.controlDisplayContainer.isVisible = save_$data_Profile.primary.trainingSettings.showControlHints;
 		this.pauseMediator = new game_mediators_PauseMediator();
 		this.playerBorderColorMediator = new game_mediators_BorderColorMediator();
 		this.playerTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.INFO,null);
@@ -8100,6 +8111,7 @@ game_ui_PauseMenu.prototype = $extend(ui_Menu.prototype,{
 var game_ui_EndlessPauseMenu = function(opts) {
 	this.gameMode = opts.gameMode;
 	this.endlessSettings = opts.endlessSettings;
+	this.controlDisplayContainer = opts.controlDisplayContainer;
 	this.actionBuffer = opts.actionBuffer;
 	game_ui_PauseMenu.call(this,opts);
 };
@@ -8109,23 +8121,29 @@ game_ui_EndlessPauseMenu.__super__ = game_ui_PauseMenu;
 game_ui_EndlessPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 	gameMode: null
 	,endlessSettings: null
+	,controlDisplayContainer: null
 	,actionBuffer: null
 	,generateInitalPage: function(_) {
 		var _gthis = this;
 		var endlessOpts = new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Endless Options",["Change Various Options And Settings","Specific to Endless Mode"],function(_) {
-			var endlessOpts;
+			var endlessOpts = new ui_YesNoWidget(new ui_YesNoWidgetOptions("Show Control Hints",["Show Or Hide The Control Display","At The Bottom"],_gthis.endlessSettings.showControlHints,function(value) {
+				_gthis.endlessSettings.showControlHints = value;
+				_gthis.controlDisplayContainer.isVisible = value;
+				save_$data_SaveManager.saveProfiles();
+			}));
+			var endlessOpts1;
 			switch(_gthis.endlessSettings.clearOnXMode) {
 			case "CLEAR":
-				endlessOpts = 0;
+				endlessOpts1 = 0;
 				break;
 			case "NEW":
-				endlessOpts = 2;
+				endlessOpts1 = 2;
 				break;
 			case "RESTART":
-				endlessOpts = 1;
+				endlessOpts1 = 1;
 				break;
 			}
-			return [new ui_OptionListWidget(new ui_OptionListWidgetOptions("Clear Field on X",["Clear The Field When A","Gelo Group Locks On The","Top Of The Center Column","","CLEAR: Clear the Field","RESTART: CLEAR + Restart Queue","NEW: CLEAR + Regenerate Queue"],["CLEAR","RESTART","NEW"],endlessOpts,function(value) {
+			return [endlessOpts,new ui_OptionListWidget(new ui_OptionListWidgetOptions("Clear Field on X",["Clear The Field When A","Gelo Group Locks On The","Top Of The Center Column","","CLEAR: Clear the Field","RESTART: CLEAR + Restart Queue","NEW: CLEAR + Regenerate Queue"],["CLEAR","RESTART","NEW"],endlessOpts1,function(value) {
 				_gthis.endlessSettings.clearOnXMode = value;
 				save_$data_SaveManager.saveProfiles();
 			})),new ui_ButtonWidget(new ui_ButtonWidgetOptions("Save Replay",function() {
@@ -8157,10 +8175,11 @@ game_ui_PauseMenuOptions.prototype = {
 	,pauseMediator: null
 	,__class__: game_ui_PauseMenuOptions
 };
-var game_ui_EndlessPauseMenuOptions = function(gameMode,endlessSettings,actionBuffer,prefsSettings,pauseMediator) {
+var game_ui_EndlessPauseMenuOptions = function(gameMode,endlessSettings,controlDisplayContainer,actionBuffer,prefsSettings,pauseMediator) {
 	game_ui_PauseMenuOptions.call(this,prefsSettings,pauseMediator);
 	this.gameMode = gameMode;
 	this.endlessSettings = endlessSettings;
+	this.controlDisplayContainer = controlDisplayContainer;
 	this.actionBuffer = actionBuffer;
 };
 $hxClasses["game.ui.EndlessPauseMenuOptions"] = game_ui_EndlessPauseMenuOptions;
@@ -8169,6 +8188,7 @@ game_ui_EndlessPauseMenuOptions.__super__ = game_ui_PauseMenuOptions;
 game_ui_EndlessPauseMenuOptions.prototype = $extend(game_ui_PauseMenuOptions.prototype,{
 	gameMode: null
 	,endlessSettings: null
+	,controlDisplayContainer: null
 	,actionBuffer: null
 	,__class__: game_ui_EndlessPauseMenuOptions
 });
@@ -8651,8 +8671,10 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 		var _gthis = this;
 		var trainingSettings = new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Training Options",["Change Various Options And Settings","To Help Elevate Your Practice!"],function(_) {
 			return [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Misc. Options",["Change Miscelaneous","Training Options"],function(_) {
-				var trainingSettings = new ui_YesNoWidget(new ui_YesNoWidgetOptions("Show Control Hints",["Show Or Hide The Control Display","At The Bottom"],_gthis.controlDisplayContainer.isVisible,function(value) {
+				var trainingSettings = new ui_YesNoWidget(new ui_YesNoWidgetOptions("Show Control Hints",["Show Or Hide The Control Display","At The Bottom"],_gthis.trainingSettings.showControlHints,function(value) {
+					_gthis.trainingSettings.showControlHints = value;
 					_gthis.controlDisplayContainer.isVisible = value;
+					save_$data_SaveManager.saveProfiles();
 				}));
 				var trainingSettings1;
 				switch(_gthis.trainingSettings.clearOnXMode) {
@@ -8673,10 +8695,9 @@ game_ui_TrainingPauseMenu.prototype = $extend(game_ui_PauseMenu.prototype,{
 					_gthis.trainingSettings.autoClear = value;
 					save_$data_SaveManager.saveProfiles();
 				})),new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Auto-Attack Options",["Practice Your Neutral Skills","By Defending Against"," Periodically Sent Chains!"],function(_) {
-					var trainingSettings = new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable",["Enable Or Disable","Auto-Attacking"],_gthis.trainingSettings.autoAttack,function(value) {
-						_gthis.trainingSettings.autoAttack = value;
+					var trainingSettings = new ui_YesNoWidget(new ui_YesNoWidgetOptions("Enable",["Enable Or Disable","Auto-Attacking"],!_gthis.autoAttackManager.isPaused,function(value) {
+						_gthis.autoAttackManager.isPaused = !value;
 						_gthis.autoAttackManager.reset();
-						save_$data_SaveManager.saveProfiles();
 					}));
 					var trainingSettings1 = new ui_ButtonWidget(new ui_ButtonWidgetOptions("Reset Timer",($_=_gthis.autoAttackManager,$bind($_,$_.reset)),["Reset The Auto-Attack","Timer"]));
 					var trainingSettings2 = new ui_NumberRangeWidget(new ui_NumericalRangeWidgetOptions("Min. Delay",["Set The Minimum Delay Before","The Chain Is Triggered","In Seconds"],1,90,1,_gthis.trainingSettings.minAttackTime,function(value) {
@@ -16570,13 +16591,12 @@ kha_audio2_Audio1.stream = function(sound,loop) {
 	}
 };
 var kha_audio2_AudioChannel = function(looping) {
-	this.looping = false;
+	this.data = null;
+	this.looping = looping;
 	this.stopped = false;
 	this.paused = false;
 	this.myPosition = 0;
 	this.myVolume = 1;
-	this.data = null;
-	this.looping = looping;
 };
 $hxClasses["kha.audio2.AudioChannel"] = kha_audio2_AudioChannel;
 kha_audio2_AudioChannel.__name__ = "kha.audio2.AudioChannel";
@@ -42068,6 +42088,7 @@ save_$data_IClearOnXModeContainer.prototype = {
 	,__class__: save_$data_IClearOnXModeContainer
 };
 var save_$data_EndlessSettings = function(overrides) {
+	this.showControlHints = true;
 	this.clearOnXMode = "NEW";
 	try {
 		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
@@ -42081,8 +42102,13 @@ var save_$data_EndlessSettings = function(overrides) {
 			var k = _g.key;
 			var v = _g.value;
 			try {
-				if(js_Boot.__cast(k , String) == "CLEAR_ON_X_MODE") {
+				switch(js_Boot.__cast(k , String)) {
+				case "CLEAR_ON_X_MODE":
 					this.clearOnXMode = js_Boot.__cast(v , String);
+					break;
+				case "SHOW_CONTROL_HINTS":
+					this.showControlHints = js_Boot.__cast(v , Bool);
+					break;
 				}
 			} catch( _g1 ) {
 				continue;
@@ -42095,10 +42121,15 @@ $hxClasses["save_data.EndlessSettings"] = save_$data_EndlessSettings;
 save_$data_EndlessSettings.__name__ = "save_data.EndlessSettings";
 save_$data_EndlessSettings.__interfaces__ = [save_$data_IClearOnXModeContainer];
 save_$data_EndlessSettings.prototype = {
-	clearOnXMode: null
+	showControlHints: null
+	,clearOnXMode: null
 	,exportOverrides: function() {
 		var overrides = new haxe_ds_StringMap();
 		var wereOverrides = false;
+		if(this.showControlHints != true) {
+			overrides.h["SHOW_CONTROL_HINTS"] = this.showControlHints;
+			wereOverrides = true;
+		}
 		if(this.clearOnXMode != "NEW") {
 			overrides.h["CLEAR_ON_X_MODE"] = this.clearOnXMode;
 			wereOverrides = true;
@@ -42629,9 +42660,9 @@ save_$data_SaveManager.loadEverything = function() {
 	save_$data_SaveManager.loadGraphics();
 };
 var save_$data_TrainingSettings = function(overrides) {
+	this.showControlHints = true;
 	this.clearOnXMode = "RESTART";
 	this.autoClear = true;
-	this.autoAttack = false;
 	this.minAttackTime = 10;
 	this.maxAttackTime = 10;
 	this.minAttackChain = 3;
@@ -42655,9 +42686,6 @@ var save_$data_TrainingSettings = function(overrides) {
 			var v = _g.value;
 			try {
 				switch(js_Boot.__cast(k , String)) {
-				case "AUTO_ATTACK":
-					this.autoAttack = js_Boot.__cast(v , Bool);
-					break;
 				case "AUTO_CLEAR":
 					this.autoClear = js_Boot.__cast(v , Bool);
 					break;
@@ -42694,6 +42722,9 @@ var save_$data_TrainingSettings = function(overrides) {
 				case "MIN_ATTACK_TIME":
 					this.minAttackTime = js_Boot.__cast(v , Int);
 					break;
+				case "SHOW_CONTROL_HINTS":
+					this.showControlHints = js_Boot.__cast(v , Bool);
+					break;
 				}
 			} catch( _g1 ) {
 				continue;
@@ -42706,9 +42737,9 @@ $hxClasses["save_data.TrainingSettings"] = save_$data_TrainingSettings;
 save_$data_TrainingSettings.__name__ = "save_data.TrainingSettings";
 save_$data_TrainingSettings.__interfaces__ = [save_$data_IClearOnXModeContainer];
 save_$data_TrainingSettings.prototype = {
-	clearOnXMode: null
+	showControlHints: null
+	,clearOnXMode: null
 	,autoClear: null
-	,autoAttack: null
 	,minAttackTime: null
 	,maxAttackTime: null
 	,minAttackChain: null
@@ -42722,6 +42753,10 @@ save_$data_TrainingSettings.prototype = {
 	,exportOverrides: function() {
 		var overrides = new haxe_ds_StringMap();
 		var wereOverrides = false;
+		if(this.showControlHints != true) {
+			overrides.h["SHOW_CONTROL_HINTS"] = this.showControlHints;
+			wereOverrides = true;
+		}
 		if(this.clearOnXMode != "RESTART") {
 			overrides.h["CLEAR_ON_X_MODE"] = this.clearOnXMode;
 			wereOverrides = true;
@@ -43701,7 +43736,7 @@ var game_actions_ActionData_ACTION_DATA = (function($this) {
 	return $r;
 }(this));
 game_all_$clear_AllClearManager.SHORT_STR = "AC!";
-game_boards_TrainingBoard.GAME_CONTROL_DISPLAY = [new ui_ControlDisplay(["TOGGLE_EDIT_MODE"],"Edit Mode"),new ui_ControlDisplay(["PREVIOUS_GROUP"],"Undo"),new ui_ControlDisplay(["NEXT_GROUP"],"Redo / Get Next Group")];
+game_boards_TrainingBoard.GAME_CONTROL_DISPLAY = [new ui_ControlDisplay(["TOGGLE_EDIT_MODE"],"Edit Mode"),new ui_ControlDisplay(["PREVIOUS_GROUP"],"Undo"),new ui_ControlDisplay(["NEXT_GROUP"],"Redo / Get Next Group"),new ui_ControlDisplay(["QUICK_RESTART"],"Quick Restart")];
 game_boards_TrainingBoard.EDIT_CONTROL_DISPLAY = [new ui_ControlDisplay(["TOGGLE_EDIT_MODE"],"Play Mode"),new ui_ControlDisplay(["EDIT_SET"],"Set"),new ui_ControlDisplay(["EDIT_CLEAR"],"Clear"),new ui_ControlDisplay(["PREVIOUS_STEP","NEXT_STEP"],"Cycle Chain Steps"),new ui_ControlDisplay(["PREVIOUS_COLOR","NEXT_COLOR"],"Cycle Gelos / Markers"),new ui_ControlDisplay(["TOGGLE_MARKERS"],"Toggle Gelos / Markers")];
 game_boardstates_EditingBoardState.COLORS = [0,1,2,3,4,6];
 game_boardstates_TrainingInfoBoardState.TITLE_FONT_SIZE = 40;
@@ -44771,6 +44806,7 @@ kha_netsync_SyncBuilder.nextId = 0;
 kha_netsync_SyncBuilder.objects = [];
 main_$menu_ui_MainMenuPage.DISCORD_INVITE = "https://discord.gg/wsWArpAFJK";
 main_$menu_ui_MainMenuPage.RELEASES_URL = "https://github.com/doczi-dominik/gelavolt/releases";
+save_$data_EndlessSettings.SHOW_CONTROL_HINTS_DEFAULT = true;
 save_$data_EndlessSettings.CLEAR_ON_X_MODE_DEFAULT = "NEW";
 save_$data_GraphicsSettings.FULLSCREEN_DEFAULT = true;
 save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
@@ -44946,6 +44982,7 @@ save_$data_Profile.onChangePrimary = [];
 save_$data_SaveManager.PROFILES_FILENAME = "profiles";
 save_$data_SaveManager.GRAPHICS_FIELNAME = "graphics";
 save_$data_SaveManager.profiles = [];
+save_$data_TrainingSettings.SHOW_CONTROL_HINTS_DEFAULT = true;
 save_$data_TrainingSettings.CLEAR_ON_X_MODE_DEFAULT = "RESTART";
 save_$data_TrainingSettings.AUTO_CLEAR_DEFAULT = true;
 save_$data_TrainingSettings.AUTO_ATTACK_DEFAULT = false;
