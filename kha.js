@@ -1455,28 +1455,32 @@ game_actionbuffers_IActionBuffer.__name__ = "game.actionbuffers.IActionBuffer";
 game_actionbuffers_IActionBuffer.__isInterface__ = true;
 game_actionbuffers_IActionBuffer.__interfaces__ = [game_copying_ICopyFrom];
 game_actionbuffers_IActionBuffer.prototype = {
-	latestAction: null
-	,update: null
+	update: null
 	,exportReplayData: null
 	,copyFrom: null
 	,__class__: game_actionbuffers_IActionBuffer
 };
-var game_actionbuffers_LocalActionBufferOptions = function(frameCounter,inputDevice) {
+var game_actionbuffers_LocalActionBufferOptions = function(frameCounter,inputDevice,frameDelay) {
 	this.frameCounter = frameCounter;
 	this.inputDevice = inputDevice;
+	this.frameDelay = frameDelay;
 };
 $hxClasses["game.actionbuffers.LocalActionBufferOptions"] = game_actionbuffers_LocalActionBufferOptions;
 game_actionbuffers_LocalActionBufferOptions.__name__ = "game.actionbuffers.LocalActionBufferOptions";
 game_actionbuffers_LocalActionBufferOptions.prototype = {
 	frameCounter: null
 	,inputDevice: null
+	,frameDelay: null
 	,__class__: game_actionbuffers_LocalActionBufferOptions
 };
 var game_actionbuffers_LocalActionBuffer = function(opts) {
 	this.frameCounter = opts.frameCounter;
 	this.inputDevice = opts.inputDevice;
-	this.actions = new haxe_ds_IntMap();
-	this.latestAction = new game_actionbuffers_ActionSnapshot(false,false,false,false,false,false);
+	this.frameDelay = opts.frameDelay;
+	var _g = new haxe_ds_IntMap();
+	var value = new game_actionbuffers_ActionSnapshot(false,false,false,false,false,false);
+	_g.h[0] = value;
+	this.actions = _g;
 };
 $hxClasses["game.actionbuffers.LocalActionBuffer"] = game_actionbuffers_LocalActionBuffer;
 game_actionbuffers_LocalActionBuffer.__name__ = "game.actionbuffers.LocalActionBuffer";
@@ -1484,17 +1488,26 @@ game_actionbuffers_LocalActionBuffer.__interfaces__ = [game_actionbuffers_IActio
 game_actionbuffers_LocalActionBuffer.prototype = {
 	frameCounter: null
 	,inputDevice: null
+	,frameDelay: null
 	,actions: null
-	,latestAction: null
-	,setLatestAction: function(frame,action) {
-		this.actions.h[frame] = action;
-		this.latestAction = action;
+	,getAction: function(frame) {
+		while(frame-- >= 0) if(this.actions.h.hasOwnProperty(frame)) {
+			return this.actions.h[frame];
+		}
+		return this.actions.h[0];
+	}
+	,addAction: function(frame,action) {
+		this.actions.h[frame + this.frameDelay] = action;
 	}
 	,update: function() {
 		var currentAction = new game_actionbuffers_ActionSnapshot(this.inputDevice.getAction("SHIFT_LEFT"),this.inputDevice.getAction("SHIFT_RIGHT"),this.inputDevice.getAction("ROTATE_LEFT"),this.inputDevice.getAction("ROTATE_RIGHT"),this.inputDevice.getAction("SOFT_DROP"),this.inputDevice.getAction("HARD_DROP"));
-		if(this.latestAction.isNotEqual(currentAction)) {
-			this.setLatestAction(this.frameCounter.value,currentAction);
+		var frame = this.frameCounter.value;
+		var latestAction = this.getAction(frame);
+		if(latestAction.isNotEqual(currentAction)) {
+			this.addAction(this.frameCounter.value,currentAction);
+			latestAction = currentAction;
 		}
+		return latestAction;
 	}
 	,exportReplayData: function() {
 		var data = new haxe_ds_IntMap();
@@ -1518,7 +1531,7 @@ game_actionbuffers_LocalActionBuffer.prototype = {
 	,__class__: game_actionbuffers_LocalActionBuffer
 };
 var game_actionbuffers_NullActionBuffer = function() {
-	this.latestAction = game_actionbuffers_ActionSnapshot.fromBitField(0);
+	this.nullAction = game_actionbuffers_ActionSnapshot.fromBitField(0);
 };
 $hxClasses["game.actionbuffers.NullActionBuffer"] = game_actionbuffers_NullActionBuffer;
 game_actionbuffers_NullActionBuffer.__name__ = "game.actionbuffers.NullActionBuffer";
@@ -1530,11 +1543,12 @@ game_actionbuffers_NullActionBuffer.get_instance = function() {
 	return game_actionbuffers_NullActionBuffer.instance;
 };
 game_actionbuffers_NullActionBuffer.prototype = {
-	latestAction: null
+	nullAction: null
 	,copy: function() {
 		return game_actionbuffers_NullActionBuffer.get_instance();
 	}
 	,update: function() {
+		return this.nullAction;
 	}
 	,exportReplayData: function() {
 		return new haxe_ds_IntMap();
@@ -1544,58 +1558,8 @@ game_actionbuffers_NullActionBuffer.prototype = {
 	}
 	,__class__: game_actionbuffers_NullActionBuffer
 };
-var game_actionbuffers_ReceiveActionBufferOptions = function(session) {
-	this.session = session;
-};
-$hxClasses["game.actionbuffers.ReceiveActionBufferOptions"] = game_actionbuffers_ReceiveActionBufferOptions;
-game_actionbuffers_ReceiveActionBufferOptions.__name__ = "game.actionbuffers.ReceiveActionBufferOptions";
-game_actionbuffers_ReceiveActionBufferOptions.prototype = {
-	session: null
-	,__class__: game_actionbuffers_ReceiveActionBufferOptions
-};
-var game_actionbuffers_ReceiveActionBuffer = function(opts) {
-	this.session = opts.session;
-	this.actions = new haxe_ds_IntMap();
-	this.latestAction = new game_actionbuffers_ActionSnapshot(false,false,false,false,false,false);
-	this.session.onInput = $bind(this,this.onInput);
-};
-$hxClasses["game.actionbuffers.ReceiveActionBuffer"] = game_actionbuffers_ReceiveActionBuffer;
-game_actionbuffers_ReceiveActionBuffer.__name__ = "game.actionbuffers.ReceiveActionBuffer";
-game_actionbuffers_ReceiveActionBuffer.__interfaces__ = [game_actionbuffers_IActionBuffer];
-game_actionbuffers_ReceiveActionBuffer.prototype = {
-	session: null
-	,actions: null
-	,latestAction: null
-	,onInput: function(frame,actions) {
-		var snapshot = game_actionbuffers_ActionSnapshot.fromBitField(actions);
-		this.actions.h[frame] = snapshot;
-		this.latestAction = snapshot;
-	}
-	,update: function() {
-	}
-	,exportReplayData: function() {
-		var data = new haxe_ds_IntMap();
-		var map = this.actions;
-		var _g_map = map;
-		var _g_keys = map.keys();
-		while(_g_keys.hasNext()) {
-			var key = _g_keys.next();
-			var _g1_value = _g_map.get(key);
-			var _g1_key = key;
-			var k = _g1_key;
-			var v = _g1_value;
-			var v1 = v.toBitField();
-			data.h[k] = v1;
-		}
-		return data;
-	}
-	,copyFrom: function(other) {
-		return this;
-	}
-	,__class__: game_actionbuffers_ReceiveActionBuffer
-};
-var game_actionbuffers_ReplayActionBufferOptions = function(replayData,frameCounter,inputDevice) {
-	game_actionbuffers_LocalActionBufferOptions.call(this,frameCounter,inputDevice);
+var game_actionbuffers_ReplayActionBufferOptions = function(replayData,frameCounter,inputDevice,frameDelay) {
+	game_actionbuffers_LocalActionBufferOptions.call(this,frameCounter,inputDevice,frameDelay);
 	this.replayData = replayData;
 };
 $hxClasses["game.actionbuffers.ReplayActionBufferOptions"] = game_actionbuffers_ReplayActionBufferOptions;
@@ -1607,63 +1571,37 @@ game_actionbuffers_ReplayActionBufferOptions.prototype = $extend(game_actionbuff
 });
 var game_actionbuffers_ReplayActionBuffer = function(opts) {
 	game_actionbuffers_LocalActionBuffer.call(this,opts);
-	this.replayData = opts.replayData;
+	var map = opts.replayData;
+	var _g_map = map;
+	var _g_keys = map.keys();
+	while(_g_keys.hasNext()) {
+		var key = _g_keys.next();
+		var _g1_value = _g_map.get(key);
+		var _g1_key = key;
+		var f = _g1_key;
+		var d = _g1_value;
+		var this1 = this.actions;
+		var v = game_actionbuffers_ActionSnapshot.fromBitField(d);
+		this1.h[f] = v;
+	}
 	this.mode = 0;
 };
 $hxClasses["game.actionbuffers.ReplayActionBuffer"] = game_actionbuffers_ReplayActionBuffer;
 game_actionbuffers_ReplayActionBuffer.__name__ = "game.actionbuffers.ReplayActionBuffer";
 game_actionbuffers_ReplayActionBuffer.__super__ = game_actionbuffers_LocalActionBuffer;
 game_actionbuffers_ReplayActionBuffer.prototype = $extend(game_actionbuffers_LocalActionBuffer.prototype,{
-	replayData: null
-	,mode: null
+	mode: null
 	,update: function() {
 		if(this.mode == 0) {
-			var current = this.replayData.h[this.frameCounter.value];
-			if(current == null) {
-				return;
-			}
-			this.latestAction = game_actionbuffers_ActionSnapshot.fromBitField(current);
-			return;
+			return this.getAction(this.frameCounter.value);
 		}
-		game_actionbuffers_LocalActionBuffer.prototype.update.call(this);
+		return game_actionbuffers_LocalActionBuffer.prototype.update.call(this);
 	}
 	,copyFrom: function(other) {
 		game_actionbuffers_LocalActionBuffer.prototype.copyFrom.call(this,other);
 		return this;
 	}
 	,__class__: game_actionbuffers_ReplayActionBuffer
-});
-var game_actionbuffers_SenderActionBufferOptions = function(session,frameCounter,inputDevice) {
-	game_actionbuffers_LocalActionBufferOptions.call(this,frameCounter,inputDevice);
-	this.session = session;
-};
-$hxClasses["game.actionbuffers.SenderActionBufferOptions"] = game_actionbuffers_SenderActionBufferOptions;
-game_actionbuffers_SenderActionBufferOptions.__name__ = "game.actionbuffers.SenderActionBufferOptions";
-game_actionbuffers_SenderActionBufferOptions.__super__ = game_actionbuffers_LocalActionBufferOptions;
-game_actionbuffers_SenderActionBufferOptions.prototype = $extend(game_actionbuffers_LocalActionBufferOptions.prototype,{
-	session: null
-	,__class__: game_actionbuffers_SenderActionBufferOptions
-});
-var game_actionbuffers_SenderActionBuffer = function(opts) {
-	game_actionbuffers_LocalActionBuffer.call(this,opts);
-	this.session = opts.session;
-};
-$hxClasses["game.actionbuffers.SenderActionBuffer"] = game_actionbuffers_SenderActionBuffer;
-game_actionbuffers_SenderActionBuffer.__name__ = "game.actionbuffers.SenderActionBuffer";
-game_actionbuffers_SenderActionBuffer.__super__ = game_actionbuffers_LocalActionBuffer;
-game_actionbuffers_SenderActionBuffer.prototype = $extend(game_actionbuffers_LocalActionBuffer.prototype,{
-	session: null
-	,setLatestAction: function(frame,action) {
-		game_actionbuffers_LocalActionBuffer.prototype.setLatestAction.call(this,frame,action);
-		var _this = this.session;
-		var actions = action.toBitField();
-		_this.ws.sendString("" + 2 + ";" + frame + ";" + actions);
-	}
-	,copyFrom: function(other) {
-		game_actionbuffers_LocalActionBuffer.prototype.copyFrom.call(this,other);
-		return this;
-	}
-	,__class__: game_actionbuffers_SenderActionBuffer
 });
 var game_actions_Action = {};
 game_actions_Action.getValues = function() {
@@ -2097,11 +2035,10 @@ game_boardmanagers_SingleBoardManager.prototype = {
 	}
 	,__class__: game_boardmanagers_SingleBoardManager
 };
-var game_boards_EndlessBoardOptions = function(endlessState,pauseMediator,inputDevice,playActionBuffer,state) {
+var game_boards_EndlessBoardOptions = function(endlessState,pauseMediator,inputDevice,state) {
 	this.endlessState = endlessState;
 	this.pauseMediator = pauseMediator;
 	this.inputDevice = inputDevice;
-	this.playActionBuffer = playActionBuffer;
 	this.state = state;
 };
 $hxClasses["game.boards.EndlessBoardOptions"] = game_boards_EndlessBoardOptions;
@@ -2110,7 +2047,6 @@ game_boards_EndlessBoardOptions.prototype = {
 	endlessState: null
 	,pauseMediator: null
 	,inputDevice: null
-	,playActionBuffer: null
 	,state: null
 	,__class__: game_boards_EndlessBoardOptions
 };
@@ -2121,7 +2057,6 @@ game_boards_IBoard.__isInterface__ = true;
 game_boards_IBoard.__interfaces__ = [game_copying_ICopyFrom];
 game_boards_IBoard.prototype = {
 	inputDevice: null
-	,playActionBuffer: null
 	,update: null
 	,renderScissored: null
 	,renderFloating: null
@@ -2131,7 +2066,6 @@ game_boards_IBoard.prototype = {
 var game_boards_SingleStateBoard = function(opts) {
 	this.pauseMediator = opts.pauseMediator;
 	this.inputDevice = opts.inputDevice;
-	this.playActionBuffer = opts.playActionBuffer;
 	this.state = opts.state;
 };
 $hxClasses["game.boards.SingleStateBoard"] = game_boards_SingleStateBoard;
@@ -2140,13 +2074,11 @@ game_boards_SingleStateBoard.__interfaces__ = [game_boards_IBoard];
 game_boards_SingleStateBoard.prototype = {
 	pauseMediator: null
 	,inputDevice: null
-	,playActionBuffer: null
 	,state: null
 	,update: function() {
 		if(this.inputDevice.getAction("PAUSE")) {
 			this.pauseMediator.pause(this.inputDevice);
 		}
-		this.playActionBuffer.update();
 		this.state.update();
 	}
 	,renderScissored: function(g,g4,alpha) {
@@ -2161,7 +2093,7 @@ game_boards_SingleStateBoard.prototype = {
 	,__class__: game_boards_SingleStateBoard
 };
 var game_boards_EndlessBoard = function(opts) {
-	game_boards_SingleStateBoard.call(this,new game_boards_SingleStateBoardOptions(opts.pauseMediator,opts.inputDevice,opts.playActionBuffer,opts.endlessState));
+	game_boards_SingleStateBoard.call(this,new game_boards_SingleStateBoardOptions(opts.pauseMediator,opts.inputDevice,opts.endlessState));
 	this.endlessState = opts.endlessState;
 };
 $hxClasses["game.boards.EndlessBoard"] = game_boards_EndlessBoard;
@@ -2181,10 +2113,9 @@ game_boards_EndlessBoard.prototype = $extend(game_boards_SingleStateBoard.protot
 	}
 	,__class__: game_boards_EndlessBoard
 });
-var game_boards_SingleStateBoardOptions = function(pauseMediator,inputDevice,playActionBuffer,state) {
+var game_boards_SingleStateBoardOptions = function(pauseMediator,inputDevice,state) {
 	this.pauseMediator = pauseMediator;
 	this.inputDevice = inputDevice;
-	this.playActionBuffer = playActionBuffer;
 	this.state = state;
 };
 $hxClasses["game.boards.SingleStateBoardOptions"] = game_boards_SingleStateBoardOptions;
@@ -2192,14 +2123,12 @@ game_boards_SingleStateBoardOptions.__name__ = "game.boards.SingleStateBoardOpti
 game_boards_SingleStateBoardOptions.prototype = {
 	pauseMediator: null
 	,inputDevice: null
-	,playActionBuffer: null
 	,state: null
 	,__class__: game_boards_SingleStateBoardOptions
 };
-var game_boards_TrainingBoardOptions = function(pauseMediator,inputDevice,playActionBuffer,infoState,controlHintContainer,saveGameStateMediator,playState,editState) {
+var game_boards_TrainingBoardOptions = function(pauseMediator,inputDevice,infoState,controlHintContainer,saveGameStateMediator,playState,editState) {
 	this.pauseMediator = pauseMediator;
 	this.inputDevice = inputDevice;
-	this.playActionBuffer = playActionBuffer;
 	this.infoState = infoState;
 	this.controlHintContainer = controlHintContainer;
 	this.saveGameStateMediator = saveGameStateMediator;
@@ -2211,7 +2140,6 @@ game_boards_TrainingBoardOptions.__name__ = "game.boards.TrainingBoardOptions";
 game_boards_TrainingBoardOptions.prototype = {
 	pauseMediator: null
 	,inputDevice: null
-	,playActionBuffer: null
 	,infoState: null
 	,controlHintContainer: null
 	,saveGameStateMediator: null
@@ -2233,7 +2161,6 @@ ui_ControlHint.prototype = {
 var game_boards_TrainingBoard = function(opts) {
 	this.pauseMediator = opts.pauseMediator;
 	this.inputDevice = opts.inputDevice;
-	this.playActionBuffer = opts.playActionBuffer;
 	this.infoState = opts.infoState;
 	this.controlHintContainer = opts.controlHintContainer;
 	this.saveGameStateMediator = opts.saveGameStateMediator;
@@ -2247,7 +2174,6 @@ game_boards_TrainingBoard.__interfaces__ = [game_boards_IBoard];
 game_boards_TrainingBoard.prototype = {
 	pauseMediator: null
 	,inputDevice: null
-	,playActionBuffer: null
 	,infoState: null
 	,controlHintContainer: null
 	,saveGameStateMediator: null
@@ -2321,7 +2247,6 @@ game_boards_TrainingBoard.prototype = {
 			this.editState.viewNext();
 			this.infoState.onViewChainStep();
 		}
-		this.playActionBuffer.update();
 		this.activeState.update();
 	}
 	,renderScissored: function(g,g4,alpha) {
@@ -2926,7 +2851,7 @@ game_boardstates_StandardBoardState.prototype = {
 		this.borderColorT = 0;
 	}
 	,update: function() {
-		this.currentActions = this.actionBuffer.latestAction;
+		this.currentActions = this.actionBuffer.update();
 		this.geloGroup.update();
 		this.field.update();
 		this.preview.update();
@@ -6204,10 +6129,10 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 	}
 	,buildActionBuffer: function() {
 		if(this.replayData == null) {
-			this.actionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputDevice));
+			this.actionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputDevice,0));
 			return;
 		}
-		this.actionBuffer = new game_actionbuffers_ReplayActionBuffer(new game_actionbuffers_ReplayActionBufferOptions(this.replayData,this.frameCounter,this.inputDevice));
+		this.actionBuffer = new game_actionbuffers_ReplayActionBuffer(new game_actionbuffers_ReplayActionBufferOptions(this.replayData,this.frameCounter,this.inputDevice,0));
 	}
 	,buildGeloGroup: function() {
 		var prefsSettings = save_$data_Profile.primary.prefs;
@@ -6227,7 +6152,7 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 		this.boardState = new game_boardstates_EndlessBoardState(new game_boardstates_EndlessBoardStateOptions(save_$data_Profile.primary.endlessSettings,this.randomizer,this.marginManager,_g,_g1,_g2,game_geometries_BoardGeometries.CENTERED,_g3,_g4,this.queue,new game_previews_VerticalPreview(this.queue),this.allClearManager,this.scoreManager,this.actionBuffer,this.chainCounter,_g5,this.chainSim,_g6));
 	}
 	,buildBoard: function() {
-		this.board = new game_boards_EndlessBoard(new game_boards_EndlessBoardOptions(this.boardState,this.pauseMediator,this.inputDevice,this.actionBuffer,this.boardState));
+		this.board = new game_boards_EndlessBoard(new game_boards_EndlessBoardOptions(this.boardState,this.pauseMediator,this.inputDevice,this.boardState));
 	}
 	,buildPauseMenu: function() {
 		if(this.replayData == null) {
@@ -6278,7 +6203,7 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 		this.chainCounter = new game_ChainCounter();
 		this.field = new game_fields_Field(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,5,1));
 		this.queue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
-		this.actionBuffer = this.replayData == null ? new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputDevice)) : new game_actionbuffers_ReplayActionBuffer(new game_actionbuffers_ReplayActionBufferOptions(this.replayData,this.frameCounter,this.inputDevice));
+		this.actionBuffer = this.replayData == null ? new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputDevice,0)) : new game_actionbuffers_ReplayActionBuffer(new game_actionbuffers_ReplayActionBufferOptions(this.replayData,this.frameCounter,this.inputDevice,0));
 		var prefsSettings = save_$data_Profile.primary.prefs;
 		this.geloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(this.rule,prefsSettings,this.scoreManager,this.field,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
 		this.allClearManager = new game_AllClearManager(new game_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.CENTERED,this.particleManager,this.borderColorMediator));
@@ -6290,7 +6215,7 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 		var _g5 = this.field;
 		var _g6 = game_garbage_NullGarbageManager.get_instance();
 		this.boardState = new game_boardstates_EndlessBoardState(new game_boardstates_EndlessBoardStateOptions(save_$data_Profile.primary.endlessSettings,this.randomizer,this.marginManager,_g,_g1,_g2,game_geometries_BoardGeometries.CENTERED,_g3,_g4,this.queue,new game_previews_VerticalPreview(this.queue),this.allClearManager,this.scoreManager,this.actionBuffer,this.chainCounter,_g5,this.chainSim,_g6));
-		this.board = new game_boards_EndlessBoard(new game_boards_EndlessBoardOptions(this.boardState,this.pauseMediator,this.inputDevice,this.actionBuffer,this.boardState));
+		this.board = new game_boards_EndlessBoard(new game_boards_EndlessBoardOptions(this.boardState,this.pauseMediator,this.inputDevice,this.boardState));
 		this.pauseMenu = this.replayData == null ? new game_ui_EndlessPauseMenu(new game_ui_EndlessPauseMenuOptions(save_$data_Profile.primary.endlessSettings,this.controlHintContainer,this.actionBuffer,save_$data_Profile.primary.prefs,this.pauseMediator)) : new game_ui_ReplayPauseMenu(new game_ui_ReplayPauseMenuOptions(js_Boot.__cast(this.actionBuffer , game_actionbuffers_ReplayActionBuffer),save_$data_Profile.primary.prefs,this.pauseMediator));
 		var _g = this.marginManager;
 		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(game_geometries_BoardGeometries.CENTERED,this.board)),_g,this.frameCounter));
@@ -6428,7 +6353,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerInputDevice = input_AnyInputDevice.instance;
 	}
 	,buildPlayerActionBuffer: function() {
-		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputDevice));
+		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputDevice,0));
 	}
 	,buildPlayerGeloGroupChainSim: function() {
 		this.playerGeloGroupChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_NullGarbageTray.instance,game_garbage_trays_NullGarbageTray.instance));
@@ -6470,10 +6395,10 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputDevice,this.playerChainSim,this.playerChainCounter,save_$data_Profile.primary.prefs,this.editField));
 	}
 	,buildPlayerBoard: function() {
-		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputDevice,this.playerActionBuffer,this.infoState,this.controlHintContainer,this.saveGameStateMediator,this.playState,this.editState));
+		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputDevice,this.infoState,this.controlHintContainer,this.saveGameStateMediator,this.playState,this.editState));
 	}
 	,buildInfoBoard: function() {
-		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputDevice,game_actionbuffers_NullActionBuffer.get_instance(),this.infoState));
+		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputDevice,this.infoState));
 	}
 	,buildPauseMenu: function() {
 		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.rule,this.randomizer,this.playerQueue,this.playState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,this.controlHintContainer,this.autoAttackManager,save_$data_Profile.primary.prefs,this.pauseMediator));
@@ -6504,7 +6429,6 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerQueue.copyFrom(other.playerQueue);
 		this.playerPreview.copyFrom(other.playerPreview);
 		this.playerInputDevice = other.playerInputDevice;
-		this.playerActionBuffer.copyFrom(other.playerActionBuffer);
 		this.playerGeloGroupChainSim.copyFrom(other.playerGeloGroupChainSim);
 		this.playerGeloGroup.copyFrom(other.playerGeloGroup);
 		this.playerAllClearManager.copyFrom(other.playerAllClearManager);
@@ -6546,7 +6470,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerQueue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
 		this.playerPreview = new game_previews_VerticalPreview(this.playerQueue);
 		this.playerInputDevice = input_AnyInputDevice.instance;
-		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputDevice));
+		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputDevice,0));
 		this.playerGeloGroupChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_NullGarbageTray.instance,game_garbage_trays_NullGarbageTray.instance));
 		this.playerGeloGroup = new game_gelogroups_TrainingGeloGroup(new game_gelogroups_TrainingGeloGroupOptions(save_$data_Profile.primary.trainingSettings,this.rule,save_$data_Profile.primary.prefs,this.playerScoreManager,this.playerField,this.playerGeloGroupChainSim));
 		this.playerAllClearManager = new game_AllClearManager(new game_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
@@ -6560,8 +6484,8 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playState = new game_boardstates_TrainingBoardState(new game_boardstates_TrainingBoardStateOptions(save_$data_Profile.primary.trainingSettings,this.infoState,this.autoAttackManager,save_$data_Profile.primary.trainingSettings,this.randomizer,this.marginManager,this.rule,save_$data_Profile.primary.prefs,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerGeloGroup,this.playerQueue,this.playerPreview,this.playerAllClearManager,this.playerScoreManager,this.playerActionBuffer,this.playerChainCounter,this.playerField,this.playerChainSim,this.playerGarbageManager));
 		this.editField = new game_fields_Field(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,5,1));
 		this.editState = new game_boardstates_EditingBoardState(new game_boardstates_EditingBoardStateOptions(game_geometries_BoardGeometries.LEFT,this.playerInputDevice,this.playerChainSim,this.playerChainCounter,save_$data_Profile.primary.prefs,this.editField));
-		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputDevice,this.playerActionBuffer,this.infoState,this.controlHintContainer,this.saveGameStateMediator,this.playState,this.editState));
-		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputDevice,game_actionbuffers_NullActionBuffer.get_instance(),this.infoState));
+		this.playerBoard = new game_boards_TrainingBoard(new game_boards_TrainingBoardOptions(this.pauseMediator,this.playerInputDevice,this.infoState,this.controlHintContainer,this.saveGameStateMediator,this.playState,this.editState));
+		this.infoBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.playerInputDevice,this.infoState));
 		this.pauseMenu = new game_ui_TrainingPauseMenu(new game_ui_TrainingPauseMenuOptions(this.rule,this.randomizer,this.playerQueue,this.playState,this.playerBoard,this.playerAllClearManager,this.playerChainSim,this.marginManager,save_$data_Profile.primary.trainingSettings,this.playerGarbageManager,this.infoGarbageManager,this.controlHintContainer,this.autoAttackManager,save_$data_Profile.primary.prefs,this.pauseMediator));
 		var _g = this.marginManager;
 		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(game_geometries_BoardGeometries.LEFT,this.playerBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(game_geometries_BoardGeometries.INFO,this.infoBoard)))),_g,this.frameCounter));
@@ -6570,269 +6494,6 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.infoTargetMediator.garbageManager = this.playerGarbageManager;
 	}
 	,__class__: game_gamestatebuilders_TrainingGameStateBuilder
-};
-var game_gamestatebuilders_VersusGameStateBuilderOptions = function(__uid,rngSeed,rule,frameCounter,leftActionBuffer,rightActionBuffer) {
-	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
-	if(__uid != null) {
-		this.__uid = __uid;
-	}
-	this.rngSeed = rngSeed;
-	this.rule = rule;
-	this.frameCounter = frameCounter;
-	this.leftActionBuffer = leftActionBuffer;
-	this.rightActionBuffer = rightActionBuffer;
-};
-$hxClasses["game.gamestatebuilders.VersusGameStateBuilderOptions"] = game_gamestatebuilders_VersusGameStateBuilderOptions;
-game_gamestatebuilders_VersusGameStateBuilderOptions.__name__ = "game.gamestatebuilders.VersusGameStateBuilderOptions";
-game_gamestatebuilders_VersusGameStateBuilderOptions.__interfaces__ = [game_gamestatebuilders_IGameStateBuilderOptions];
-game_gamestatebuilders_VersusGameStateBuilderOptions.doSerialize = function(__ctx,__this) {
-};
-game_gamestatebuilders_VersusGameStateBuilderOptions.doUnserialize = function(__ctx,__this) {
-};
-game_gamestatebuilders_VersusGameStateBuilderOptions.prototype = {
-	__uid: null
-	,getCLID: function() {
-		return game_gamestatebuilders_VersusGameStateBuilderOptions.__clid;
-	}
-	,serialize: function(__ctx) {
-		game_gamestatebuilders_VersusGameStateBuilderOptions.doSerialize(__ctx,this);
-	}
-	,getSerializeSchema: function() {
-		var schema = new hxbit_Schema();
-		schema.isFinal = hxbit_Serializer.isClassFinal(game_gamestatebuilders_VersusGameStateBuilderOptions.__clid);
-		return schema;
-	}
-	,unserializeInit: function() {
-	}
-	,unserialize: function(__ctx) {
-		game_gamestatebuilders_VersusGameStateBuilderOptions.doUnserialize(__ctx,this);
-	}
-	,rngSeed: null
-	,rule: null
-	,frameCounter: null
-	,leftActionBuffer: null
-	,rightActionBuffer: null
-	,getType: function() {
-		return 2;
-	}
-	,__class__: game_gamestatebuilders_VersusGameStateBuilderOptions
-};
-var game_gamestatebuilders_VersusGameStateBuilder = function(opts) {
-	this.rngSeed = opts.rngSeed;
-	this.rule = opts.rule;
-	this.frameCounter = opts.frameCounter;
-	this.leftActionBuffer = opts.leftActionBuffer;
-	this.rightActionBuffer = opts.rightActionBuffer;
-};
-$hxClasses["game.gamestatebuilders.VersusGameStateBuilder"] = game_gamestatebuilders_VersusGameStateBuilder;
-game_gamestatebuilders_VersusGameStateBuilder.__name__ = "game.gamestatebuilders.VersusGameStateBuilder";
-game_gamestatebuilders_VersusGameStateBuilder.__interfaces__ = [game_gamestatebuilders_IGameStateBuilder];
-game_gamestatebuilders_VersusGameStateBuilder.prototype = {
-	rngSeed: null
-	,rule: null
-	,frameCounter: null
-	,leftActionBuffer: null
-	,rightActionBuffer: null
-	,rng: null
-	,randomizer: null
-	,particleManager: null
-	,marginManager: null
-	,leftBorderColorMediator: null
-	,leftTargetMediator: null
-	,rightBorderColorMediator: null
-	,rightTargetMediator: null
-	,leftGarbageManager: null
-	,leftScoreManager: null
-	,leftChainSim: null
-	,leftChainCounter: null
-	,leftField: null
-	,leftQueue: null
-	,leftInputDevice: null
-	,leftGeloGroup: null
-	,leftAllClearManager: null
-	,rightGarbageManager: null
-	,rightScoreManager: null
-	,rightChainSim: null
-	,rightChainCounter: null
-	,rightField: null
-	,rightQueue: null
-	,rightInputDevice: null
-	,rightGeloGroup: null
-	,rightAllClearManager: null
-	,leftState: null
-	,rightState: null
-	,leftBoard: null
-	,rightBoard: null
-	,pauseMediator: null
-	,controlHintContainer: null
-	,saveGameStateMediator: null
-	,gameState: null
-	,pauseMenu: null
-	,copy: function() {
-		return new game_gamestatebuilders_VersusGameStateBuilder(new game_gamestatebuilders_VersusGameStateBuilderOptions(null,this.rngSeed,this.rule,new game_mediators_FrameCounter().copyFrom(this.frameCounter),null,null));
-	}
-	,buildRNG: function() {
-		this.rng = new game_copying_CopyableRNG(this.rngSeed);
-	}
-	,buildRandomizer: function() {
-		this.randomizer = new game_randomizers_Randomizer(new game_randomizers_RandomizerOptions(this.rng,save_$data_Profile.primary.prefs));
-		this.randomizer.currentPool = 4;
-		this.randomizer.generatePools(game_randomizers_RandomizerType.TSU);
-	}
-	,buildParticleManager: function() {
-		this.particleManager = new game_particles_ParticleManager();
-	}
-	,buildMarginManager: function() {
-		this.marginManager = new game_rules_MarginTimeManager(this.rule);
-	}
-	,buildLeftBorderColorMediator: function() {
-		this.leftBorderColorMediator = new game_mediators_BorderColorMediator();
-	}
-	,buildLeftTargetMediator: function() {
-		this.leftTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT);
-	}
-	,buildRightBorderColorMediator: function() {
-		this.rightBorderColorMediator = new game_mediators_BorderColorMediator();
-	}
-	,buildRightTargetMediator: function() {
-		this.leftTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT);
-	}
-	,buildLeftGarbageManager: function() {
-		this.leftGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.leftTargetMediator));
-	}
-	,buildLeftScoreManager: function() {
-		this.leftScoreManager = new game_ScoreManager(new game_ScoreManagerOptions(this.rule,game_geometries_BoardOrientation.LEFT));
-	}
-	,buildLeftChainSim: function() {
-		this.leftChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs)));
-	}
-	,buildLeftChainCounter: function() {
-		this.leftChainCounter = new game_ChainCounter();
-	}
-	,buildLeftField: function() {
-		this.leftField = new game_fields_Field(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,5,1));
-	}
-	,buildLeftQueue: function() {
-		this.leftQueue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
-	}
-	,buildLeftInputDevice: function() {
-		this.leftInputDevice = input_AnyInputDevice.instance;
-	}
-	,buildLeftGeloGroup: function() {
-		var prefsSettings = save_$data_Profile.primary.prefs;
-		this.leftGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(this.rule,prefsSettings,this.leftScoreManager,this.leftField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
-	}
-	,buildLeftAllClearManager: function() {
-		this.leftAllClearManager = new game_AllClearManager(new game_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.leftBorderColorMediator));
-	}
-	,buildRightGarbageManager: function() {
-		this.rightGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.rightTargetMediator));
-	}
-	,buildRightScoreManager: function() {
-		this.rightScoreManager = new game_ScoreManager(new game_ScoreManagerOptions(this.rule,game_geometries_BoardOrientation.LEFT));
-	}
-	,buildRightChainSim: function() {
-		this.rightChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs)));
-	}
-	,buildRightChainCounter: function() {
-		this.rightChainCounter = new game_ChainCounter();
-	}
-	,buildRightField: function() {
-		this.rightField = new game_fields_Field(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,5,1));
-	}
-	,buildRightQueue: function() {
-		this.rightQueue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
-	}
-	,buildRightInputDevice: function() {
-		this.rightInputDevice = input_NullInputDevice.instance;
-	}
-	,buildRightGeloGroup: function() {
-		var prefsSettings = save_$data_Profile.primary.prefs;
-		this.rightGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(this.rule,prefsSettings,this.rightScoreManager,this.rightField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
-	}
-	,buildRightAllClearManager: function() {
-		this.rightAllClearManager = new game_AllClearManager(new game_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.RIGHT,this.particleManager,this.rightBorderColorMediator));
-	}
-	,buildLeftBoardState: function() {
-		var _g = this.leftField;
-		var _g1 = this.leftGarbageManager;
-		this.leftState = new game_boardstates_StandardBoardState(new game_boardstates_StandardBoardStateOptions(this.rule,save_$data_Profile.primary.prefs,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.leftGeloGroup,this.leftQueue,new game_previews_VerticalPreview(this.leftQueue),this.leftAllClearManager,this.leftScoreManager,this.leftActionBuffer,this.leftChainCounter,_g,this.leftChainSim,_g1));
-	}
-	,buildRightBoardState: function() {
-		var _g = this.rightField;
-		var _g1 = this.rightGarbageManager;
-		this.rightState = new game_boardstates_StandardBoardState(new game_boardstates_StandardBoardStateOptions(this.rule,save_$data_Profile.primary.prefs,this.rng,game_geometries_BoardGeometries.RIGHT,this.particleManager,this.rightGeloGroup,this.rightQueue,new game_previews_VerticalPreview(this.rightQueue),this.rightAllClearManager,this.rightScoreManager,this.rightActionBuffer,this.rightChainCounter,_g,this.rightChainSim,_g1));
-	}
-	,buildLeftBoard: function() {
-		this.leftBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.leftInputDevice,this.leftActionBuffer,this.leftState));
-	}
-	,buildRightBoard: function() {
-		this.rightBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.rightInputDevice,this.rightActionBuffer,this.rightState));
-	}
-	,buildPauseMenu: function() {
-		this.pauseMenu = new game_ui_PauseMenu(new game_ui_PauseMenuOptions(save_$data_Profile.primary.prefs,this.pauseMediator));
-	}
-	,buildGameState: function() {
-		var _g = this.marginManager;
-		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(game_geometries_BoardGeometries.LEFT,this.leftBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(game_geometries_BoardGeometries.RIGHT,this.rightBoard)))),_g,this.frameCounter));
-	}
-	,wireMediators: function() {
-		this.leftBorderColorMediator.changeColor = ($_=this.leftState,$bind($_,$_.changeBorderColor));
-		this.leftTargetMediator.garbageManager = this.rightGarbageManager;
-		this.rightBorderColorMediator.changeColor = ($_=this.rightState,$bind($_,$_.changeBorderColor));
-		this.rightTargetMediator.garbageManager = this.leftGarbageManager;
-	}
-	,copyFrom: function(other) {
-		return this;
-	}
-	,build: function() {
-		this.rng = new game_copying_CopyableRNG(this.rngSeed);
-		this.randomizer = new game_randomizers_Randomizer(new game_randomizers_RandomizerOptions(this.rng,save_$data_Profile.primary.prefs));
-		this.randomizer.currentPool = 4;
-		this.randomizer.generatePools(game_randomizers_RandomizerType.TSU);
-		this.particleManager = new game_particles_ParticleManager();
-		this.marginManager = new game_rules_MarginTimeManager(this.rule);
-		this.leftBorderColorMediator = new game_mediators_BorderColorMediator();
-		this.leftTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.RIGHT);
-		this.rightBorderColorMediator = new game_mediators_BorderColorMediator();
-		this.leftTargetMediator = new game_mediators_GarbageTargetMediator(game_geometries_BoardGeometries.LEFT);
-		this.leftGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.LEFT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.leftTargetMediator));
-		this.leftScoreManager = new game_ScoreManager(new game_ScoreManagerOptions(this.rule,game_geometries_BoardOrientation.LEFT));
-		this.leftChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs)));
-		this.leftChainCounter = new game_ChainCounter();
-		this.leftField = new game_fields_Field(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,5,1));
-		this.leftQueue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
-		this.leftInputDevice = input_AnyInputDevice.instance;
-		var prefsSettings = save_$data_Profile.primary.prefs;
-		this.leftGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(this.rule,prefsSettings,this.leftScoreManager,this.leftField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
-		this.leftAllClearManager = new game_AllClearManager(new game_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.leftBorderColorMediator));
-		this.rightGarbageManager = new game_garbage_GarbageManager(new game_garbage_GarbageManagerOptions(this.rule,this.rng,save_$data_Profile.primary.prefs,this.particleManager,game_geometries_BoardGeometries.RIGHT,game_garbage_trays_CenterGarbageTray.create(save_$data_Profile.primary.prefs),this.rightTargetMediator));
-		this.rightScoreManager = new game_ScoreManager(new game_ScoreManagerOptions(this.rule,game_geometries_BoardOrientation.LEFT));
-		this.rightChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,new game_simulation_LinkInfoBuilder(new game_simulation_LinkInfoBuilderOptions(this.rule,this.marginManager)),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs),game_garbage_trays_GarbageTray.create(save_$data_Profile.primary.prefs)));
-		this.rightChainCounter = new game_ChainCounter();
-		this.rightField = new game_fields_Field(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,5,1));
-		this.rightQueue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
-		this.rightInputDevice = input_NullInputDevice.instance;
-		var prefsSettings = save_$data_Profile.primary.prefs;
-		this.rightGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(this.rule,prefsSettings,this.rightScoreManager,this.rightField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.rule,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
-		this.rightAllClearManager = new game_AllClearManager(new game_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.RIGHT,this.particleManager,this.rightBorderColorMediator));
-		var _g = this.leftField;
-		var _g1 = this.leftGarbageManager;
-		this.leftState = new game_boardstates_StandardBoardState(new game_boardstates_StandardBoardStateOptions(this.rule,save_$data_Profile.primary.prefs,this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.leftGeloGroup,this.leftQueue,new game_previews_VerticalPreview(this.leftQueue),this.leftAllClearManager,this.leftScoreManager,this.leftActionBuffer,this.leftChainCounter,_g,this.leftChainSim,_g1));
-		var _g = this.rightField;
-		var _g1 = this.rightGarbageManager;
-		this.rightState = new game_boardstates_StandardBoardState(new game_boardstates_StandardBoardStateOptions(this.rule,save_$data_Profile.primary.prefs,this.rng,game_geometries_BoardGeometries.RIGHT,this.particleManager,this.rightGeloGroup,this.rightQueue,new game_previews_VerticalPreview(this.rightQueue),this.rightAllClearManager,this.rightScoreManager,this.rightActionBuffer,this.rightChainCounter,_g,this.rightChainSim,_g1));
-		this.leftBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.leftInputDevice,this.leftActionBuffer,this.leftState));
-		this.rightBoard = new game_boards_SingleStateBoard(new game_boards_SingleStateBoardOptions(this.pauseMediator,this.rightInputDevice,this.rightActionBuffer,this.rightState));
-		this.pauseMenu = new game_ui_PauseMenu(new game_ui_PauseMenuOptions(save_$data_Profile.primary.prefs,this.pauseMediator));
-		var _g = this.marginManager;
-		this.gameState = new game_states_GameState(new game_states_GameStateOptions(this.particleManager,new game_boardmanagers_DualBoardManager(new game_boardmanagers_DualBoardManagerOptions(new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(game_geometries_BoardGeometries.LEFT,this.leftBoard)),new game_boardmanagers_SingleBoardManager(new game_boardmanagers_SingleBoardManagerOptions(game_geometries_BoardGeometries.RIGHT,this.rightBoard)))),_g,this.frameCounter));
-		this.leftBorderColorMediator.changeColor = ($_=this.leftState,$bind($_,$_.changeBorderColor));
-		this.leftTargetMediator.garbageManager = this.rightGarbageManager;
-		this.rightBorderColorMediator.changeColor = ($_=this.rightState,$bind($_,$_.changeBorderColor));
-		this.rightTargetMediator.garbageManager = this.leftGarbageManager;
-	}
-	,__class__: game_gamestatebuilders_VersusGameStateBuilder
 };
 var game_garbage_GarbageIcon = $hxEnums["game.garbage.GarbageIcon"] = { __ename__:"game.garbage.GarbageIcon",__constructs__:null
 	,SMALL: {_hx_name:"SMALL",_hx_index:0,__enum__:"game.garbage.GarbageIcon",toString:$estr}
@@ -8417,206 +8078,6 @@ game_mediators_SaveGameStateMediator.prototype = {
 	loadState: null
 	,saveState: null
 	,__class__: game_mediators_SaveGameStateMediator
-};
-var game_net_NetplayOptions = function(rngSeed,rule,builderType,isOnLeftSide) {
-	this.rngSeed = rngSeed;
-	this.rule = rule;
-	this.builderType = builderType;
-	this.isOnLeftSide = isOnLeftSide;
-};
-$hxClasses["game.net.NetplayOptions"] = game_net_NetplayOptions;
-game_net_NetplayOptions.__name__ = "game.net.NetplayOptions";
-game_net_NetplayOptions.prototype = {
-	rngSeed: null
-	,rule: null
-	,builderType: null
-	,isOnLeftSide: null
-	,__class__: game_net_NetplayOptions
-};
-var game_net_SessionManagerOptions = function(serverUrl,roomCode,frameCounter) {
-	this.serverUrl = serverUrl;
-	this.roomCode = roomCode;
-	this.frameCounter = frameCounter;
-};
-$hxClasses["game.net.SessionManagerOptions"] = game_net_SessionManagerOptions;
-game_net_SessionManagerOptions.__name__ = "game.net.SessionManagerOptions";
-game_net_SessionManagerOptions.prototype = {
-	serverUrl: null
-	,roomCode: null
-	,frameCounter: null
-	,__class__: game_net_SessionManagerOptions
-};
-var game_net_SessionManager = function(opts) {
-	this.serverUrl = opts.serverUrl;
-	this.roomCode = opts.roomCode;
-	this.frameCounter = opts.frameCounter;
-	this.netplayOptions = new game_net_NetplayOptions(24,new game_rules_Rule(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null),2,true);
-	this.initConnectingState();
-};
-$hxClasses["game.net.SessionManager"] = game_net_SessionManager;
-game_net_SessionManager.__name__ = "game.net.SessionManager";
-game_net_SessionManager.prototype = {
-	serverUrl: null
-	,roomCode: null
-	,frameCounter: null
-	,ws: null
-	,syncTimeTaskID: null
-	,lastSyncRequestTimestamp: null
-	,roundTripCounter: null
-	,averageLocalAdvantage: null
-	,localAdvantageCounter: null
-	,averageRemoteAdvantage: null
-	,remoteAdvantageCounter: null
-	,successfulSleepChecks: null
-	,netplayOptions: null
-	,sleepFrames: null
-	,onInput: null
-	,onBegin: null
-	,averageRTT: null
-	,state: null
-	,beginFrame: null
-	,advantageSign: function(x) {
-		if(x < 0) {
-			return -1;
-		} else {
-			return 1;
-		}
-	}
-	,onClose: function(e) {
-		haxe_Log.trace("WS Closed: " + Std.string(e),{ fileName : "game/net/SessionManager.hx", lineNumber : 64, className : "game.net.SessionManager", methodName : "onClose"});
-	}
-	,onServerMessage: function(msg) {
-		if(msg.b[0] == 1) {
-			this.initSyncingState();
-		}
-	}
-	,onMessage: function(msg) {
-		var parts = msg.split(";");
-		var type = Std.parseInt(parts[0]);
-		switch(type) {
-		case 0:
-			this.onSyncRequest(parts);
-			break;
-		case 1:
-			this.onSyncResponse(parts);
-			break;
-		case 2:
-			this.onInputPacket(parts);
-			break;
-		case 3:
-			this.onBeginRequest(parts);
-			break;
-		case 4:
-			this.onBeginResponse(parts);
-			break;
-		}
-	}
-	,onError: function(msg) {
-		haxe_Log.trace("WS Error: " + msg,{ fileName : "game/net/SessionManager.hx", lineNumber : 94, className : "game.net.SessionManager", methodName : "onError"});
-	}
-	,initConnectingState: function() {
-		this.ws = haxe_net_WebSocket.create("ws://" + this.serverUrl + "/" + this.roomCode);
-		this.ws.onopen = $bind(this,this.initWaitingState);
-		this.ws.onclose = $bind(this,this.onClose);
-		this.ws.onmessageBytes = $bind(this,this.onServerMessage);
-		this.ws.onmessageString = $bind(this,this.onMessage);
-		this.ws.onerror = $bind(this,this.onError);
-		this.state = 0;
-	}
-	,initWaitingState: function() {
-		this.state = 1;
-	}
-	,initSyncingState: function() {
-		this.roundTripCounter = 0;
-		this.localAdvantageCounter = 0;
-		this.remoteAdvantageCounter = 0;
-		this.setSyncInterval(100);
-		this.state = 2;
-	}
-	,sendSyncRequest: function() {
-		var prediction = null;
-		if(this.averageRTT != null) {
-			prediction = this.frameCounter.value + (this.averageRTT * 60 / 1000 | 0);
-		}
-		this.lastSyncRequestTimestamp = kha_Scheduler.realTime();
-		this.ws.sendString("" + 0 + ";" + prediction);
-	}
-	,onSyncRequest: function(parts) {
-		var prediction = Std.parseInt(parts[1]);
-		var adv = null;
-		if(prediction != null) {
-			adv = this.frameCounter.value - prediction;
-			this.averageLocalAdvantage = Math.round(0.4 * adv + 0.6 * this.averageLocalAdvantage);
-		}
-		this.ws.sendString("" + 1 + ";" + adv);
-	}
-	,onSyncResponse: function(parts) {
-		var d = kha_Scheduler.realTime() - this.lastSyncRequestTimestamp;
-		var rtt = d * 1000 | 0;
-		this.averageRTT = Math.round(0.4 * rtt + 0.6 * this.averageRTT);
-		var adv = Std.parseInt(parts[1]);
-		if(adv != null) {
-			this.averageRemoteAdvantage = Math.round(0.4 * adv + 0.6 * this.averageRemoteAdvantage);
-			haxe_Log.trace("L: " + this.averageLocalAdvantage + " -- R: " + this.averageRemoteAdvantage,{ fileName : "game/net/SessionManager.hx", lineNumber : 164, className : "game.net.SessionManager", methodName : "onSyncResponse"});
-			if(this.sleepFrames == 0 && ++this.remoteAdvantageCounter % 5 == 0) {
-				var diff = this.averageLocalAdvantage - this.averageRemoteAdvantage;
-				if(Math.abs(diff) < 3 && ++this.successfulSleepChecks > 10) {
-					this.initBeginningState();
-					return;
-				}
-				if(this.averageLocalAdvantage < this.averageRemoteAdvantage) {
-					this.sleepFrames = 0;
-					return;
-				}
-				var s = Math.min(diff / 2,9) | 0;
-				haxe_Log.trace("S: " + s,{ fileName : "game/net/SessionManager.hx", lineNumber : 181, className : "game.net.SessionManager", methodName : "onSyncResponse"});
-				if(s < 2) {
-					this.sleepFrames = 0;
-					return;
-				}
-				this.sleepFrames = s;
-				this.successfulSleepChecks = 0;
-			}
-		}
-	}
-	,initBeginningState: function() {
-		this.ws.sendString("" + 3);
-		this.state = 3;
-	}
-	,onBeginRequest: function(parts) {
-		this.ws.sendString("" + 4 + ";" + this.beginFrame);
-	}
-	,onBeginResponse: function(parts) {
-		this.beginFrame = Std.parseInt(parts[1]);
-		if(this.beginFrame == null) {
-			this.beginFrame = this.frameCounter.value + (this.averageRTT * 10 | 0);
-		}
-	}
-	,onInputPacket: function(parts) {
-		var frame = Std.parseInt(parts[1]);
-		var actions = Std.parseInt(parts[2]);
-		this.onInput(frame,actions);
-	}
-	,setSyncInterval: function(interval) {
-		kha_Scheduler.removeTimeTask(this.syncTimeTaskID);
-		this.syncTimeTaskID = kha_Scheduler.addTimeTask($bind(this,this.sendSyncRequest),0,interval / 1000);
-	}
-	,getSleepFrames: function() {
-		var v = this.sleepFrames;
-		this.sleepFrames = 0;
-		return v;
-	}
-	,sendInput: function(frame,actions) {
-		this.ws.sendString("" + 2 + ";" + frame + ";" + actions);
-	}
-	,waitForRunning: function() {
-		if(this.state == 3 && this.frameCounter.value == this.beginFrame) {
-			this.setSyncInterval(1000);
-			this.onBegin(this.netplayOptions);
-			this.state = 4;
-		}
-	}
-	,__class__: game_net_SessionManager
 };
 var game_particles_GarbageBulletParticleOptions = function(begin,control,target,beginScale,targetScale,duration,color,onFinish) {
 	this.begin = begin;
@@ -12502,44 +11963,6 @@ haxe_Serializer.prototype = {
 	}
 	,__class__: haxe_Serializer
 };
-var haxe_Timer = function(time_ms) {
-	var me = this;
-	this.id = kha_Scheduler.addTimeTask(function() {
-		me.run();
-	},time_ms / 1000,time_ms / 1000);
-};
-$hxClasses["haxe.Timer"] = haxe_Timer;
-haxe_Timer.__name__ = "haxe.Timer";
-haxe_Timer.delay = function(f,time_ms) {
-	var t = new haxe_Timer(time_ms);
-	t.run = function() {
-		t.stop();
-		f();
-	};
-	return t;
-};
-haxe_Timer.measure = function(f,pos) {
-	var t0 = kha_Scheduler.realTime();
-	var r = f();
-	haxe_Log.trace(kha_Scheduler.realTime() - t0 + "s",pos);
-	return r;
-};
-haxe_Timer.stamp = function() {
-	return kha_Scheduler.realTime();
-};
-haxe_Timer.prototype = {
-	id: null
-	,stop: function() {
-		if(this.id == null) {
-			return;
-		}
-		kha_Scheduler.removeTimeTask(this.id);
-		this.id = null;
-	}
-	,run: function() {
-	}
-	,__class__: haxe_Timer
-};
 var haxe__$Unserializer_DefaultResolver = function() {
 };
 $hxClasses["haxe._Unserializer.DefaultResolver"] = haxe__$Unserializer_DefaultResolver;
@@ -14166,117 +13589,6 @@ haxe_iterators_MapKeyValueIterator.prototype = {
 	}
 	,__class__: haxe_iterators_MapKeyValueIterator
 };
-var haxe_net_ReadyState = $hxEnums["haxe.net.ReadyState"] = { __ename__:"haxe.net.ReadyState",__constructs__:null
-	,Connecting: {_hx_name:"Connecting",_hx_index:0,__enum__:"haxe.net.ReadyState",toString:$estr}
-	,Open: {_hx_name:"Open",_hx_index:1,__enum__:"haxe.net.ReadyState",toString:$estr}
-	,Closing: {_hx_name:"Closing",_hx_index:2,__enum__:"haxe.net.ReadyState",toString:$estr}
-	,Closed: {_hx_name:"Closed",_hx_index:3,__enum__:"haxe.net.ReadyState",toString:$estr}
-};
-haxe_net_ReadyState.__constructs__ = [haxe_net_ReadyState.Connecting,haxe_net_ReadyState.Open,haxe_net_ReadyState.Closing,haxe_net_ReadyState.Closed];
-var haxe_net_WebSocket = function() {
-};
-$hxClasses["haxe.net.WebSocket"] = haxe_net_WebSocket;
-haxe_net_WebSocket.__name__ = "haxe.net.WebSocket";
-haxe_net_WebSocket.create = function(url,protocols,origin,debug) {
-	if(debug == null) {
-		debug = false;
-	}
-	return new haxe_net_impl_WebSocketJs(url,protocols);
-};
-haxe_net_WebSocket.defer = function(callback) {
-	haxe_Timer.delay(callback,0);
-};
-haxe_net_WebSocket.prototype = {
-	process: function() {
-	}
-	,sendString: function(message) {
-	}
-	,sendBytes: function(message) {
-	}
-	,close: function() {
-	}
-	,get_readyState: function() {
-		throw haxe_Exception.thrown("Not implemented");
-	}
-	,onopen: function() {
-	}
-	,onerror: function(message) {
-	}
-	,onmessageString: function(message) {
-	}
-	,onmessageBytes: function(message) {
-	}
-	,onclose: function(e) {
-	}
-	,__class__: haxe_net_WebSocket
-};
-var haxe_net_impl_WebSocketJs = function(url,protocols) {
-	var _gthis = this;
-	haxe_net_WebSocket.call(this);
-	if(protocols != null) {
-		this.impl = new WebSocket(url,protocols);
-	} else {
-		this.impl = new WebSocket(url);
-	}
-	this.impl.onopen = function(e) {
-		_gthis.onopen();
-	};
-	this.impl.onclose = function(e) {
-		_gthis.onclose(e);
-	};
-	this.impl.onerror = function(e) {
-		_gthis.onerror("error");
-	};
-	this.impl.onmessage = function(e) {
-		var m = e.data;
-		if(typeof(m) == "string") {
-			_gthis.onmessageString(m);
-		} else if(((m) instanceof ArrayBuffer)) {
-			_gthis.onmessageBytes(haxe_io_Bytes.ofData(js_Boot.__cast(m , ArrayBuffer)));
-		} else if(((m) instanceof Blob)) {
-			var arrayBuffer;
-			var fileReader = new FileReader();
-			fileReader.onload = function() {
-				arrayBuffer = fileReader.result;
-				_gthis.onmessageBytes(haxe_io_Bytes.ofData(arrayBuffer));
-			};
-			fileReader.readAsArrayBuffer(js_Boot.__cast(m , Blob));
-		} else {
-			haxe_Log.trace("Unhandled websocket onmessage " + m,{ fileName : "src/haxe/net/impl/WebSocketJs.hx", lineNumber : 56, className : "haxe.net.impl.WebSocketJs", methodName : "new"});
-		}
-	};
-};
-$hxClasses["haxe.net.impl.WebSocketJs"] = haxe_net_impl_WebSocketJs;
-haxe_net_impl_WebSocketJs.__name__ = "haxe.net.impl.WebSocketJs";
-haxe_net_impl_WebSocketJs.__super__ = haxe_net_WebSocket;
-haxe_net_impl_WebSocketJs.prototype = $extend(haxe_net_WebSocket.prototype,{
-	impl: null
-	,sendString: function(message) {
-		this.impl.send(message);
-	}
-	,sendBytes: function(message) {
-		message = message.sub(0,message.length);
-		this.impl.send(message.b.bufferValue);
-	}
-	,close: function() {
-		this.impl.close();
-	}
-	,get_readyState: function() {
-		switch(this.impl.readyState) {
-		case 0:
-			return haxe_net_ReadyState.Connecting;
-		case 1:
-			return haxe_net_ReadyState.Open;
-		case 2:
-			return haxe_net_ReadyState.Closing;
-		case 3:
-			return haxe_net_ReadyState.Closed;
-		default:
-			throw haxe_Exception.thrown("Unexpected websocket state");
-		}
-	}
-	,__class__: haxe_net_impl_WebSocketJs
-});
 var haxe_rtti_Meta = function() { };
 $hxClasses["haxe.rtti.Meta"] = haxe_rtti_Meta;
 haxe_rtti_Meta.__name__ = "haxe.rtti.Meta";
@@ -16047,36 +15359,6 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	}
 	,__class__: input_KeyboardInputDevice
 });
-var input_NullInputDevice = function() {
-	this.type = 3;
-};
-$hxClasses["input.NullInputDevice"] = input_NullInputDevice;
-input_NullInputDevice.__name__ = "input.NullInputDevice";
-input_NullInputDevice.__interfaces__ = [input_IInputDevice];
-input_NullInputDevice.prototype = {
-	type: null
-	,inputSettings: null
-	,get_inputSettings: function() {
-		return save_$data_Profile.primary.input;
-	}
-	,unbind: function(action) {
-	}
-	,bindDefault: function(actoin) {
-	}
-	,rebind: function(action) {
-	}
-	,getAction: function(action) {
-		return false;
-	}
-	,getRawAction: function(action) {
-		return false;
-	}
-	,renderBinding: function(g,x,y,scale,action) {
-	}
-	,renderControls: function(g,x,width,padding,controls) {
-	}
-	,__class__: input_NullInputDevice
-};
 var js_Boot = function() { };
 $hxClasses["js.Boot"] = js_Boot;
 js_Boot.__name__ = "js.Boot";
@@ -46664,7 +45946,7 @@ var main_$menu_ui_MainMenuPage = function(prefsSettings) {
 		},"Training Mode",["Practice In GelaVolt's","Signature Training Mode!"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
 			var _g = new game_rules_Rule(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null);
 			GlobalScreenSwitcher.switchScreen(new game_screens_GameScreen(new game_gamestatebuilders_EndlessGameStateBuilder(new game_gamestatebuilders_EndlessGameStateBuilderOptions(null,kha_System.get_time() * 1000000 | 0,_g,input_AnyInputDevice.instance,null))));
-		},"Endless Mode",["Play For As Long As You","Can In Endless Mode And","Share Your Replays!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Netplay Test",new main_$menu_ui_NetplaySyncPage(),[])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(prefsSettings),["Change Various Options and Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
+		},"Endless Mode",["Play For As Long As You","Can In Endless Mode And","Share Your Replays!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(prefsSettings),["Change Various Options and Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
 			window.open("https://github.com/doczi-dominik/gelavolt/releases");
 		},"Download Desktop Version",["Download GelaVolt's","Desktop Version For","Better Performance","And Offline Play"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
 			window.open("https://discord.gg/wsWArpAFJK");
@@ -46678,79 +45960,6 @@ main_$menu_ui_MainMenuPage.prototype = $extend(ui_ListMenuPage.prototype,{
 	prefsSettings: null
 	,__class__: main_$menu_ui_MainMenuPage
 });
-var main_$menu_ui_NetplaySyncPage = function() {
-	this.font = kha_Assets.fonts.Pixellari;
-	this.header = "Sync Test";
-	this.controlHints = [new ui_ControlHint(["BACK"],"Back")];
-};
-$hxClasses["main_menu.ui.NetplaySyncPage"] = main_$menu_ui_NetplaySyncPage;
-main_$menu_ui_NetplaySyncPage.__name__ = "main_menu.ui.NetplaySyncPage";
-main_$menu_ui_NetplaySyncPage.__interfaces__ = [ui_IMenuPage];
-main_$menu_ui_NetplaySyncPage.prototype = {
-	font: null
-	,menu: null
-	,fontSize: null
-	,fontHeight: null
-	,frameCounter: null
-	,session: null
-	,lastSleepFrames: null
-	,sleepCounter: null
-	,header: null
-	,controlHints: null
-	,onResize: function() {
-		this.fontSize = 48 * this.menu.scaleManager.smallerScale | 0;
-		this.fontHeight = this.font.height(this.fontSize);
-	}
-	,onShow: function(menu) {
-		var _gthis = this;
-		this.menu = menu;
-		this.frameCounter = new game_mediators_FrameCounter();
-		this.session = new game_net_SessionManager(new game_net_SessionManagerOptions("192.168.1.161:2424","test12345",this.frameCounter));
-		this.session.onBegin = function(options) {
-			if(options.builderType == 2) {
-				GlobalScreenSwitcher.switchScreen(new game_screens_GameScreen(new game_gamestatebuilders_VersusGameStateBuilder(new game_gamestatebuilders_VersusGameStateBuilderOptions(null,options.rngSeed,options.rule,_gthis.frameCounter,new game_actionbuffers_SenderActionBuffer(new game_actionbuffers_SenderActionBufferOptions(_gthis.session,_gthis.frameCounter,menu.inputDevice)),new game_actionbuffers_ReceiveActionBuffer(new game_actionbuffers_ReceiveActionBufferOptions(_gthis.session))))));
-			}
-		};
-	}
-	,update: function() {
-		var anyInput = input_AnyInputDevice.instance;
-		if(anyInput.getAction("BACK")) {
-			this.menu.popPage();
-			return;
-		}
-		this.session.waitForRunning();
-		if(this.sleepCounter > 0) {
-			this.sleepCounter--;
-			return;
-		}
-		switch(this.session.state) {
-		case 2:case 3:
-			this.frameCounter.update();
-			break;
-		default:
-		}
-		this.sleepCounter = this.session.getSleepFrames();
-		if(this.sleepCounter > 0) {
-			this.lastSleepFrames = this.sleepCounter;
-		}
-	}
-	,render: function(g,x,y) {
-		g.set_font(this.font);
-		g.set_fontSize(this.fontSize);
-		g.drawString("State: " + this.session.state,x,y);
-		g.drawString("Avg RTT: " + this.session.averageRTT,x,y + this.fontHeight);
-		var t = this.frameCounter.value;
-		g.drawString("T: " + t,x,y + this.fontHeight * 2);
-		g.drawString("Last sleep frames: " + this.lastSleepFrames,x,y + this.fontHeight * 3);
-		g.drawString("Beginning on: " + this.session.beginFrame,x,y + this.fontHeight * 4);
-		if(t % 500 == 0 && t > 0) {
-			g.set_color(-65536);
-			g.fillRect(0,0,1920,1080);
-		}
-		g.set_color(-1);
-	}
-	,__class__: main_$menu_ui_NetplaySyncPage
-};
 var main_$menu_ui_OptionsPage = function(prefsSettings) {
 	var _gthis = this;
 	this.prefsSettings = prefsSettings;
@@ -48522,10 +47731,7 @@ game_ChainCounter.POWERED_COLOR = kha_Color._new(-59580);
 game_Dropsets.CLASSICAL = [game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR];
 game_Queue.__meta__ = { fields : { groups : { copy : null}, currentIndex : { copy : null}}};
 game_ScoreManager.__meta__ = { fields : { rule : { inject : null}, orientation : { inject : null}, actionTextColor : { copy : null}, formulaText : { copy : null}, formulaTextWidth : { copy : null}, lastFormulaT : { copy : null}, formulaT : { copy : null}, showChainFormula : { copy : null}, actionText : { copy : null}, actionTextT : { copy : null}, actionTextCharacters : { copy : null}, showActionText : { copy : null}, score : { copy : null}, dropBonus : { copy : null}}};
-game_actionbuffers_LocalActionBuffer.__meta__ = { fields : { frameCounter : { inject : null}, inputDevice : { inject : null}}};
-game_actionbuffers_ReceiveActionBuffer.__meta__ = { fields : { session : { inject : null}}};
-game_actionbuffers_ReplayActionBuffer.__meta__ = { fields : { replayData : { inject : null}}};
-game_actionbuffers_SenderActionBuffer.__meta__ = { fields : { session : { inject : null}}};
+game_actionbuffers_LocalActionBuffer.__meta__ = { fields : { frameCounter : { inject : null}, inputDevice : { inject : null}, frameDelay : { inject : null}}};
 game_actions_Action.PAUSE = "PAUSE";
 game_actions_Action.MENU_LEFT = "MENU_LEFT";
 game_actions_Action.MENU_RIGHT = "MENU_RIGHT";
@@ -48686,9 +47892,9 @@ game_auto_$attack_AutoAttackManager.__meta__ = { fields : { rule : { inject : nu
 game_auto_$attack_AutoAttackManager.EFFECT_Y = 800;
 game_boardmanagers_DualBoardManager.__meta__ = { fields : { boardOne : { inject : null}, boardTwo : { inject : null}}};
 game_boardmanagers_SingleBoardManager.__meta__ = { fields : { geometries : { inject : null}, board : { inject : null}}};
-game_boards_SingleStateBoard.__meta__ = { fields : { pauseMediator : { inject : null}, inputDevice : { inject : null}, playActionBuffer : { inject : null}, state : { inject : null}}};
+game_boards_SingleStateBoard.__meta__ = { fields : { pauseMediator : { inject : null}, inputDevice : { inject : null}, state : { inject : null}}};
 game_boards_EndlessBoard.__meta__ = { fields : { endlessState : { inject : null}}};
-game_boards_TrainingBoard.__meta__ = { fields : { pauseMediator : { inject : null}, inputDevice : { inject : null}, playActionBuffer : { inject : null}, infoState : { inject : null}, controlHintContainer : { inject : null}, saveGameStateMediator : { inject : null}, playState : { inject : null}, editState : { inject : null}, activeState : { copy : null}}};
+game_boards_TrainingBoard.__meta__ = { fields : { pauseMediator : { inject : null}, inputDevice : { inject : null}, infoState : { inject : null}, controlHintContainer : { inject : null}, saveGameStateMediator : { inject : null}, playState : { inject : null}, editState : { inject : null}, activeState : { copy : null}}};
 game_boards_TrainingBoard.GAME_CONTROL_HINTS = [new ui_ControlHint(["TOGGLE_EDIT_MODE"],"Edit Mode"),new ui_ControlHint(["PREVIOUS_GROUP"],"Undo"),new ui_ControlHint(["NEXT_GROUP"],"Redo / Get Next Group"),new ui_ControlHint(["QUICK_RESTART"],"Quick Restart"),new ui_ControlHint(["SAVE_STATE"],"Save State"),new ui_ControlHint(["LOAD_STATE"],"Load State")];
 game_boards_TrainingBoard.EDIT_CONTROL_HINTS = [new ui_ControlHint(["TOGGLE_EDIT_MODE"],"Play Mode"),new ui_ControlHint(["EDIT_SET"],"Set"),new ui_ControlHint(["EDIT_CLEAR"],"Clear"),new ui_ControlHint(["PREVIOUS_STEP","NEXT_STEP"],"Cycle Chain Steps"),new ui_ControlHint(["PREVIOUS_COLOR","NEXT_COLOR"],"Cycle Gelos / Markers"),new ui_ControlHint(["TOGGLE_MARKERS"],"Toggle Gelos / Markers")];
 game_boardstates_EditingBoardState.__meta__ = { fields : { geometries : { inject : null}, inputDevice : { inject : null}, chainSim : { inject : null}, chainCounter : { inject : null}, prefsSettings : { inject : null}, cursorX : { copy : null}, cursorY : { copy : null}, cursorDisplayX : { copy : null}, cursorDisplayY : { copy : null}, selectedIndex : { copy : null}, mode : { copy : null}, field : { inject : null}}};
@@ -48720,9 +47926,7 @@ hxbit_Serializer.ENUM_CLASSES = new haxe_ds_StringMap();
 game_gamestatebuilders_EndlessGameStateBuilderOptions.__clid = hxbit_Serializer.registerClass(game_gamestatebuilders_EndlessGameStateBuilderOptions);
 game_gamestatebuilders_EndlessGameStateBuilder.__meta__ = { fields : { rngSeed : { inject : null}, rule : { inject : null}, inputDevice : { inject : null}, replayData : { inject : null}, rng : { copy : null}, randomizer : { copy : null}, particleManager : { copy : null}, marginManager : { copy : null}, frameCounter : { copy : null}, scoreManager : { copy : null}, chainSim : { copy : null}, chainCounter : { copy : null}, field : { copy : null}, queue : { copy : null}, actionBuffer : { copy : null}, geloGroup : { copy : null}, allClearManager : { copy : null}, boardState : { copy : null}, board : { copy : null}, controlHintContainer : { copy : null}}};
 game_gamestatebuilders_TrainingGameStateBuilderOptions.type = 0;
-game_gamestatebuilders_TrainingGameStateBuilder.__meta__ = { fields : { rngSeed : { inject : null}, rule : { inject : null}, rng : { copy : null}, randomizer : { copy : null}, particleManager : { copy : null}, marginManager : { copy : null}, frameCounter : { copy : null}, playerGarbageTray : { copy : null}, playerGarbageManager : { copy : null}, playerScoreManager : { copy : null}, playerChainSimDisplay : { copy : null}, playerChainSimAccumDisplay : { copy : null}, playerChainSim : { copy : null}, playerChainCounter : { copy : null}, playerField : { copy : null}, playerQueue : { copy : null}, playerPreview : { copy : null}, playerInputDevice : { copy : null}, playerActionBuffer : { copy : null}, playerGeloGroupChainSim : { copy : null}, playerGeloGroup : { copy : null}, playerAllClearManager : { copy : null}, infoGarbageTray : { copy : null}, infoGarbageManager : { copy : null}, autoAttackChainCounter : { copy : null}, autoAttackManager : { copy : null}, infoChainAdvantageDisplay : { copy : null}, infoAfterCounterDisplay : { copy : null}, editField : { copy : null}, infoState : { copy : null}, playState : { copy : null}, editState : { copy : null}, playerBoard : { copy : null}, infoBoard : { copy : null}, controlHintContainer : { copy : null}}};
-game_gamestatebuilders_VersusGameStateBuilderOptions.__clid = hxbit_Serializer.registerClass(game_gamestatebuilders_VersusGameStateBuilderOptions);
-game_gamestatebuilders_VersusGameStateBuilder.__meta__ = { fields : { rngSeed : { inject : null}, rule : { inject : null}, frameCounter : { inject : null}, leftActionBuffer : { inject : null}, rightActionBuffer : { inject : null}}};
+game_gamestatebuilders_TrainingGameStateBuilder.__meta__ = { fields : { rngSeed : { inject : null}, rule : { inject : null}, rng : { copy : null}, randomizer : { copy : null}, particleManager : { copy : null}, marginManager : { copy : null}, frameCounter : { copy : null}, playerGarbageTray : { copy : null}, playerGarbageManager : { copy : null}, playerScoreManager : { copy : null}, playerChainSimDisplay : { copy : null}, playerChainSimAccumDisplay : { copy : null}, playerChainSim : { copy : null}, playerChainCounter : { copy : null}, playerField : { copy : null}, playerQueue : { copy : null}, playerPreview : { copy : null}, playerInputDevice : { copy : null}, playerGeloGroupChainSim : { copy : null}, playerGeloGroup : { copy : null}, playerAllClearManager : { copy : null}, infoGarbageTray : { copy : null}, infoGarbageManager : { copy : null}, autoAttackChainCounter : { copy : null}, autoAttackManager : { copy : null}, infoChainAdvantageDisplay : { copy : null}, infoAfterCounterDisplay : { copy : null}, editField : { copy : null}, infoState : { copy : null}, playState : { copy : null}, editState : { copy : null}, playerBoard : { copy : null}, infoBoard : { copy : null}, controlHintContainer : { copy : null}}};
 var game_garbage_GarbageIcon_GARBAGE_ICON_GEOMETRIES = (function($this) {
 	var $r;
 	var _g = new haxe_ds_EnumValueMap();
@@ -48964,7 +48168,6 @@ game_geometries_BoardGeometries.CENTERED = new game_geometries_BoardGeometries(n
 game_geometries_BoardGeometries.INFO = new game_geometries_BoardGeometries(new utils_Point(888,160),1,game_geometries_BoardOrientation.RIGHT,new utils_Point(-48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(-64,-77),new utils_Point(-48,game_geometries_BoardGeometries.HEIGHT - 64));
 game_mediators_ControlHintContainer.__meta__ = { fields : { value : { copy : null}, isVisible : { copy : null}}};
 game_mediators_FrameCounter.__meta__ = { fields : { value : { copy : null}}};
-game_net_SessionManager.__meta__ = { fields : { serverUrl : { inject : null}, roomCode : { inject : null}, frameCounter : { inject : null}}};
 game_particles_GarbageBulletParticle.__meta__ = { fields : { begin : { inject : null}, control : { inject : null}, target : { inject : null}, beginScale : { inject : null}, targetScale : { inject : null}, duration : { inject : null}, color : { inject : null}, onFinish : { inject : null}, trailParts : { copy : null}, prevX : { copy : null}, prevY : { copy : null}, currentX : { copy : null}, currentY : { copy : null}, t : { copy : null}, isAnimationFinished : { copy : null}}};
 game_particles_GarbageBulletTrailParticle.__meta__ = { fields : { x : { inject : null}, y : { inject : null}, color : { inject : null}, lastT : { copy : null}, t : { copy : null}, isAnimationFinished : { copy : null}}};
 game_particles_GeloPopParticle.__meta__ = { fields : { dx : { inject : null}, dyIncrement : { inject : null}, color : { inject : null}, maxT : { inject : null}, x : { inject : null, copy : null}, y : { inject : null, copy : null}, dy : { inject : null, copy : null}, lastX : { copy : null}, lastY : { copy : null}, t : { copy : null}, isAnimationFinished : { copy : null}}};
@@ -49545,7 +48748,6 @@ var input_KeyCodeToString_KEY_CODE_TO_STRING = (function($this) {
 	$r = _g;
 	return $r;
 }(this));
-input_NullInputDevice.instance = new input_NullInputDevice();
 kha_Assets.images = new kha__$Assets_ImageList();
 kha_Assets.sounds = new kha__$Assets_SoundList();
 kha_Assets.blobs = new kha__$Assets_BlobList();
@@ -49824,7 +49026,6 @@ kha_netsync_SyncBuilder.nextId = 0;
 kha_netsync_SyncBuilder.objects = [];
 main_$menu_ui_MainMenuPage.DISCORD_INVITE = "https://discord.gg/wsWArpAFJK";
 main_$menu_ui_MainMenuPage.RELEASES_URL = "https://github.com/doczi-dominik/gelavolt/releases";
-main_$menu_ui_NetplaySyncPage.FONT_SIZE = 48;
 save_$data_EndlessSettings.SHOW_CONTROL_HINTS_DEFAULT = true;
 save_$data_EndlessSettings.CLEAR_ON_X_MODE_DEFAULT = "NEW";
 save_$data_GraphicsSettings.FULLSCREEN_DEFAULT = true;
