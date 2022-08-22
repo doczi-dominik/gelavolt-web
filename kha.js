@@ -94,6 +94,15 @@ HxOverrides.remove = function(a,obj) {
 HxOverrides.now = function() {
 	return Date.now();
 };
+var IScreen = function() { };
+$hxClasses["IScreen"] = IScreen;
+IScreen.__name__ = "IScreen";
+IScreen.__isInterface__ = true;
+IScreen.prototype = {
+	update: null
+	,render: null
+	,__class__: IScreen
+};
 var Lambda = function() { };
 $hxClasses["Lambda"] = Lambda;
 Lambda.__name__ = "Lambda";
@@ -177,6 +186,7 @@ Main.main = function() {
 			save_$data_SaveManager.loadGraphics();
 			save_$data_Profile.changePrimary(save_$data_SaveManager.profiles[0]);
 			input_AnyInputDevice.init();
+			ScreenManager.init();
 			ScaleManager.screen.resize(kha_System.windowWidth(),kha_System.windowHeight());
 			lobby_LobbyPage.handleURLJoin();
 			window.ondrop = function(ev) {
@@ -194,25 +204,16 @@ Main.main = function() {
 				Main.accumulator += frameTime;
 				while(Main.accumulator >= Main.FIXED_UPDATE_DELTA) {
 					input_InputDevice.update();
-					GlobalScreenSwitcher.updateCurrent();
+					ScreenManager.updateCurrent();
 					Main.accumulator -= Main.FIXED_UPDATE_DELTA;
 				}
 				Main.alpha = Main.accumulator / Main.FIXED_UPDATE_DELTA;
-				GlobalScreenSwitcher.renderCurrent(frames[0],Main.alpha);
+				ScreenManager.renderCurrent(frames[0],Main.alpha);
 			});
 		});
 	});
 };
 Math.__name__ = "Math";
-var IScreen = function() { };
-$hxClasses["IScreen"] = IScreen;
-IScreen.__name__ = "IScreen";
-IScreen.__isInterface__ = true;
-IScreen.prototype = {
-	update: null
-	,render: null
-	,__class__: IScreen
-};
 var NullScreen = function() {
 };
 $hxClasses["NullScreen"] = NullScreen;
@@ -405,21 +406,39 @@ ScaleManager.prototype = {
 	}
 	,__class__: ScaleManager
 };
-var GlobalScreenSwitcher = function() { };
-$hxClasses["GlobalScreenSwitcher"] = GlobalScreenSwitcher;
-GlobalScreenSwitcher.__name__ = "GlobalScreenSwitcher";
-GlobalScreenSwitcher.updateCurrent = function() {
-	GlobalScreenSwitcher.currentScreen.update();
+var ScreenManager = function() { };
+$hxClasses["ScreenManager"] = ScreenManager;
+ScreenManager.__name__ = "ScreenManager";
+ScreenManager.init = function() {
+	ScreenManager.overlay = new ui_Menu(new ui_MenuOptions(null,0,1,0.9,save_$data_Profile.primary.prefs));
+	ScreenManager.showOverlay = false;
+	ScreenManager.currentScreen = NullScreen.get_instance();
 };
-GlobalScreenSwitcher.renderCurrent = function(fb,alpha) {
+ScreenManager.pushOverlay = function(page) {
+	ScreenManager.overlay.pushPage(page);
+	ScreenManager.overlay.onShow(input_AnyInputDevice.instance);
+	ScreenManager.showOverlay = true;
+};
+ScreenManager.updateCurrent = function() {
+	if(ScreenManager.showOverlay) {
+		ScreenManager.overlay.update();
+		return;
+	}
+	ScreenManager.currentScreen.update();
+};
+ScreenManager.renderCurrent = function(fb,alpha) {
 	var g4 = fb.get_g4();
 	var g = fb.get_g2();
 	g.begin();
-	GlobalScreenSwitcher.currentScreen.render(g,g4,alpha);
+	ScreenManager.currentScreen.render(g,g4,alpha);
+	if(ScreenManager.showOverlay) {
+		ScreenManager.overlay.render(g,alpha);
+	}
 	g.end();
 };
-GlobalScreenSwitcher.switchScreen = function(newScreen) {
-	GlobalScreenSwitcher.currentScreen = newScreen;
+ScreenManager.switchScreen = function(newScreen) {
+	ScreenManager.currentScreen = newScreen;
+	ScreenManager.showOverlay = false;
 };
 var Std = function() { };
 $hxClasses["Std"] = Std;
@@ -1559,6 +1578,8 @@ game_actionbuffers_IActionBuffer.__name__ = "game.actionbuffers.IActionBuffer";
 game_actionbuffers_IActionBuffer.__isInterface__ = true;
 game_actionbuffers_IActionBuffer.prototype = {
 	update: null
+	,activate: null
+	,deactivate: null
 	,exportReplayData: null
 	,__class__: game_actionbuffers_IActionBuffer
 };
@@ -1583,6 +1604,7 @@ var game_actionbuffers_LocalActionBuffer = function(opts) {
 	var value = new game_actionbuffers_ActionSnapshot(false,false,false,false,false,false);
 	_g.h[0] = value;
 	this.actions = _g;
+	this.isActive = true;
 };
 $hxClasses["game.actionbuffers.LocalActionBuffer"] = game_actionbuffers_LocalActionBuffer;
 game_actionbuffers_LocalActionBuffer.__name__ = "game.actionbuffers.LocalActionBuffer";
@@ -1592,6 +1614,7 @@ game_actionbuffers_LocalActionBuffer.prototype = {
 	,inputDevice: null
 	,frameDelay: null
 	,actions: null
+	,isActive: null
 	,getAction: function(frame) {
 		while(frame > 0) {
 			if(this.actions.h.hasOwnProperty(frame)) {
@@ -1602,13 +1625,22 @@ game_actionbuffers_LocalActionBuffer.prototype = {
 		return this.actions.h[frame];
 	}
 	,update: function() {
-		var currentAction = new game_actionbuffers_ActionSnapshot(this.inputDevice.getAction("SHIFT_LEFT"),this.inputDevice.getAction("SHIFT_RIGHT"),this.inputDevice.getAction("ROTATE_LEFT"),this.inputDevice.getAction("ROTATE_RIGHT"),this.inputDevice.getAction("SOFT_DROP"),this.inputDevice.getAction("HARD_DROP"));
 		var latestAction = this.getAction(this.frameCounter.value);
+		if(!this.isActive) {
+			return latestAction;
+		}
+		var currentAction = new game_actionbuffers_ActionSnapshot(this.inputDevice.getAction("SHIFT_LEFT"),this.inputDevice.getAction("SHIFT_RIGHT"),this.inputDevice.getAction("ROTATE_LEFT"),this.inputDevice.getAction("ROTATE_RIGHT"),this.inputDevice.getAction("SOFT_DROP"),this.inputDevice.getAction("HARD_DROP"));
 		if(latestAction.isNotEqual(currentAction)) {
 			this.actions.h[this.frameCounter.value + this.frameDelay] = currentAction;
 			latestAction = currentAction;
 		}
 		return latestAction;
+	}
+	,activate: function() {
+		this.isActive = true;
+	}
+	,deactivate: function() {
+		this.isActive = false;
 	}
 	,exportReplayData: function() {
 		var data = new haxe_ds_IntMap();
@@ -1648,6 +1680,10 @@ game_actionbuffers_NullActionBuffer.prototype = {
 	}
 	,update: function() {
 		return this.nullAction;
+	}
+	,activate: function() {
+	}
+	,deactivate: function() {
 	}
 	,exportReplayData: function() {
 		return new haxe_ds_IntMap();
@@ -1700,26 +1736,36 @@ game_actionbuffers_ReceiveActionBuffer.prototype = {
 		}
 		return this.actions.h[frame];
 	}
-	,onInput: function(frame,actions) {
-		haxe_Log.trace("Received input for frame " + frame + " on " + this.frameCounter.value,{ fileName : "game/actionbuffers/ReceiveActionBuffer.hx", lineNumber : 49, className : "game.actionbuffers.ReceiveActionBuffer", methodName : "onInput"});
-		var frameDiff = this.frameCounter.value - frame;
-		var snapshot = game_actionbuffers_ActionSnapshot.fromBitField(actions);
-		if(frameDiff < 1) {
-			haxe_Log.trace("Input is for the future, saving",{ fileName : "game/actionbuffers/ReceiveActionBuffer.hx", lineNumber : 55, className : "game.actionbuffers.ReceiveActionBuffer", methodName : "onInput"});
+	,onInput: function(history) {
+		var rollbackTo = null;
+		var _g = 0;
+		while(_g < history.length) {
+			var e = history[_g];
+			++_g;
+			var frame = e.frame;
+			var frameDiff = this.frameCounter.value - frame;
+			var snapshot = game_actionbuffers_ActionSnapshot.fromBitField(e.actions);
 			this.actions.h[frame] = snapshot;
-			return;
+			if(frameDiff < 1) {
+				continue;
+			}
+			if(rollbackTo != null) {
+				continue;
+			}
+			if(this.getAction(frame).isNotEqual(snapshot)) {
+				rollbackTo = frame;
+			}
 		}
-		haxe_Log.trace("Input received happened " + frameDiff + " frames ago!!",{ fileName : "game/actionbuffers/ReceiveActionBuffer.hx", lineNumber : 62, className : "game.actionbuffers.ReceiveActionBuffer", methodName : "onInput"});
-		if(this.getAction(frame).isNotEqual(snapshot)) {
-			haxe_Log.trace("Inputs diverge, saving input and rolling back " + frameDiff + " frames!",{ fileName : "game/actionbuffers/ReceiveActionBuffer.hx", lineNumber : 65, className : "game.actionbuffers.ReceiveActionBuffer", methodName : "onInput"});
-			this.actions.h[frame] = snapshot;
-			this.rollbackMediator.rollback(frame);
-			return;
+		if(rollbackTo != null) {
+			this.rollbackMediator.rollback(rollbackTo);
 		}
-		haxe_Log.trace("Input are the same, skipping rollback",{ fileName : "game/actionbuffers/ReceiveActionBuffer.hx", lineNumber : 74, className : "game.actionbuffers.ReceiveActionBuffer", methodName : "onInput"});
 	}
 	,update: function() {
 		return this.getAction(this.frameCounter.value);
+	}
+	,activate: function() {
+	}
+	,deactivate: function() {
 	}
 	,exportReplayData: function() {
 		var data = new haxe_ds_IntMap();
@@ -1802,11 +1848,16 @@ game_actionbuffers_SenderActionBuffer.prototype = $extend(game_actionbuffers_Loc
 	session: null
 	,update: function() {
 		var latestAction = game_actionbuffers_LocalActionBuffer.prototype.update.call(this);
-		var _this = this.session;
-		var frame = this.frameCounter.value + this.frameDelay;
-		var actions = latestAction.toBitField();
-		_this.dc.send("" + 2 + ";" + frame + ";" + actions);
+		this.session.sendInput(this.frameCounter.value + this.frameDelay,latestAction.toBitField());
 		return latestAction;
+	}
+	,activate: function() {
+		game_actionbuffers_LocalActionBuffer.prototype.activate.call(this);
+		this.session.isInputIdle = false;
+	}
+	,deactivate: function() {
+		game_actionbuffers_LocalActionBuffer.prototype.deactivate.call(this);
+		this.session.isInputIdle = true;
 	}
 	,__class__: game_actionbuffers_SenderActionBuffer
 });
@@ -2792,6 +2843,7 @@ game_boardstates_StandardBoardState.prototype = {
 	}
 	,lockGroup: function() {
 		this.canDropGarbage = true;
+		this.actionBuffer.deactivate();
 		this.beginChainSimulation();
 	}
 	,afterDrop: function() {
@@ -2839,6 +2891,7 @@ game_boardstates_StandardBoardState.prototype = {
 		this.geloGroup.load(screenCoords.x,screenCoords.y + 32,_this.get(_this.currentIndex));
 		this.queue.currentIndex++;
 		this.preview.startAnimation(this.queue.currentIndex);
+		this.actionBuffer.activate();
 		this.state = game_boardstates__$StandardBoardState_InnerState.SPAWNING;
 	}
 	,updateSpawningState: function() {
@@ -6408,7 +6461,7 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 	}
 	,buildActionBuffer: function() {
 		if(this.replayData == null) {
-			this.actionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputDevice,0));
+			this.actionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputDevice,save_$data_Profile.primary.input.localDelay));
 			return;
 		}
 		this.actionBuffer = new game_actionbuffers_ReplayActionBuffer(new game_actionbuffers_ReplayActionBufferOptions(this.replayData,this.frameCounter,this.inputDevice,0));
@@ -6464,7 +6517,7 @@ game_gamestatebuilders_EndlessGameStateBuilder.prototype = {
 		this.chainCounter = new game_ChainCounter();
 		this.field = new game_fields_Field(new game_fields_FieldOptions(save_$data_Profile.primary.prefs,6,12,5,1));
 		this.queue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
-		this.actionBuffer = this.replayData == null ? new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputDevice,0)) : new game_actionbuffers_ReplayActionBuffer(new game_actionbuffers_ReplayActionBufferOptions(this.replayData,this.frameCounter,this.inputDevice,0));
+		this.actionBuffer = this.replayData == null ? new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.inputDevice,save_$data_Profile.primary.input.localDelay)) : new game_actionbuffers_ReplayActionBuffer(new game_actionbuffers_ReplayActionBufferOptions(this.replayData,this.frameCounter,this.inputDevice,0));
 		var prefsSettings = save_$data_Profile.primary.prefs;
 		this.geloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(this.physics,this.animations,this.dropSpeed,prefsSettings,this.scoreManager,this.field,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.popCount,this.vanishHiddenRows,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_GarbageTray.create(prefsSettings),game_garbage_trays_GarbageTray.create(prefsSettings)))));
 		this.allClearManager = new game_AllClearManager(new game_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.CENTERED,this.particleManager,this.borderColorMediator));
@@ -6714,7 +6767,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerInputDevice = input_AnyInputDevice.instance;
 	}
 	,buildPlayerActionBuffer: function() {
-		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputDevice,0));
+		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputDevice,save_$data_Profile.primary.input.localDelay));
 	}
 	,buildPlayerGeloGroupChainSim: function() {
 		this.playerGeloGroupChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.popCount,this.vanishHiddenRows,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_NullGarbageTray.instance,game_garbage_trays_NullGarbageTray.instance));
@@ -6844,7 +6897,7 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerQueue = new game_Queue(this.randomizer.createQueueData(game_Dropsets.CLASSICAL));
 		this.playerPreview = new game_previews_VerticalPreview(this.playerQueue);
 		this.playerInputDevice = input_AnyInputDevice.instance;
-		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputDevice,0));
+		this.playerActionBuffer = new game_actionbuffers_LocalActionBuffer(new game_actionbuffers_LocalActionBufferOptions(this.frameCounter,this.playerInputDevice,save_$data_Profile.primary.input.localDelay));
 		this.playerGeloGroupChainSim = new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.popCount,this.vanishHiddenRows,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_NullGarbageTray.instance,game_garbage_trays_NullGarbageTray.instance));
 		this.playerGeloGroup = new game_gelogroups_TrainingGeloGroup(new game_gelogroups_TrainingGeloGroupOptions(save_$data_Profile.primary.trainingSettings,this.physics,this.animations,this.dropSpeed,save_$data_Profile.primary.prefs,this.playerScoreManager,this.playerField,this.playerGeloGroupChainSim));
 		this.playerAllClearManager = new game_AllClearManager(new game_AllClearManagerOptions(this.rng,game_geometries_BoardGeometries.LEFT,this.particleManager,this.playerBorderColorMediator));
@@ -7120,7 +7173,7 @@ game_gamestatebuilders_VersusGameStateBuilder.prototype = {
 		}
 		if(this.isLocalOnLeft) {
 			this.leftInputDevice = input_AnyInputDevice.instance;
-			this.leftActionBuffer = new game_actionbuffers_SenderActionBuffer(new game_actionbuffers_SenderActionBufferOptions(this.session,this.frameCounter,this.leftInputDevice,2));
+			this.leftActionBuffer = new game_actionbuffers_SenderActionBuffer(new game_actionbuffers_SenderActionBufferOptions(this.session,this.frameCounter,this.leftInputDevice,save_$data_Profile.primary.input.netplayDelay));
 			return;
 		}
 		this.leftInputDevice = input_NullInputDevice.instance;
@@ -7182,7 +7235,7 @@ game_gamestatebuilders_VersusGameStateBuilder.prototype = {
 			return;
 		}
 		this.rightInputDevice = input_AnyInputDevice.instance;
-		this.rightActionBuffer = new game_actionbuffers_SenderActionBuffer(new game_actionbuffers_SenderActionBufferOptions(this.session,this.frameCounter,this.rightInputDevice,2));
+		this.rightActionBuffer = new game_actionbuffers_SenderActionBuffer(new game_actionbuffers_SenderActionBufferOptions(this.session,this.frameCounter,this.rightInputDevice,save_$data_Profile.primary.input.netplayDelay));
 	}
 	,buildRightGeloGroup: function() {
 		var prefsSettings = save_$data_Profile.primary.prefs;
@@ -7297,7 +7350,7 @@ game_gamestatebuilders_VersusGameStateBuilder.prototype = {
 			this.leftActionBuffer = game_actionbuffers_NullActionBuffer.get_instance();
 		} else if(this.isLocalOnLeft) {
 			this.leftInputDevice = input_AnyInputDevice.instance;
-			this.leftActionBuffer = new game_actionbuffers_SenderActionBuffer(new game_actionbuffers_SenderActionBufferOptions(this.session,this.frameCounter,this.leftInputDevice,2));
+			this.leftActionBuffer = new game_actionbuffers_SenderActionBuffer(new game_actionbuffers_SenderActionBufferOptions(this.session,this.frameCounter,this.leftInputDevice,save_$data_Profile.primary.input.netplayDelay));
 		} else {
 			this.leftInputDevice = input_NullInputDevice.instance;
 			var recvAB = new game_actionbuffers_ReceiveActionBuffer(new game_actionbuffers_ReceiveActionBufferOptions(this.frameCounter,this.rollbackMediator));
@@ -7328,7 +7381,7 @@ game_gamestatebuilders_VersusGameStateBuilder.prototype = {
 			this.session.onInput = $bind(recvAB,recvAB.onInput);
 		} else {
 			this.rightInputDevice = input_AnyInputDevice.instance;
-			this.rightActionBuffer = new game_actionbuffers_SenderActionBuffer(new game_actionbuffers_SenderActionBufferOptions(this.session,this.frameCounter,this.rightInputDevice,2));
+			this.rightActionBuffer = new game_actionbuffers_SenderActionBuffer(new game_actionbuffers_SenderActionBufferOptions(this.session,this.frameCounter,this.rightInputDevice,save_$data_Profile.primary.input.netplayDelay));
 		}
 		var prefsSettings = save_$data_Profile.primary.prefs;
 		this.rightGeloGroup = new game_gelogroups_GeloGroup(new game_gelogroups_GeloGroupOptions(this.physics,this.animations,this.dropSpeed,prefsSettings,this.rightScoreManager,this.rightField,new game_simulation_ChainSimulator(new game_simulation_ChainSimulatorOptions(this.popCount,this.vanishHiddenRows,game_simulation_NullLinkInfoBuilder.get_instance(),game_garbage_trays_NullGarbageTray.instance,game_garbage_trays_NullGarbageTray.instance))));
@@ -8960,16 +9013,25 @@ game_mediators_SaveGameStateMediator.prototype = {
 	,saveState: null
 	,__class__: game_mediators_SaveGameStateMediator
 };
+var game_net_InputHistoryEntry = function(frame,actions) {
+	this.frame = frame;
+	this.actions = actions;
+};
+$hxClasses["game.net.InputHistoryEntry"] = game_net_InputHistoryEntry;
+game_net_InputHistoryEntry.__name__ = "game.net.InputHistoryEntry";
+game_net_InputHistoryEntry.prototype = {
+	frame: null
+	,actions: null
+	,__class__: game_net_InputHistoryEntry
+};
 var game_net_SessionManager = function(peer,isHost,remoteID) {
 	this.frameCounter = new game_mediators_FrameCounter();
-	haxe_Log.trace("RemoteID: " + remoteID,{ fileName : "game/net/SessionManager.hx", lineNumber : 37, className : "game.net.SessionManager", methodName : "new"});
 	if(isHost) {
-		haxe_Log.trace("Hosting",{ fileName : "game/net/SessionManager.hx", lineNumber : 40, className : "game.net.SessionManager", methodName : "new"});
 		peer.on(peerjs_PeerEventType.Connection,$bind(this,this.initDataConnection));
 	} else {
-		haxe_Log.trace("Connecting",{ fileName : "game/net/SessionManager.hx", lineNumber : 43, className : "game.net.SessionManager", methodName : "new"});
-		this.initDataConnection(peer.connect(remoteID));
+		this.initDataConnection(peer.connect(remoteID,{ serialization : peerjs_PeerDataSerialization.None}));
 	}
+	this.localInputHistory = [];
 	this.state = 1;
 };
 $hxClasses["game.net.SessionManager"] = game_net_SessionManager;
@@ -8984,6 +9046,9 @@ game_net_SessionManager.prototype = {
 	,sleepFrames: null
 	,internalSleepCounter: null
 	,beginFrame: null
+	,localInputHistory: null
+	,lastInputFrame: null
+	,syncTimeoutTaskID: null
 	,onInput: null
 	,isInputIdle: null
 	,averageRTT: null
@@ -9004,9 +9069,6 @@ game_net_SessionManager.prototype = {
 		dc.on(peerjs_DataConnectionEventType.Open,function() {
 			_gthis.initSyncingState();
 		});
-		dc.on(peerjs_DataConnectionEventType.Error,function(err) {
-			haxe_Log.trace("DC Error: " + Std.string(err),{ fileName : "game/net/SessionManager.hx", lineNumber : 62, className : "game.net.SessionManager", methodName : "initDataConnection"});
-		});
 		dc.on(peerjs_DataConnectionEventType.Data,$bind(this,this.onMessage));
 	}
 	,onMessage: function(msg) {
@@ -9023,15 +9085,15 @@ game_net_SessionManager.prototype = {
 			this.onInputPacket(parts);
 			break;
 		case 3:
-			this.onBeginRequest(parts);
+			this.onInputAckPacket(parts);
 			break;
 		case 4:
+			this.onBeginRequest(parts);
+			break;
+		case 5:
 			this.onBeginResponse(parts);
 			break;
 		}
-	}
-	,onError: function(msg) {
-		haxe_Log.trace("WS Error: " + msg,{ fileName : "game/net/SessionManager.hx", lineNumber : 88, className : "game.net.SessionManager", methodName : "onError"});
 	}
 	,initSyncingState: function() {
 		this.roundTripCounter = 0;
@@ -9049,15 +9111,19 @@ game_net_SessionManager.prototype = {
 		if(this.averageRTT != null) {
 			prediction = this.frameCounter.value + (this.averageRTT / 2 * 60 / 1000 | 0);
 		}
-		this.dc.send("" + 0 + ";" + ping + ";" + prediction);
+		this.dc.send("" + 0 + ";" + ping + ";" + prediction + ";" + (this.state == 4 ? "R" : "O"));
 	}
 	,onSyncRequest: function(parts) {
+		this.resetSyncTimeoutTimer();
 		var pong = parts[1];
 		var prediction = Std.parseInt(parts[2]);
 		var adv = null;
 		if(prediction != null) {
 			adv = this.frameCounter.value - prediction;
 			this.averageLocalAdvantage = Math.round(0.5 * adv + 0.5 * this.averageLocalAdvantage);
+		}
+		if(parts[3] == "R") {
+			this.initRunningState();
 		}
 		this.dc.send("" + 1 + ";" + pong + ";" + adv);
 	}
@@ -9071,7 +9137,7 @@ game_net_SessionManager.prototype = {
 			if(this.internalSleepCounter == 0 && ++this.remoteAdvantageCounter % 5 == 0) {
 				var diff = this.averageLocalAdvantage - this.averageRemoteAdvantage;
 				if(Math.abs(diff) < 4) {
-					if(++this.successfulSleepChecks > 2) {
+					if(++this.successfulSleepChecks > 5) {
 						this.initBeginningState();
 						return;
 					}
@@ -9096,11 +9162,11 @@ game_net_SessionManager.prototype = {
 		}
 	}
 	,initBeginningState: function() {
-		this.dc.send("" + 3);
+		this.dc.send("" + 4);
 		this.state = 3;
 	}
 	,onBeginRequest: function(parts) {
-		this.dc.send("" + 4 + ";" + this.beginFrame);
+		this.dc.send("" + 5 + ";" + this.beginFrame);
 	}
 	,onBeginResponse: function(parts) {
 		this.beginFrame = Std.parseInt(parts[1]);
@@ -9109,12 +9175,40 @@ game_net_SessionManager.prototype = {
 		}
 	}
 	,onInputPacket: function(parts) {
+		var history = [];
+		var i = 1;
+		var lastFrame = -1;
+		while(i < parts.length) {
+			var frame = Std.parseInt(parts[i]);
+			var actions = Std.parseInt(parts[i + 1]);
+			history.push(new game_net_InputHistoryEntry(frame,actions));
+			i += 2;
+			lastFrame = frame;
+		}
+		if(lastFrame < this.lastInputFrame) {
+			return;
+		}
+		this.dc.send("" + 3 + ";" + lastFrame);
+		this.onInput(history);
+		this.lastInputFrame = lastFrame;
+	}
+	,onInputAckPacket: function(parts) {
 		var frame = Std.parseInt(parts[1]);
-		var actions = Std.parseInt(parts[2]);
-		this.onInput(frame,actions);
+		var _g = [];
+		var _g1 = 0;
+		var _g2 = this.localInputHistory;
+		while(_g1 < _g2.length) {
+			var v = _g2[_g1];
+			++_g1;
+			if(v.frame > frame) {
+				_g.push(v);
+			}
+		}
+		this.localInputHistory = _g;
 	}
 	,initRunningState: function() {
 		this.setSyncInterval(500);
+		this.lastInputFrame = -1;
 		this.state = 4;
 	}
 	,updateSyncingState: function() {
@@ -9127,8 +9221,7 @@ game_net_SessionManager.prototype = {
 	}
 	,updateBeginningState: function() {
 		if(this.frameCounter.value == this.beginFrame) {
-			this.setSyncInterval(500);
-			this.state = 4;
+			this.initRunningState();
 			return 0;
 		}
 		this.frameCounter.update();
@@ -9142,12 +9235,27 @@ game_net_SessionManager.prototype = {
 		}
 		return 0;
 	}
+	,resetSyncTimeoutTimer: function() {
+		kha_Scheduler.removeTimeTask(this.syncTimeoutTaskID);
+		this.syncTimeoutTaskID = kha_Scheduler.addTimeTask(function() {
+			ScreenManager.pushOverlay(ui_ErrorPage.mainMenuPage("Connection Error: Sync Package Timeout"));
+		},2);
+	}
 	,setSyncInterval: function(interval) {
 		kha_Scheduler.removeTimeTask(this.syncTimeTaskID);
 		this.syncTimeTaskID = kha_Scheduler.addTimeTask($bind(this,this.sendSyncRequest),0,interval / 1000);
 	}
 	,sendInput: function(frame,actions) {
-		this.dc.send("" + 2 + ";" + frame + ";" + actions);
+		this.localInputHistory.push(new game_net_InputHistoryEntry(frame,actions));
+		var msg = "" + 2;
+		var _g = 0;
+		var _g1 = this.localInputHistory;
+		while(_g < _g1.length) {
+			var e = _g1[_g];
+			++_g;
+			msg += ";" + e.frame + ";" + e.actions;
+		}
+		this.dc.send(msg);
 	}
 	,update: function() {
 		switch(this.state) {
@@ -10195,6 +10303,7 @@ var game_screens_NetplayGameScreen = function(opts) {
 		this.elapsedFrames[i] = new game_screens__$NetplayGameScreen_ElapsedFrame(this.gameStateBuilder.createBackupBuilder());
 		this.elapsedFrames[i].builder.build();
 	}
+	this.sleepCounter = 0;
 };
 $hxClasses["game.screens.NetplayGameScreen"] = game_screens_NetplayGameScreen;
 game_screens_NetplayGameScreen.__name__ = "game.screens.NetplayGameScreen";
@@ -10204,6 +10313,7 @@ game_screens_NetplayGameScreen.prototype = $extend(game_screens_GameScreenBase.p
 	,frameCounter: null
 	,gameStateBuilder: null
 	,elapsedFrames: null
+	,sleepCounter: null
 	,updatePaused: function() {
 		this.pauseMenu.update();
 		this.updateGameState();
@@ -10213,10 +10323,11 @@ game_screens_NetplayGameScreen.prototype = $extend(game_screens_GameScreenBase.p
 		this.updateGameState();
 	}
 	,updateGameState: function() {
-		var sleep = this.session.update();
-		if(sleep != 0) {
-			haxe_Log.trace("Suggested sleep: " + sleep,{ fileName : "game/screens/NetplayGameScreen.hx", lineNumber : 79, className : "game.screens.NetplayGameScreen", methodName : "updateGameState"});
+		if(this.sleepCounter > 0) {
+			this.sleepCounter--;
+			return;
 		}
+		this.sleepCounter = this.session.update();
 		if(this.session.state == 4) {
 			this.gameState.update();
 			var ringBufferIndex = this.frameCounter.value % 15;
@@ -11404,11 +11515,13 @@ game_ui_EndlessPauseMenuOptions.prototype = $extend(game_ui_PauseMenuOptions.pro
 var ui_Menu = function(opts) {
 	this.positionFactor = opts.positionFactor;
 	this.widthFactor = opts.widthFactor;
-	this.initialPage = opts.initialPage;
+	this.backgroundOpacity = opts.backgroundOpacity;
 	this.prefsSettings = opts.prefsSettings;
 	this.pages = new haxe_ds_GenericStack();
-	var _this = this.pages;
-	_this.head = new haxe_ds_GenericCell(opts.initialPage,_this.head);
+	if(opts.initialPage != null) {
+		var _this = this.pages;
+		_this.head = new haxe_ds_GenericCell(opts.initialPage,_this.head);
+	}
 	this.inputDevices = new haxe_ds_GenericStack();
 	this.headerFont = kha_Assets.fonts.DigitalDisco;
 	this.controlsFont = kha_Assets.fonts.Pixellari;
@@ -11420,7 +11533,7 @@ ui_Menu.__name__ = "ui.Menu";
 ui_Menu.prototype = {
 	positionFactor: null
 	,widthFactor: null
-	,initialPage: null
+	,backgroundOpacity: null
 	,prefsSettings: null
 	,pages: null
 	,inputDevices: null
@@ -11515,14 +11628,27 @@ ui_Menu.prototype = {
 	}
 	,update: function() {
 		var _this = this.pages;
-		(_this.head == null ? null : _this.head.elt).update();
+		var currentPage = _this.head == null ? null : _this.head.elt;
+		if(currentPage == null) {
+			return;
+		}
+		currentPage.update();
 	}
 	,render: function(g,alpha) {
 		var _this = this.pages;
 		var currentPage = _this.head == null ? null : _this.head.elt;
+		if(currentPage == null) {
+			return;
+		}
 		var paddedX = this.renderX + this.padding;
 		var width = this.scaleManager.width;
-		g.scissor(this.renderX | 0,0,width | 0,this.scaleManager.height | 0);
+		var height = this.scaleManager.height;
+		g.scissor(this.renderX | 0,0,width | 0,height | 0);
+		g.pushOpacity(this.backgroundOpacity);
+		g.set_color(-16777216);
+		g.fillRect(this.renderX,0,width,height);
+		g.set_color(-1);
+		g.popOpacity();
 		g.set_font(this.headerFont);
 		g.set_fontSize(this.headerFontSize);
 		g.drawString(currentPage.header,paddedX,this.padding);
@@ -11552,7 +11678,7 @@ var game_ui_PauseMenu = function(opts) {
 	this.updateGameState = false;
 	this.pauseMediator = opts.pauseMediator;
 	var _g = opts.prefsSettings;
-	ui_Menu.call(this,new ui_MenuOptions(0,1,new ui_ListMenuPage(new ui_ListMenuPageOptions($bind(this,this.generateInitalPage),"Paused")),_g));
+	ui_Menu.call(this,new ui_MenuOptions(new ui_ListMenuPage(new ui_ListMenuPageOptions($bind(this,this.generateInitalPage),"Paused")),0,1,0.9,_g));
 };
 $hxClasses["game.ui.PauseMenu"] = game_ui_PauseMenu;
 game_ui_PauseMenu.__name__ = "game.ui.PauseMenu";
@@ -11562,44 +11688,14 @@ game_ui_PauseMenu.prototype = $extend(ui_Menu.prototype,{
 	,updateGameState: null
 	,generateInitalPage: function(menu) {
 		return [new ui_ButtonWidget(new ui_ButtonWidgetOptions(this.pauseMediator.resume,"Resume",["Continue Chaining!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(this.prefsSettings),["Change Various Options and Settings"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("Return To The Main Menu?",function() {
-			GlobalScreenSwitcher.switchScreen(new main_$menu_MainMenuScreen());
+			ScreenManager.switchScreen(new main_$menu_MainMenuScreen());
 		},"Exit To Main Menu",["Return To The Main Menu"]))];
-	}
-	,popPage: function() {
-		var _this = this.pages;
-		var k = _this.head;
-		var poppedPage;
-		if(k == null) {
-			poppedPage = null;
-		} else {
-			_this.head = k.next;
-			poppedPage = k.elt;
-		}
-		if(this.pages.head == null) {
-			var _this = this.pages;
-			_this.head = new haxe_ds_GenericCell(poppedPage,_this.head);
-			this.pauseMediator.resume();
-			return;
-		}
-		var _this = this.pages;
-		var firstPage = _this.head == null ? null : _this.head.elt;
-		firstPage.onShow(this);
-		firstPage.onResize();
 	}
 	,update: function() {
 		if(this.inputDevice.getAction("PAUSE")) {
 			this.pauseMediator.resume();
 		}
 		ui_Menu.prototype.update.call(this);
-	}
-	,render: function(g,alpha) {
-		var scr = ScaleManager.screen;
-		g.pushOpacity(0.90);
-		g.set_color(-16777216);
-		g.fillRect(0,0,scr.width,scr.height);
-		g.set_color(-1);
-		g.popOpacity();
-		ui_Menu.prototype.render.call(this,g,alpha);
 	}
 	,__class__: game_ui_PauseMenu
 });
@@ -11886,9 +11982,40 @@ game_ui_QueueEditorPageOptions.prototype = {
 	,groupEditor: null
 	,__class__: game_ui_QueueEditorPageOptions
 };
+var ui_MenuPageBase = function(opts) {
+	this.designFontSize = opts.designFontSize;
+	this.font = kha_Assets.fonts.get(opts.font);
+	this.header = opts.header;
+	this.controlHints = opts.controlHints;
+};
+$hxClasses["ui.MenuPageBase"] = ui_MenuPageBase;
+ui_MenuPageBase.__name__ = "ui.MenuPageBase";
+ui_MenuPageBase.__interfaces__ = [ui_IMenuPage];
+ui_MenuPageBase.prototype = {
+	designFontSize: null
+	,font: null
+	,header: null
+	,controlHints: null
+	,menu: null
+	,fontSize: null
+	,fontHeight: null
+	,onShow: function(menu) {
+		this.menu = menu;
+	}
+	,onResize: function() {
+		this.fontSize = this.designFontSize * this.menu.scaleManager.smallerScale | 0;
+		this.fontHeight = this.font.height(this.fontSize);
+	}
+	,update: function() {
+	}
+	,render: function(g,x,y) {
+		g.set_font(this.font);
+		g.set_fontSize(this.fontSize);
+	}
+	,__class__: ui_MenuPageBase
+};
 var game_ui_QueueEditorPage = function(opts) {
-	this.controlHints = [new ui_ControlHint(["MENU_LEFT","MENU_UP","MENU_DOWN","MENU_RIGHT"],"Select"),new ui_ControlHint(["BACK"],"Back"),new ui_ControlHint(["CONFIRM"],"Edit")];
-	this.header = "Edit Queue";
+	ui_MenuPageBase.call(this,new ui_MenuPageBaseOptions(72,"Edit Queue",[new ui_ControlHint(["MENU_LEFT","MENU_UP","MENU_DOWN","MENU_RIGHT"],"Select"),new ui_ControlHint(["BACK"],"Back"),new ui_ControlHint(["CONFIRM"],"Edit")],null));
 	this.queue = opts.queue;
 	this.groupEditor = opts.groupEditor;
 	this.selectionX = 0;
@@ -11897,18 +12024,13 @@ var game_ui_QueueEditorPage = function(opts) {
 };
 $hxClasses["game.ui.QueueEditorPage"] = game_ui_QueueEditorPage;
 game_ui_QueueEditorPage.__name__ = "game.ui.QueueEditorPage";
-game_ui_QueueEditorPage.__interfaces__ = [ui_IMenuPage];
-game_ui_QueueEditorPage.prototype = {
+game_ui_QueueEditorPage.__super__ = ui_MenuPageBase;
+game_ui_QueueEditorPage.prototype = $extend(ui_MenuPageBase.prototype,{
 	queue: null
 	,groupEditor: null
-	,menu: null
-	,scale: null
-	,fontSize: null
 	,selectionX: null
 	,selectionY: null
 	,minView: null
-	,header: null
-	,controlHints: null
 	,cellToScreen: function(cellX,cellY) {
 		return new utils_Point(150 + cellX * 64 * 4,118 + cellY * 64 * 4.5);
 	}
@@ -11926,13 +12048,6 @@ game_ui_QueueEditorPage.prototype = {
 		var d = (this.queue.groups.data.length / 7 | 0) + 1;
 		var r = (this.selectionY + delta) % d;
 		this.selectionY = (r < 0 ? r + d : r) | 0;
-	}
-	,onResize: function() {
-		this.scale = this.menu.scaleManager.smallerScale;
-		this.fontSize = 72 * this.scale | 0;
-	}
-	,onShow: function(menu) {
-		this.menu = menu;
 	}
 	,update: function() {
 		var inputDevice = this.menu.inputDevice;
@@ -11975,7 +12090,9 @@ game_ui_QueueEditorPage.prototype = {
 		}
 	}
 	,render: function(g,x,y) {
+		ui_MenuPageBase.prototype.render.call(this,g,x,y);
 		var groups = this.queue.groups;
+		var scale = this.menu.scaleManager.smallerScale;
 		var _this__00 = 1;
 		var _this__10 = 0;
 		var _this__20 = x;
@@ -11985,11 +12102,11 @@ game_ui_QueueEditorPage.prototype = {
 		var _this__02 = 0;
 		var _this__12 = 0;
 		var _this__22 = 1;
-		var m__00 = this.scale;
+		var m__00 = scale;
 		var m__10 = 0;
 		var m__20 = 0;
 		var m__01 = 0;
-		var m__11 = this.scale;
+		var m__11 = scale;
 		var m__21 = 0;
 		var m__02 = 0;
 		var m__12 = 0;
@@ -12003,7 +12120,6 @@ game_ui_QueueEditorPage.prototype = {
 		var transform__02 = _this__02 * m__00 + _this__12 * m__01 + _this__22 * m__02;
 		var transform__12 = _this__02 * m__10 + _this__12 * m__11 + _this__22 * m__12;
 		var transform__22 = _this__02 * m__20 + _this__12 * m__21 + _this__22 * m__22;
-		g.set_fontSize(72);
 		var _this = g.transformations[g.transformationIndex];
 		var trans__00 = _this._00 * transform__00 + _this._10 * transform__01 + _this._20 * transform__02;
 		var trans__10 = _this._00 * transform__10 + _this._10 * transform__11 + _this._20 * transform__12;
@@ -12055,7 +12171,7 @@ game_ui_QueueEditorPage.prototype = {
 		g.popTransformation();
 	}
 	,__class__: game_ui_QueueEditorPage
-};
+});
 var game_ui_ReplayPauseMenuOptions = function(actionBuffer,prefsSettings,pauseMediator) {
 	game_ui_PauseMenuOptions.call(this,prefsSettings,pauseMediator);
 	this.actionBuffer = actionBuffer;
@@ -16492,14 +16608,15 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		var paddedScreenWidth = width - padding * 2;
 		var totalWidth = 0.0;
 		var _g = 0;
-		while(_g < controls.length) {
-			var d = controls[_g];
+		var _g1 = controls;
+		while(_g < _g1.length) {
+			var d = _g1[_g];
 			++_g;
-			var _g1 = 0;
-			var _g2 = d.actions;
-			while(_g1 < _g2.length) {
-				var action = _g2[_g1];
-				++_g1;
+			var _g2 = 0;
+			var _g3 = d.actions;
+			while(_g2 < _g3.length) {
+				var action = _g3[_g2];
+				++_g2;
 				var mapping = this.get_inputSettings().mappings.h[action];
 				var button = mapping.gamepadButton;
 				var axis = mapping.gamepadAxis;
@@ -16520,15 +16637,16 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		}
 		var scrollX = this.getScrollX(totalWidth,paddedScreenWidth);
 		var _g = 0;
-		while(_g < controls.length) {
-			var d = controls[_g];
+		var _g1 = controls;
+		while(_g < _g1.length) {
+			var d = _g1[_g];
 			++_g;
 			var str = "";
-			var _g1 = 0;
-			var _g2 = d.actions;
-			while(_g1 < _g2.length) {
-				var action = _g2[_g1];
-				++_g1;
+			var _g2 = 0;
+			var _g3 = d.actions;
+			while(_g2 < _g3.length) {
+				var action = _g3[_g2];
+				++_g2;
 				var mapping = this.get_inputSettings().mappings.h[action];
 				var axis = mapping.gamepadAxis;
 				var buttonSpr = this.get_inputSettings().getButtonSprite(action);
@@ -16725,14 +16843,15 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	,renderControls: function(g,x,width,padding,controls) {
 		var str = "";
 		var _g = 0;
-		while(_g < controls.length) {
-			var d = controls[_g];
+		var _g1 = controls;
+		while(_g < _g1.length) {
+			var d = _g1[_g];
 			++_g;
-			var _g1 = 0;
-			var _g2 = d.actions;
-			while(_g1 < _g2.length) {
-				var action = _g2[_g1];
-				++_g1;
+			var _g2 = 0;
+			var _g3 = d.actions;
+			while(_g2 < _g3.length) {
+				var action = _g3[_g2];
+				++_g2;
 				var mapping = this.get_inputSettings().mappings.h[action].keyboardInput;
 				if(mapping != null) {
 					str += "" + input_KeyCodeToString_KEY_CODE_TO_STRING.h[mapping] + "/";
@@ -49473,17 +49592,14 @@ kha_vr_TimeWarpParms.prototype = {
 	,__class__: kha_vr_TimeWarpParms
 };
 var lobby_LobbyPage = function() {
-	this.font = kha_Assets.fonts.Pixellari;
-	this.header = "Lobby";
-	this.controlHints = [new ui_ControlHint(["BACK"],"Leave")];
+	ui_MenuPageBase.call(this,new ui_MenuPageBaseOptions(56,"Lobby",[new ui_ControlHint(["BACK"],"Leave")],null));
 };
 $hxClasses["lobby.LobbyPage"] = lobby_LobbyPage;
 lobby_LobbyPage.__name__ = "lobby.LobbyPage";
-lobby_LobbyPage.__interfaces__ = [ui_IMenuPage];
 lobby_LobbyPage.startGame = function(peer,isHost,remoteID) {
 	var s = new game_net_SessionManager(peer,isHost,remoteID);
 	var f = new game_mediators_FrameCounter();
-	GlobalScreenSwitcher.switchScreen(new game_screens_NetplayGameScreen(new game_screens_NetplayGameScreenOptions(s,f,new game_gamestatebuilders_VersusGameStateBuilder(new game_gamestatebuilders_VersusGameStateBuilderOptions(null,0,96,70,utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(0.5),utils_ValueBox.fromValue(4),utils_ValueBox.fromValue(false),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue(true),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(game_rules_PhysicsType.TSU),utils_ValueBox.fromValue(game_rules_AnimationsType.TSU),utils_ValueBox.fromValue(2.6),utils_ValueBox.fromValue(true),true,s,f)))));
+	ScreenManager.switchScreen(new game_screens_NetplayGameScreen(new game_screens_NetplayGameScreenOptions(s,f,new game_gamestatebuilders_VersusGameStateBuilder(new game_gamestatebuilders_VersusGameStateBuilderOptions(null,0,96,70,utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(0.5),utils_ValueBox.fromValue(4),utils_ValueBox.fromValue(false),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue(true),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(game_rules_PhysicsType.TSU),utils_ValueBox.fromValue(game_rules_AnimationsType.TSU),utils_ValueBox.fromValue(2.6),utils_ValueBox.fromValue(true),true,s,f)))));
 };
 lobby_LobbyPage.addRoomHandler = function(peer,room) {
 	room.onMessage(1,function(msg) {
@@ -49495,74 +49611,57 @@ lobby_LobbyPage.addRoomHandler = function(peer,room) {
 };
 lobby_LobbyPage.handleURLJoin = function() {
 	var roomID = $global.location.hash.substring(1);
-	haxe_Log.trace("ID: " + roomID,{ fileName : "lobby/LobbyPage.hx", lineNumber : 75, className : "lobby.LobbyPage", methodName : "handleURLJoin"});
 	if(roomID == "") {
-		GlobalScreenSwitcher.switchScreen(new main_$menu_MainMenuScreen());
+		ScreenManager.switchScreen(new main_$menu_MainMenuScreen());
 		return;
 	}
 	var peer = new Peer();
 	peer.on(peerjs_PeerEventType.Error,function(err) {
-		haxe_Log.trace("URL Join PeerError: " + Std.string(err),{ fileName : "lobby/LobbyPage.hx", lineNumber : 85, className : "lobby.LobbyPage", methodName : "handleURLJoin"});
+		ScreenManager.pushOverlay(ui_ErrorPage.mainMenuPage("PeerError: " + Std.string(err)));
 	});
 	peer.on(peerjs_PeerEventType.Open,function(peerID) {
-		haxe_Log.trace("Connected to PeerServer, ID: " + peerID,{ fileName : "lobby/LobbyPage.hx", lineNumber : 89, className : "lobby.LobbyPage", methodName : "handleURLJoin"});
 		var tmp = new io_colyseus_Client("wss://" + "szi5os.colyseus.de");
 		var roomID1 = roomID;
 		var _g = new haxe_ds_StringMap();
 		_g.h["peerID"] = peerID;
 		tmp.joinById_lobby_WaitingRoomState(roomID1,_g,lobby_WaitingRoomState,function(err,room) {
 			if(err != null) {
-				haxe_Log.trace("Join error: " + Std.string(err),{ fileName : "lobby/LobbyPage.hx", lineNumber : 92, className : "lobby.LobbyPage", methodName : "handleURLJoin"});
-				GlobalScreenSwitcher.switchScreen(new main_$menu_MainMenuScreen());
+				ScreenManager.pushOverlay(ui_ErrorPage.mainMenuPage("Could Not Join Room: " + err.code + " - " + err.message));
 				return;
 			}
 			lobby_LobbyPage.addRoomHandler(peer,room);
 		});
 	});
 };
-lobby_LobbyPage.prototype = {
-	font: null
-	,menu: null
-	,fontSize: null
-	,fontHeight: null
-	,room: null
-	,header: null
-	,controlHints: null
-	,onResize: function() {
-		this.fontSize = 48 * this.menu.scaleManager.smallerScale | 0;
-		this.fontHeight = this.font.height(this.fontSize);
-	}
+lobby_LobbyPage.__super__ = ui_MenuPageBase;
+lobby_LobbyPage.prototype = $extend(ui_MenuPageBase.prototype,{
+	room: null
 	,onShow: function(menu) {
 		var _gthis = this;
-		this.menu = menu;
+		ui_MenuPageBase.prototype.onShow.call(this,menu);
 		if(this.room != null) {
 			return;
 		}
 		var peer = new Peer();
 		peer.on(peerjs_PeerEventType.Error,function(err) {
-			haxe_Log.trace("Create PeerError: " + Std.string(err),{ fileName : "lobby/LobbyPage.hx", lineNumber : 135, className : "lobby.LobbyPage", methodName : "onShow"});
+			ScreenManager.pushOverlay(ui_ErrorPage.mainMenuPage("PeerError: " + Std.string(err)));
 		});
 		peer.on(peerjs_PeerEventType.Open,function(id) {
-			haxe_Log.trace("Connected to PeerServer, ID: " + id,{ fileName : "lobby/LobbyPage.hx", lineNumber : 139, className : "lobby.LobbyPage", methodName : "onShow"});
 			var tmp = new io_colyseus_Client("wss://" + "szi5os.colyseus.de");
 			var _g = new haxe_ds_StringMap();
 			_g.h["peerID"] = id;
 			tmp.create_lobby_WaitingRoomState("waiting",_g,lobby_WaitingRoomState,function(err,room) {
 				if(err != null) {
-					haxe_Log.trace("Create error: " + Std.string(err),{ fileName : "lobby/LobbyPage.hx", lineNumber : 142, className : "lobby.LobbyPage", methodName : "onShow"});
+					ScreenManager.pushOverlay(ui_ErrorPage.mainMenuPage("Could Not Create Room: " + err.code + " - " + err.message));
 					return;
 				}
 				_gthis.room = room;
-				haxe_Log.trace(room.id,{ fileName : "lobby/LobbyPage.hx", lineNumber : 148, className : "lobby.LobbyPage", methodName : "onShow"});
 				lobby_LobbyPage.addRoomHandler(peer,room);
 			});
 		});
 	}
-	,update: function() {
-	}
 	,render: function(g,x,y) {
-		g.set_font(this.font);
-		g.set_fontSize(this.fontSize);
+		ui_MenuPageBase.prototype.render.call(this,g,x,y);
 		if(this.room == null) {
 			g.drawString("Connecting...",x,y);
 			return;
@@ -49571,13 +49670,13 @@ lobby_LobbyPage.prototype = {
 		g.drawString("Join Link: https://gelavolt.io/#" + this.room.id,x,y + this.fontHeight);
 	}
 	,__class__: lobby_LobbyPage
-};
+});
 var lobby_WaitingRoomState = function() { };
 $hxClasses["lobby.WaitingRoomState"] = lobby_WaitingRoomState;
 lobby_WaitingRoomState.__name__ = "lobby.WaitingRoomState";
 var main_$menu_MainMenuScreen = function() {
 	var prefs = save_$data_Profile.primary.prefs;
-	this.menu = new ui_Menu(new ui_MenuOptions(0,1,new main_$menu_ui_MainMenuPage(prefs),prefs));
+	this.menu = new ui_Menu(new ui_MenuOptions(new main_$menu_ui_MainMenuPage(prefs),0,1,0,prefs));
 	this.menu.onShow(input_AnyInputDevice.instance);
 };
 $hxClasses["main_menu.MainMenuScreen"] = main_$menu_MainMenuScreen;
@@ -49597,9 +49696,9 @@ var main_$menu_ui_MainMenuPage = function(prefsSettings) {
 	this.prefsSettings = prefsSettings;
 	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions(function(_) {
 		return [new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
-			GlobalScreenSwitcher.switchScreen(new game_screens_BackupStateGameScreen(new game_gamestatebuilders_TrainingGameStateBuilder(new game_gamestatebuilders_TrainingGameStateBuilderOptions(kha_System.get_time() * 1000000 | 0,96,70,utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(0.5),utils_ValueBox.fromValue(4),utils_ValueBox.fromValue(false),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue(true),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(game_rules_PhysicsType.TSU),utils_ValueBox.fromValue(game_rules_AnimationsType.TSU),utils_ValueBox.fromValue(2.6),utils_ValueBox.fromValue(true)))));
+			ScreenManager.switchScreen(new game_screens_BackupStateGameScreen(new game_gamestatebuilders_TrainingGameStateBuilder(new game_gamestatebuilders_TrainingGameStateBuilderOptions(kha_System.get_time() * 1000000 | 0,96,70,utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(0.5),utils_ValueBox.fromValue(4),utils_ValueBox.fromValue(false),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue(true),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(game_rules_PhysicsType.TSU),utils_ValueBox.fromValue(game_rules_AnimationsType.TSU),utils_ValueBox.fromValue(2.6),utils_ValueBox.fromValue(true)))));
 		},"Training Mode",["Practice In GelaVolt's","Signature Training Mode!"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
-			GlobalScreenSwitcher.switchScreen(new game_screens_GameScreen(new game_gamestatebuilders_EndlessGameStateBuilder(new game_gamestatebuilders_EndlessGameStateBuilderOptions(null,kha_System.get_time() * 1000000 | 0,96,70,utils_ValueBox.fromValue(0.5),utils_ValueBox.fromValue(4),utils_ValueBox.fromValue(false),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue(true),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(game_rules_PhysicsType.TSU),utils_ValueBox.fromValue(game_rules_AnimationsType.TSU),utils_ValueBox.fromValue(2.6),utils_ValueBox.fromValue(true),input_AnyInputDevice.instance,null))));
+			ScreenManager.switchScreen(new game_screens_GameScreen(new game_gamestatebuilders_EndlessGameStateBuilder(new game_gamestatebuilders_EndlessGameStateBuilderOptions(null,kha_System.get_time() * 1000000 | 0,96,70,utils_ValueBox.fromValue(0.5),utils_ValueBox.fromValue(4),utils_ValueBox.fromValue(false),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue("TSU"),utils_ValueBox.fromValue(true),utils_ValueBox.fromValue(30),utils_ValueBox.fromValue(game_rules_PhysicsType.TSU),utils_ValueBox.fromValue(game_rules_AnimationsType.TSU),utils_ValueBox.fromValue(2.6),utils_ValueBox.fromValue(true),input_AnyInputDevice.instance,null))));
 		},"Endless Mode",["Play For As Long As You","Can In Endless Mode And","Share Your Replays!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Host Netplay Test (WIP)",new lobby_LobbyPage(),[])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(prefsSettings),["Change Various Options and Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
 			window.open("https://github.com/doczi-dominik/gelavolt/releases");
 		},"Download Desktop Version",["Download GelaVolt's","Desktop Version For","Better Performance","And Offline Play"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
@@ -49700,7 +49799,13 @@ main_$menu_ui_OptionsPage.prototype = $extend(ui_ListMenuPage.prototype,{
 		return [tmp,new ui_OptionListWidget(new ui_OptionListWidgetOptions("Gamepad Brand",["DS4","SW Pro Controller","JOYCON","XBONE","XB360"],tmp1,function(value) {
 			inputSettings.gamepadBrand = value;
 			save_$data_SaveManager.saveProfiles();
-		},["Change The Type Of Button Icons","To Display"]))];
+		},["Change The Type Of Button Icons","To Display"])),new ui_NumberRangeWidget(new ui_NumberRangeWidgetOptions("Offline Input Delay",0,8,1,inputSettings.localDelay,function(value) {
+			inputSettings.localDelay = value | 0;
+			save_$data_SaveManager.saveProfiles();
+		},["Input Delay For Singleplayer Gamemodes","","Setting This To Match","'Netplay Input Delay' Is Recommended!"])),new ui_NumberRangeWidget(new ui_NumberRangeWidgetOptions("Netplay Input Delay",0,8,1,inputSettings.netplayDelay,function(value) {
+			inputSettings.netplayDelay = value | 0;
+			save_$data_SaveManager.saveProfiles();
+		},["Input Delay For Online Multiplayer","","Lower: More Responsive Inputs,","More Visual Glitches","","Higher: Less Responsive Inputs,","Less Visual Glitches"]))];
 	}
 	,buildUniversalBottom: function(inputDevice) {
 		return [new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Input Settings",function() {
@@ -50476,6 +50581,9 @@ var save_$data_InputSettings = function(overrides) {
 				case "GAMEPAD_BRAND":
 					this.gamepadBrand = js_Boot.__cast(v , String);
 					break;
+				case "LOCAL_DELAY":
+					this.localDelay = js_Boot.__cast(v , Int);
+					break;
 				case "MAPPINGS":
 					var h = (js_Boot.__cast(v , haxe_ds_StringMap)).h;
 					var _g2_h = h;
@@ -50492,6 +50600,9 @@ var save_$data_InputSettings = function(overrides) {
 						this1.h[js_Boot.__cast(kk , String)] = v1;
 					}
 					break;
+				case "NETPLAY_DELAY":
+					this.netplayDelay = js_Boot.__cast(v , Int);
+					break;
 				}
 			} catch( _g2 ) {
 				continue;
@@ -50507,6 +50618,8 @@ save_$data_InputSettings.prototype = {
 	,mappings: null
 	,deadzone: null
 	,gamepadBrand: null
+	,localDelay: null
+	,netplayDelay: null
 	,exportOverrides: function() {
 		var overrides = new haxe_ds_StringMap();
 		var wereOverrides = false;
@@ -50540,6 +50653,14 @@ save_$data_InputSettings.prototype = {
 			overrides.h["GAMEPAD_BRAND"] = this.gamepadBrand;
 			wereOverrides = true;
 		}
+		if(this.localDelay != 0) {
+			overrides.h["LOCAL_DELAY"] = this.localDelay;
+			wereOverrides = true;
+		}
+		if(this.netplayDelay != 2) {
+			overrides.h["NETPLAY_DELAY"] = this.netplayDelay;
+			wereOverrides = true;
+		}
 		if(wereOverrides) {
 			return overrides;
 		} else {
@@ -50563,6 +50684,8 @@ save_$data_InputSettings.prototype = {
 		this.mappings = haxe_ds_StringMap.createCopy(save_$data_InputSettings.MAPPINGS_DEFAULTS.h);
 		this.deadzone = 0.5;
 		this.gamepadBrand = "DS4";
+		this.localDelay = 0;
+		this.netplayDelay = 2;
 		this.notifyListeners();
 	}
 	,getButtonSprite: function(action) {
@@ -51281,22 +51404,14 @@ ui_AnyGamepadDetectWrapperOptions.prototype = {
 var ui_AnyGamepadDetectWrapper = function(opts) {
 	this.keyboardDevice = opts.keyboardDevice;
 	this.pageBuilder = opts.pageBuilder;
-	this.font = kha_Assets.fonts.Pixellari;
-	this.header = "Select Gamepad";
-	this.controlHints = [new ui_ControlHint(["BACK"],"Back")];
+	ui_MenuPageBase.call(this,new ui_MenuPageBaseOptions(64,"Select Gamepad",[new ui_ControlHint(["BACK"],"Back")],null));
 };
 $hxClasses["ui.AnyGamepadDetectWrapper"] = ui_AnyGamepadDetectWrapper;
 ui_AnyGamepadDetectWrapper.__name__ = "ui.AnyGamepadDetectWrapper";
-ui_AnyGamepadDetectWrapper.__interfaces__ = [ui_IMenuPage];
-ui_AnyGamepadDetectWrapper.prototype = {
+ui_AnyGamepadDetectWrapper.__super__ = ui_MenuPageBase;
+ui_AnyGamepadDetectWrapper.prototype = $extend(ui_MenuPageBase.prototype,{
 	keyboardDevice: null
 	,pageBuilder: null
-	,font: null
-	,menu: null
-	,fontSize: null
-	,fontHeight: null
-	,header: null
-	,controlHints: null
 	,popPage: function() {
 		var _this = this.menu;
 		var _this1 = _this.inputDevices;
@@ -51307,12 +51422,8 @@ ui_AnyGamepadDetectWrapper.prototype = {
 		_this.setInputDevice();
 		this.menu.popPage();
 	}
-	,onResize: function() {
-		this.fontSize = 64 * this.menu.scaleManager.smallerScale | 0;
-		this.fontHeight = this.font.height(this.fontSize);
-	}
 	,onShow: function(menu) {
-		this.menu = menu;
+		ui_MenuPageBase.prototype.onShow.call(this,menu);
 		var _this = menu.inputDevices;
 		_this.head = new haxe_ds_GenericCell(this.keyboardDevice,_this.head);
 		menu.setInputDevice();
@@ -51346,8 +51457,7 @@ ui_AnyGamepadDetectWrapper.prototype = {
 		}
 	}
 	,render: function(g,x,y) {
-		g.set_font(this.font);
-		g.set_fontSize(this.fontSize);
+		ui_MenuPageBase.prototype.render.call(this,g,x,y);
 		var _g = 0;
 		var _g1 = ui_AnyGamepadDetectWrapper.TEXT.length;
 		while(_g < _g1) {
@@ -51356,31 +51466,18 @@ ui_AnyGamepadDetectWrapper.prototype = {
 		}
 	}
 	,__class__: ui_AnyGamepadDetectWrapper
-};
+});
 var ui_AreYouSurePage = function(content,callback) {
-	this.font = kha_Assets.fonts.Pixellari;
+	ui_MenuPageBase.call(this,new ui_MenuPageBaseOptions(64,"Are You Sure?",[new ui_ControlHint(["BACK"],"Back"),new ui_ControlHint(["CONFIRM"],"Confirm")],null));
 	this.content = content;
-	this.header = "Are You Sure?";
-	this.controlHints = [new ui_ControlHint(["BACK"],"Back"),new ui_ControlHint(["CONFIRM"],"Confirm")];
 	this.callback = callback;
 };
 $hxClasses["ui.AreYouSurePage"] = ui_AreYouSurePage;
 ui_AreYouSurePage.__name__ = "ui.AreYouSurePage";
-ui_AreYouSurePage.__interfaces__ = [ui_IMenuPage];
-ui_AreYouSurePage.prototype = {
-	font: null
-	,content: null
+ui_AreYouSurePage.__super__ = ui_MenuPageBase;
+ui_AreYouSurePage.prototype = $extend(ui_MenuPageBase.prototype,{
+	content: null
 	,callback: null
-	,fontSize: null
-	,menu: null
-	,header: null
-	,controlHints: null
-	,onResize: function() {
-		this.fontSize = 64 * this.menu.scaleManager.smallerScale | 0;
-	}
-	,onShow: function(menu) {
-		this.menu = menu;
-	}
 	,update: function() {
 		var inputDevice = this.menu.inputDevice;
 		if(inputDevice.getAction("BACK")) {
@@ -51398,7 +51495,7 @@ ui_AreYouSurePage.prototype = {
 		g.drawString(this.content,x,y);
 	}
 	,__class__: ui_AreYouSurePage
-};
+});
 var ui_ButtonWidgetOptions = function(callback,title,description) {
 	this.callback = callback;
 	this.title = title;
@@ -51432,6 +51529,46 @@ ui_AreYouSureSubPageWidget.__name__ = "ui.AreYouSureSubPageWidget";
 ui_AreYouSureSubPageWidget.__super__ = ui_SubPageWidget;
 ui_AreYouSureSubPageWidget.prototype = $extend(ui_SubPageWidget.prototype,{
 	__class__: ui_AreYouSureSubPageWidget
+});
+var ui_ErrorPageOptons = function(controlDescription,message,callback) {
+	this.controlDescription = controlDescription;
+	this.message = message;
+	this.callback = callback;
+};
+$hxClasses["ui.ErrorPageOptons"] = ui_ErrorPageOptons;
+ui_ErrorPageOptons.__name__ = "ui.ErrorPageOptons";
+ui_ErrorPageOptons.prototype = {
+	controlDescription: null
+	,message: null
+	,callback: null
+	,__class__: ui_ErrorPageOptons
+};
+var ui_ErrorPage = function(opts) {
+	ui_MenuPageBase.call(this,new ui_MenuPageBaseOptions(64,"Error",[new ui_ControlHint(["BACK","CONFIRM"],opts.controlDescription)],null));
+	this.message = opts.message;
+	this.callback = opts.callback;
+};
+$hxClasses["ui.ErrorPage"] = ui_ErrorPage;
+ui_ErrorPage.__name__ = "ui.ErrorPage";
+ui_ErrorPage.mainMenuPage = function(message) {
+	return new ui_ErrorPage(new ui_ErrorPageOptons("Return To Main Menu",message,function() {
+		ScreenManager.switchScreen(new main_$menu_MainMenuScreen());
+	}));
+};
+ui_ErrorPage.__super__ = ui_MenuPageBase;
+ui_ErrorPage.prototype = $extend(ui_MenuPageBase.prototype,{
+	message: null
+	,callback: null
+	,update: function() {
+		if(this.menu.inputDevice.getAction("BACK") || this.menu.inputDevice.getAction("CONFIRM")) {
+			this.callback();
+		}
+	}
+	,render: function(g,x,y) {
+		ui_MenuPageBase.prototype.render.call(this,g,x,y);
+		g.drawString(this.message,x,y);
+	}
+	,__class__: ui_ErrorPage
 });
 var ui_ListMenuPageOptions = function(widgetBuilder,header) {
 	this.widgetBuilder = widgetBuilder;
@@ -51467,28 +51604,18 @@ ui_KeyboardConfirmWrapperOptions.prototype = {
 	,__class__: ui_KeyboardConfirmWrapperOptions
 };
 var ui_KeyboardConfirmWrapper = function(opts) {
+	ui_MenuPageBase.call(this,new ui_MenuPageBaseOptions(64,"Confirm Keyboard",[new ui_ControlHint(["BACK"],"Back")],null));
 	this.keyboardDevice = opts.keyboardDevice;
 	this.pageBuilder = opts.pageBuilder;
-	this.font = kha_Assets.fonts.Pixellari;
-	this.header = "Confirm Keyboard";
-	this.controlHints = [new ui_ControlHint(["BACK"],"Back")];
 };
 $hxClasses["ui.KeyboardConfirmWrapper"] = ui_KeyboardConfirmWrapper;
 ui_KeyboardConfirmWrapper.__name__ = "ui.KeyboardConfirmWrapper";
-ui_KeyboardConfirmWrapper.__interfaces__ = [ui_IMenuPage];
-ui_KeyboardConfirmWrapper.prototype = {
+ui_KeyboardConfirmWrapper.__super__ = ui_MenuPageBase;
+ui_KeyboardConfirmWrapper.prototype = $extend(ui_MenuPageBase.prototype,{
 	keyboardDevice: null
 	,pageBuilder: null
-	,font: null
-	,menu: null
-	,fontSize: null
-	,header: null
-	,controlHints: null
-	,onResize: function() {
-		this.fontSize = 64 * this.menu.scaleManager.smallerScale | 0;
-	}
 	,onShow: function(menu) {
-		this.menu = menu;
+		ui_MenuPageBase.prototype.onShow.call(this,menu);
 		this.keyboardDevice.resetIsAnyKeyDown();
 	}
 	,update: function() {
@@ -51502,26 +51629,45 @@ ui_KeyboardConfirmWrapper.prototype = {
 		}
 	}
 	,render: function(g,x,y) {
-		g.set_font(this.font);
-		g.set_fontSize(this.fontSize);
+		ui_MenuPageBase.prototype.render.call(this,g,x,y);
 		g.drawString(ui_KeyboardConfirmWrapper.TEXT,x,y);
 	}
 	,__class__: ui_KeyboardConfirmWrapper
-};
-var ui_MenuOptions = function(positionFactor,widthFactor,initialPage,prefsSettings) {
+});
+var ui_MenuOptions = function(initialPage,positionFactor,widthFactor,backgroundOpacity,prefsSettings) {
+	this.initialPage = initialPage;
 	this.positionFactor = positionFactor;
 	this.widthFactor = widthFactor;
-	this.initialPage = initialPage;
+	this.backgroundOpacity = backgroundOpacity;
 	this.prefsSettings = prefsSettings;
 };
 $hxClasses["ui.MenuOptions"] = ui_MenuOptions;
 ui_MenuOptions.__name__ = "ui.MenuOptions";
 ui_MenuOptions.prototype = {
-	positionFactor: null
+	initialPage: null
+	,positionFactor: null
 	,widthFactor: null
-	,initialPage: null
+	,backgroundOpacity: null
 	,prefsSettings: null
 	,__class__: ui_MenuOptions
+};
+var ui_MenuPageBaseOptions = function(designFontSize,header,controlHints,font) {
+	this.font = "Pixellari";
+	this.designFontSize = designFontSize;
+	this.header = header;
+	this.controlHints = controlHints;
+	if(font != null) {
+		this.font = font;
+	}
+};
+$hxClasses["ui.MenuPageBaseOptions"] = ui_MenuPageBaseOptions;
+ui_MenuPageBaseOptions.__name__ = "ui.MenuPageBaseOptions";
+ui_MenuPageBaseOptions.prototype = {
+	designFontSize: null
+	,header: null
+	,controlHints: null
+	,font: null
+	,__class__: ui_MenuPageBaseOptions
 };
 var ui_NumberRangeWidgetOptions = function(title,minValue,maxValue,delta,startValue,onChange,description) {
 	this.title = title;
@@ -51938,7 +52084,6 @@ Main.accumulator = 0.0;
 ScaleManager.SCREEN_DESIGN_WIDTH = 1920;
 ScaleManager.SCREEN_DESIGN_HEIGHT = 1080;
 ScaleManager.screen = new ScaleManager(1920,1080);
-GlobalScreenSwitcher.currentScreen = NullScreen.get_instance();
 game_AllClearManager.__meta__ = { fields : { rng : { inject : null}, geometries : { inject : null}, particleManager : { inject : null}, borderColorMediator : { inject : null}, targetY : { copy : null}, boardCenterX : { copy : null}, line1 : { copy : null}, line2 : { copy : null}, line1HalfWidth : { copy : null}, line2HalfWidth : { copy : null}, shortStrHalfWidth : { copy : null}, t : { copy : null}, y : { copy : null}, scaleX : { copy : null}, showAnimation : { copy : null}, acCounter : { copy : null}}};
 game_AllClearManager.SHORT_STR = "AC!";
 kha_Color.Black = -16777216;
@@ -52470,7 +52615,7 @@ ui_ListMenuPage.DEFAULT_CONTROL_DISPLAYS = [new ui_ControlHint(["MENU_UP","MENU_
 ui_InputLimitedListPage.__meta__ = { fields : { inputDevice : { inject : null}}};
 ui_ButtonWidget.__meta__ = { fields : { callback : { inject : null}, title : { inject : null}, description : { inject : null}}};
 ui_ButtonWidget.FONT_SIZE = 60;
-ui_Menu.__meta__ = { fields : { positionFactor : { inject : null}, widthFactor : { inject : null}, initialPage : { inject : null}, prefsSettings : { inject : null}}};
+ui_Menu.__meta__ = { fields : { positionFactor : { inject : null}, widthFactor : { inject : null}, backgroundOpacity : { inject : null}, prefsSettings : { inject : null}}};
 ui_Menu.HEADER_FONT_SIZE = 128;
 ui_Menu.CONTROLS_FONT_SIZE = 48;
 ui_Menu.WARNING_FONT_SIZE = 24;
@@ -52480,7 +52625,6 @@ game_ui_EndlessPauseMenu.__meta__ = { fields : { endlessSettings : { inject : nu
 game_ui_GroupEditorPage.GRID_COLOR = kha_Color._new(-12303292);
 game_ui_InputWidget.FONT_SIZE = 60;
 game_ui_QueueEditorPage.__meta__ = { fields : { queue : { inject : null}, groupEditor : { inject : null}}};
-game_ui_QueueEditorPage.FONT_SIZE = 72;
 game_ui_ReplayPauseMenu.__meta__ = { fields : { actionBuffer : { inject : null}}};
 game_ui_TrainingPauseMenu.__meta__ = { fields : { popCount : { inject : null}, vanishHiddenRows : { inject : null}, dropSpeed : { inject : null}, physics : { inject : null}, powerTableType : { inject : null}, colorBonusTableType : { inject : null}, groupBonusTableType : { inject : null}, dropBonusGarbage : { inject : null}, allClearReward : { inject : null}, randomizer : { inject : null}, queue : { inject : null}, playState : { inject : null}, trainingBoard : { inject : null}, allClearManager : { inject : null}, chainSim : { inject : null}, marginManager : { inject : null}, trainingSettings : { inject : null}, playerGarbageManager : { inject : null}, infoGarbageManager : { inject : null}, controlHintContainer : { inject : null}, autoAttackManager : { inject : null}}};
 haxe_Serializer.USE_CACHE = false;
@@ -53275,7 +53419,6 @@ kha_netsync_Session.RPC_SERVER = 0;
 kha_netsync_Session.RPC_ALL = 1;
 kha_netsync_SyncBuilder.nextId = 0;
 kha_netsync_SyncBuilder.objects = [];
-lobby_LobbyPage.FONT_SIZE = 48;
 lobby_LobbyPage.RELAY_PORT_MESSAGE_TYPE = 1;
 lobby_LobbyPage.SERVER_URL = "szi5os.colyseus.de";
 main_$menu_ui_MainMenuPage.DISCORD_INVITE = "https://discord.gg/wsWArpAFJK";
@@ -53436,6 +53579,8 @@ save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
 }(this));
 save_$data_InputSettings.DEADZONE_DEFAULT = 0.5;
 save_$data_InputSettings.GAMEPAD_BRAND_DEFAULT = "DS4";
+save_$data_InputSettings.LOCAL_DELAY_DEFAULT = 0;
+save_$data_InputSettings.NETPLAY_DELAY_DEFAULT = 2;
 save_$data_PrefsSettings.COLOR_TINTS_DEFAULT = (function($this) {
 	var $r;
 	var _g = new haxe_ds_IntMap();
@@ -53504,11 +53649,9 @@ side_$setup_SideSetupScreen.FONT_SIZE = 80;
 side_$setup_SideSetupScreen.LEFT_BOARD_STR = "Left Board";
 side_$setup_SideSetupScreen.RIGHT_BOARD_STR = "Right Board";
 ui_AnyGamepadDetectWrapper.__meta__ = { fields : { keyboardDevice : { inject : null}, pageBuilder : { inject : null}}};
-ui_AnyGamepadDetectWrapper.FONT_SIZE = 64;
 ui_AnyGamepadDetectWrapper.TEXT = ["Press any button on","the gamepad you wish","to use"];
-ui_AreYouSurePage.FONT_SIZE = 64;
+ui_ErrorPage.__meta__ = { fields : { message : { inject : null}, callback : { inject : null}}};
 ui_KeyboardConfirmWrapper.__meta__ = { fields : { keyboardDevice : { inject : null}, pageBuilder : { inject : null}}};
-ui_KeyboardConfirmWrapper.FONT_SIZE = 64;
 ui_KeyboardConfirmWrapper.TEXT = "Press any button to continue";
 ui_NumberRangeWidget.__meta__ = { fields : { title : { inject : null}, minValue : { inject : null}, maxValue : { inject : null}, delta : { inject : null}, startValue : { inject : null}, onChange : { inject : null}, description : { inject : null}}};
 ui_NumberRangeWidget.FONT_SIZE = 60;
