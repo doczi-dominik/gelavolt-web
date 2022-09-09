@@ -203,9 +203,11 @@ Main.main = function() {
 				var frameTime = now - Main.lastT;
 				Main.lastT = now;
 				Main.accumulator += frameTime;
-				input_InputDevice.update();
-				ScreenManager.updateCurrent();
-				while(Main.accumulator >= Main.FIXED_UPDATE_DELTA) Main.accumulator -= Main.FIXED_UPDATE_DELTA;
+				while(Main.accumulator >= Main.FIXED_UPDATE_DELTA) {
+					input_InputDevice.update();
+					ScreenManager.updateCurrent();
+					Main.accumulator -= Main.FIXED_UPDATE_DELTA;
+				}
 				Main.alpha = Main.accumulator / Main.FIXED_UPDATE_DELTA;
 				ScreenManager.renderCurrent(frames[0],Main.alpha);
 			});
