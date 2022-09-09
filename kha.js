@@ -9113,6 +9113,8 @@ game_net_SessionManager.prototype = {
 			if(++this.desyncCounter > 5) {
 				this.error("Desync Detected");
 			}
+		} else {
+			this.desyncCounter = 0;
 		}
 		this.lastLocalChecksum = null;
 		this.lastRemoteChecksum = null;
