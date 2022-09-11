@@ -203,11 +203,11 @@ Main.main = function() {
 				var frameTime = now - Main.lastT;
 				Main.lastT = now;
 				Main.accumulator += frameTime;
-				while(Main.accumulator >= Main.FIXED_UPDATE_DELTA) {
+				if(Main.accumulator >= Main.FIXED_UPDATE_DELTA) {
 					input_InputDevice.update();
 					ScreenManager.updateCurrent();
-					Main.accumulator -= Main.FIXED_UPDATE_DELTA;
 				}
+				Main.accumulator %= Main.FIXED_UPDATE_DELTA;
 				Main.alpha = Main.accumulator / Main.FIXED_UPDATE_DELTA;
 				ScreenManager.renderCurrent(frames[0],Main.alpha);
 			});
@@ -9361,7 +9361,7 @@ game_net_SessionManager.prototype = {
 		var _gthis = this;
 		kha_Scheduler.removeTimeTask(this.syncPackageTimeoutTaskID);
 		this.syncPackageTimeoutTaskID = kha_Scheduler.addTimeTask(function() {
-			_gthis.error("Connection Error: Sync Package Timeout");
+			_gthis.error("Peer Disconnected (Sync Package Timeout)");
 		},2);
 	}
 	,setSyncInterval: function(interval) {
@@ -16643,15 +16643,46 @@ input_AnyInputDevice.prototype = {
 	,__class__: input_AnyInputDevice
 	,__properties__: {get_inputSettings:"get_inputSettings"}
 };
-var input_AxisMapping = function(axis,direction) {
+var input_AxisMapping = function(axis,direction,__uid) {
+	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
 	this.axis = axis;
 	this.direction = direction;
+	if(__uid != null) {
+		this.__uid = __uid;
+	}
 };
 $hxClasses["input.AxisMapping"] = input_AxisMapping;
 input_AxisMapping.__name__ = "input.AxisMapping";
+input_AxisMapping.__interfaces__ = [hxbit_Serializable];
 input_AxisMapping.fromString = function(str) {
 	var parts = str.split(";");
-	return new input_AxisMapping(Std.parseInt(parts[0]),Std.parseInt(parts[1]));
+	return new input_AxisMapping(Std.parseInt(parts[0]),Std.parseInt(parts[1]),null);
+};
+input_AxisMapping.doSerialize = function(__ctx,__this) {
+	if(__this.axis == null) {
+		__ctx.addByte(0);
+	} else {
+		__ctx.addByte(1);
+		__ctx.addInt(__this.axis);
+	}
+	if(__this.direction == null) {
+		__ctx.addByte(0);
+	} else {
+		__ctx.addByte(1);
+		__ctx.addInt(__this.direction);
+	}
+};
+input_AxisMapping.doUnserialize = function(__ctx,__this) {
+	if(__ctx.input.b[__ctx.inPos++] == 0) {
+		__this.axis = null;
+	} else {
+		__this.axis = __ctx.getInt();
+	}
+	if(__ctx.input.b[__ctx.inPos++] == 0) {
+		__this.direction = null;
+	} else {
+		__this.direction = __ctx.getInt();
+	}
 };
 input_AxisMapping.prototype = {
 	axis: null
@@ -16675,6 +16706,27 @@ input_AxisMapping.prototype = {
 	}
 	,asString: function() {
 		return "" + this.axis + ";" + this.direction;
+	}
+	,__uid: null
+	,getCLID: function() {
+		return input_AxisMapping.__clid;
+	}
+	,serialize: function(__ctx) {
+		input_AxisMapping.doSerialize(__ctx,this);
+	}
+	,getSerializeSchema: function() {
+		var schema = new hxbit_Schema();
+		schema.fieldsNames.push("axis");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PNull(hxbit_PropTypeDesc.PInt));
+		schema.fieldsNames.push("direction");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PNull(hxbit_PropTypeDesc.PInt));
+		schema.isFinal = hxbit_Serializer.isClassFinal(input_AxisMapping.__clid);
+		return schema;
+	}
+	,unserializeInit: function() {
+	}
+	,unserialize: function(__ctx) {
+		input_AxisMapping.doUnserialize(__ctx,this);
 	}
 	,__class__: input_AxisMapping
 };
@@ -16869,7 +16921,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 					somethingChanged = true;
 				}
 				if(somethingChanged) {
-					var oppositeMapping = new input_AxisMapping(axis,k.direction * -1);
+					var oppositeMapping = new input_AxisMapping(axis,k.direction * -1,null);
 					var _this1 = this.axesToActions.values;
 					var key2 = oppositeMapping.hashCode();
 					if(_this1.h.hasOwnProperty(key2)) {
@@ -16887,7 +16939,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		}
 		var original = this.get_inputSettings().mappings.h[action];
 		var this1 = this.get_inputSettings().mappings;
-		var v = new input_InputMapping(original.keyboardInput,button,original.gamepadAxis);
+		var v = new input_InputMapping(original.keyboardInput,button,original.gamepadAxis,null);
 		this1.h[action] = v;
 		this.finishRebind();
 	}
@@ -16897,7 +16949,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		}
 		var original = this.get_inputSettings().mappings.h[action];
 		var this1 = this.get_inputSettings().mappings;
-		var v = new input_InputMapping(original.keyboardInput,original.gamepadButton,new input_AxisMapping(axis,value > 0 ? 1 : -1));
+		var v = new input_InputMapping(original.keyboardInput,original.gamepadButton,new input_AxisMapping(axis,value > 0 ? 1 : -1,null),null);
 		this1.h[action] = v;
 		this.finishRebind();
 	}
@@ -16969,7 +17021,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	,unbind: function(action) {
 		var old = this.get_inputSettings().mappings.h[action];
 		var this1 = this.get_inputSettings().mappings;
-		var v = new input_InputMapping(old.keyboardInput,null,new input_AxisMapping(null,null));
+		var v = new input_InputMapping(old.keyboardInput,null,new input_AxisMapping(null,null,null),null);
 		this1.h[action] = v;
 		input_InputDevice.prototype.unbind.call(this,action);
 	}
@@ -16977,7 +17029,7 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 		var def = save_$data_InputSettings.MAPPINGS_DEFAULTS.h[action];
 		var old = this.get_inputSettings().mappings.h[action];
 		var this1 = this.get_inputSettings().mappings;
-		var v = new input_InputMapping(old.keyboardInput,def.gamepadButton,def.gamepadAxis);
+		var v = new input_InputMapping(old.keyboardInput,def.gamepadButton,def.gamepadAxis,null);
 		this1.h[action] = v;
 		input_InputDevice.prototype.bindDefault.call(this,action);
 	}
@@ -17115,16 +17167,51 @@ input_GamepadInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	}
 	,__class__: input_GamepadInputDevice
 });
-var input_InputMapping = function(keyboardInput,gamepadButton,gamepadAxis) {
+var input_InputMapping = function(keyboardInput,gamepadButton,gamepadAxis,__uid) {
+	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
 	this.keyboardInput = keyboardInput;
 	this.gamepadButton = gamepadButton;
 	this.gamepadAxis = gamepadAxis;
+	if(__uid != null) {
+		this.__uid = __uid;
+	}
 };
 $hxClasses["input.InputMapping"] = input_InputMapping;
 input_InputMapping.__name__ = "input.InputMapping";
+input_InputMapping.__interfaces__ = [hxbit_Serializable];
 input_InputMapping.fromString = function(str) {
 	var parts = str.split(";");
-	return new input_InputMapping(parts[0] != "" ? js_Boot.__cast(Std.parseInt(parts[0]) , Int) : null,parts[1] != "" ? Std.parseInt(parts[1]) : null,parts[2] != "" ? input_AxisMapping.fromString(parts[2]) : new input_AxisMapping(null,null));
+	return new input_InputMapping(parts[0] != "" ? js_Boot.__cast(Std.parseInt(parts[0]) , Int) : null,parts[1] != "" ? Std.parseInt(parts[1]) : null,parts[2] != "" ? input_AxisMapping.fromString(parts[2]) : new input_AxisMapping(null,null,null),null);
+};
+input_InputMapping.doSerialize = function(__ctx,__this) {
+	if(__this.keyboardInput == null) {
+		__ctx.addByte(0);
+	} else {
+		__ctx.addByte(1);
+		__ctx.addInt(__this.keyboardInput);
+	}
+	if(__this.gamepadButton == null) {
+		__ctx.addByte(0);
+	} else {
+		__ctx.addByte(1);
+		__ctx.addInt(__this.gamepadButton);
+	}
+	__ctx.addKnownRef(__this.gamepadAxis);
+};
+input_InputMapping.doUnserialize = function(__ctx,__this) {
+	if(__ctx.input.b[__ctx.inPos++] == 0) {
+		__this.keyboardInput = null;
+	} else {
+		var v0 = __ctx.getInt();
+		__this.keyboardInput = v0;
+	}
+	if(__ctx.input.b[__ctx.inPos++] == 0) {
+		__this.gamepadButton = null;
+	} else {
+		var v0 = __ctx.getInt();
+		__this.gamepadButton = v0;
+	}
+	__this.gamepadAxis = __ctx.getRef(input_AxisMapping,input_AxisMapping.__clid);
 };
 input_InputMapping.prototype = {
 	keyboardInput: null
@@ -17142,6 +17229,29 @@ input_InputMapping.prototype = {
 		var bt = this.gamepadButton == null ? "" : "" + this.gamepadButton;
 		var ax = this.gamepadAxis == null ? "" : "" + this.gamepadAxis.asString();
 		return "" + kb + ";" + bt + ";" + ax;
+	}
+	,__uid: null
+	,getCLID: function() {
+		return input_InputMapping.__clid;
+	}
+	,serialize: function(__ctx) {
+		input_InputMapping.doSerialize(__ctx,this);
+	}
+	,getSerializeSchema: function() {
+		var schema = new hxbit_Schema();
+		schema.fieldsNames.push("keyboardInput");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PNull(hxbit_PropTypeDesc.PInt));
+		schema.fieldsNames.push("gamepadButton");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PNull(hxbit_PropTypeDesc.PInt));
+		schema.fieldsNames.push("gamepadAxis");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PSerializable("input.AxisMapping"));
+		schema.isFinal = hxbit_Serializer.isClassFinal(input_InputMapping.__clid);
+		return schema;
+	}
+	,unserializeInit: function() {
+	}
+	,unserialize: function(__ctx) {
+		input_InputMapping.doUnserialize(__ctx,this);
 	}
 	,__class__: input_InputMapping
 };
@@ -17199,7 +17309,7 @@ input_KeyboardInputDevice.prototype = $extend(input_InputDevice.prototype,{
 	,changeKeybind: function(action,key) {
 		var original = this.get_inputSettings().mappings.h[action];
 		var this1 = this.get_inputSettings().mappings;
-		var v = new input_InputMapping(key,original.gamepadButton,original.gamepadAxis);
+		var v = new input_InputMapping(key,original.gamepadButton,original.gamepadAxis,null);
 		this1.h[action] = v;
 	}
 	,rebindListener: function(action,key) {
@@ -20155,10 +20265,7 @@ kha_Image.create = function(width,height,format,usage) {
 kha_Image.create3D = function(width,height,depth,format,usage) {
 	return null;
 };
-kha_Image.createRenderTarget = function(width,height,format,depthStencil,antiAliasingSamples,contextId) {
-	if(contextId == null) {
-		contextId = 0;
-	}
+kha_Image.createRenderTarget = function(width,height,format,depthStencil,antiAliasingSamples) {
 	if(antiAliasingSamples == null) {
 		antiAliasingSamples = 1;
 	}
@@ -41957,10 +42064,7 @@ var kha_graphics4_CubeMap = function(size,format,renderTarget,depthStencilFormat
 $hxClasses["kha.graphics4.CubeMap"] = kha_graphics4_CubeMap;
 kha_graphics4_CubeMap.__name__ = "kha.graphics4.CubeMap";
 kha_graphics4_CubeMap.__interfaces__ = [kha_Resource,kha_Canvas];
-kha_graphics4_CubeMap.createRenderTarget = function(size,format,depthStencil,contextId) {
-	if(contextId == null) {
-		contextId = 0;
-	}
+kha_graphics4_CubeMap.createRenderTarget = function(size,format,depthStencil) {
 	if(format == null) {
 		format = 0;
 	}
@@ -50300,22 +50404,19 @@ var main_$menu_ui_ProfilePage = function(listPage,profile) {
 	ui_ListMenuPage.call(this,new ui_ListMenuPageOptions(function(_) {
 		var widgets = [new game_ui_ListSubPageWidget(new game_ui_ListSubPageWidgetOptions("Reset To Default",["Reset Various Aspects Of The Profile","To Their Default Values"],function(_) {
 			return [new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Input Settings",function() {
-				profile.input.setDefaults();
+				profile.input = new save_$data_InputSettings();
 				save_$data_SaveManager.saveProfiles();
 			},"Reset Input Settings",["Reset Input Settings"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Preferences",function() {
-				profile.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
+				profile.prefs = new save_$data_PrefsSettings(null,null,null,null,null,null,null,null,null,null);
 				save_$data_SaveManager.saveProfiles();
 			},"Reset Preferences",["Reset Preferences"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Training Options",function() {
-				profile.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
+				profile.trainingSettings = new save_$data_TrainingSettings(null,null,null,null,null,null,null,null,null,null,null,null,null,null);
 				save_$data_SaveManager.saveProfiles();
 			},"Reset Training Options",["Reset Training Mode-Exclusive Options"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset Your Endless Options",function() {
-				profile.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+				profile.endlessSettings = new save_$data_EndlessSettings(null,null,null);
 				save_$data_SaveManager.saveProfiles();
 			},"Reset Endless Options",["Reset Endless Mode-Exclusive Options"])),new ui_AreYouSureSubPageWidget(new ui_AreYouSureSubPageWidgetOptions("This Will IRREVERSIBLY Reset All Of Your Data",function() {
-				profile.input.setDefaults();
-				profile.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
-				profile.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
-				profile.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+				profile.setDefaults();
 				save_$data_SaveManager.saveProfiles();
 			},"Reset All",["Reset Input, Preferences, Training","And Endless Options"]))];
 		}))];
@@ -50906,158 +51007,173 @@ save_$data_IClearOnXModeContainer.prototype = {
 	clearOnXMode: null
 	,__class__: save_$data_IClearOnXModeContainer
 };
-var save_$data_EndlessSettings = function(overrides) {
-	this.showControlHints = true;
+var save_$data_EndlessSettings = function(showControlHints,clearOnXMode,__uid) {
+	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
 	this.clearOnXMode = "NEW";
-	try {
-		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
-		var _g_h = h;
-		var _g_keys = Object.keys(h);
-		var _g_length = _g_keys.length;
-		var _g_current = 0;
-		while(_g_current < _g_length) {
-			var key = _g_keys[_g_current++];
-			var _g = { key : key, value : _g_h[key]};
-			var k = _g.key;
-			var v = _g.value;
-			try {
-				switch(js_Boot.__cast(k , String)) {
-				case "CLEAR_ON_X_MODE":
-					this.clearOnXMode = js_Boot.__cast(v , String);
-					break;
-				case "SHOW_CONTROL_HINTS":
-					this.showControlHints = js_Boot.__cast(v , Bool);
-					break;
-				}
-			} catch( _g1 ) {
-				continue;
-			}
-		}
-	} catch( _g ) {
+	this.showControlHints = true;
+	if(showControlHints != null) {
+		this.showControlHints = showControlHints;
+	}
+	if(clearOnXMode != null) {
+		this.clearOnXMode = clearOnXMode;
+	}
+	if(__uid != null) {
+		this.__uid = __uid;
 	}
 };
 $hxClasses["save_data.EndlessSettings"] = save_$data_EndlessSettings;
 save_$data_EndlessSettings.__name__ = "save_data.EndlessSettings";
-save_$data_EndlessSettings.__interfaces__ = [save_$data_IClearOnXModeContainer];
+save_$data_EndlessSettings.__interfaces__ = [save_$data_IClearOnXModeContainer,hxbit_Serializable];
+save_$data_EndlessSettings.doSerialize = function(__ctx,__this) {
+	__ctx.addBool(__this.showControlHints);
+	__ctx.addString(__this.clearOnXMode);
+};
+save_$data_EndlessSettings.doUnserialize = function(__ctx,__this) {
+	__this.showControlHints = __ctx.input.b[__ctx.inPos++] != 0;
+	var v0 = __ctx.getString();
+	__this.clearOnXMode = v0;
+};
 save_$data_EndlessSettings.prototype = {
 	showControlHints: null
 	,clearOnXMode: null
-	,exportOverrides: function() {
-		var overrides = new haxe_ds_StringMap();
-		var wereOverrides = false;
-		if(this.showControlHints != true) {
-			overrides.h["SHOW_CONTROL_HINTS"] = this.showControlHints;
-			wereOverrides = true;
-		}
-		if(this.clearOnXMode != "NEW") {
-			overrides.h["CLEAR_ON_X_MODE"] = this.clearOnXMode;
-			wereOverrides = true;
-		}
-		if(wereOverrides) {
-			return overrides;
-		} else {
-			return null;
-		}
+	,__uid: null
+	,getCLID: function() {
+		return save_$data_EndlessSettings.__clid;
+	}
+	,serialize: function(__ctx) {
+		save_$data_EndlessSettings.doSerialize(__ctx,this);
+	}
+	,getSerializeSchema: function() {
+		var schema = new hxbit_Schema();
+		schema.fieldsNames.push("showControlHints");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.fieldsNames.push("clearOnXMode");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PString);
+		schema.isFinal = hxbit_Serializer.isClassFinal(save_$data_EndlessSettings.__clid);
+		return schema;
+	}
+	,unserializeInit: function() {
+		this.showControlHints = true;
+		this.clearOnXMode = "NEW";
+	}
+	,unserialize: function(__ctx) {
+		save_$data_EndlessSettings.doUnserialize(__ctx,this);
 	}
 	,__class__: save_$data_EndlessSettings
 };
-var save_$data_GraphicsSettings = function(overrides) {
+var save_$data_GraphicsSettings = function(fullscreen,__uid) {
+	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
 	this.fullscreen = true;
-	try {
-		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
-		var _g_h = h;
-		var _g_keys = Object.keys(h);
-		var _g_length = _g_keys.length;
-		var _g_current = 0;
-		while(_g_current < _g_length) {
-			var key = _g_keys[_g_current++];
-			var _g = { key : key, value : _g_h[key]};
-			var k = _g.key;
-			var v = _g.value;
-			try {
-				if(js_Boot.__cast(k , String) == "FULLSCREEN") {
-					this.fullscreen = js_Boot.__cast(v , Bool);
-				}
-			} catch( _g1 ) {
-				continue;
-			}
-		}
-	} catch( _g ) {
+	if(fullscreen != null) {
+		this.fullscreen = fullscreen;
+	}
+	if(__uid != null) {
+		this.__uid = __uid;
 	}
 };
 $hxClasses["save_data.GraphicsSettings"] = save_$data_GraphicsSettings;
 save_$data_GraphicsSettings.__name__ = "save_data.GraphicsSettings";
+save_$data_GraphicsSettings.__interfaces__ = [hxbit_Serializable];
+save_$data_GraphicsSettings.doSerialize = function(__ctx,__this) {
+	__ctx.addBool(__this.fullscreen);
+};
+save_$data_GraphicsSettings.doUnserialize = function(__ctx,__this) {
+	__this.fullscreen = __ctx.input.b[__ctx.inPos++] != 0;
+};
 save_$data_GraphicsSettings.prototype = {
 	fullscreen: null
-	,exportOverrides: function() {
-		var overrides = new haxe_ds_StringMap();
-		var wereOverrides = false;
-		if(this.fullscreen != true) {
-			overrides.h["FULLSCREEN"] = this.fullscreen;
-			wereOverrides = true;
-		}
-		if(wereOverrides) {
-			return overrides;
-		} else {
-			return null;
-		}
+	,__uid: null
+	,getCLID: function() {
+		return save_$data_GraphicsSettings.__clid;
+	}
+	,serialize: function(__ctx) {
+		save_$data_GraphicsSettings.doSerialize(__ctx,this);
+	}
+	,getSerializeSchema: function() {
+		var schema = new hxbit_Schema();
+		schema.fieldsNames.push("fullscreen");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.isFinal = hxbit_Serializer.isClassFinal(save_$data_GraphicsSettings.__clid);
+		return schema;
+	}
+	,unserializeInit: function() {
+		this.fullscreen = true;
+	}
+	,unserialize: function(__ctx) {
+		save_$data_GraphicsSettings.doUnserialize(__ctx,this);
 	}
 	,__class__: save_$data_GraphicsSettings
 };
-var save_$data_InputSettings = function(overrides) {
+var save_$data_InputSettings = function() {
+	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
+	this.netplayDelay = 2;
+	this.localDelay = 2;
+	this.gamepadBrand = "DS4";
+	this.deadzone = 0.5;
+	this.mappings = haxe_ds_StringMap.createCopy(save_$data_InputSettings.MAPPINGS_DEFAULTS.h);
 	this.updateListeners = [];
-	this.setDefaults();
-	try {
-		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
-		var _g_h = h;
-		var _g_keys = Object.keys(h);
-		var _g_length = _g_keys.length;
-		var _g_current = 0;
-		while(_g_current < _g_length) {
-			var key = _g_keys[_g_current++];
-			var _g = { key : key, value : _g_h[key]};
-			var k = _g.key;
-			var v = _g.value;
-			try {
-				switch(js_Boot.__cast(k , String)) {
-				case "DEADZONE":
-					this.deadzone = js_Boot.__cast(v , Float);
-					break;
-				case "GAMEPAD_BRAND":
-					this.gamepadBrand = js_Boot.__cast(v , String);
-					break;
-				case "LOCAL_DELAY":
-					this.localDelay = js_Boot.__cast(v , Int);
-					break;
-				case "MAPPINGS":
-					var h = (js_Boot.__cast(v , haxe_ds_StringMap)).h;
-					var _g2_h = h;
-					var _g2_keys = Object.keys(h);
-					var _g2_length = _g2_keys.length;
-					var _g2_current = 0;
-					while(_g2_current < _g2_length) {
-						var key1 = _g2_keys[_g2_current++];
-						var _g1 = { key : key1, value : _g2_h[key1]};
-						var kk = _g1.key;
-						var vv = _g1.value;
-						var this1 = this.mappings;
-						var v1 = input_InputMapping.fromString(js_Boot.__cast(vv , String));
-						this1.h[js_Boot.__cast(kk , String)] = v1;
-					}
-					break;
-				case "NETPLAY_DELAY":
-					this.netplayDelay = js_Boot.__cast(v , Int);
-					break;
-				}
-			} catch( _g2 ) {
-				continue;
-			}
-		}
-	} catch( _g ) {
-	}
 };
 $hxClasses["save_data.InputSettings"] = save_$data_InputSettings;
 save_$data_InputSettings.__name__ = "save_data.InputSettings";
+save_$data_InputSettings.__interfaces__ = [hxbit_Serializable];
+save_$data_InputSettings.doSerialize = function(__ctx,__this) {
+	var a = __this.mappings;
+	if(a == null) {
+		__ctx.addByte(0);
+	} else {
+		var _g = [];
+		var h = a.h;
+		var k_h = h;
+		var k_keys = Object.keys(h);
+		var k_length = k_keys.length;
+		var k_current = 0;
+		while(k_current < k_length) {
+			var k = k_keys[k_current++];
+			_g.push(k);
+		}
+		var keys = _g;
+		__ctx.addInt(keys.length + 1);
+		var _g = 0;
+		while(_g < keys.length) {
+			var k = keys[_g];
+			++_g;
+			__ctx.addString(k);
+			__ctx.addKnownRef(a.h[k]);
+		}
+	}
+	__ctx.addFloat(__this.deadzone);
+	__ctx.addString(__this.gamepadBrand);
+	__ctx.addInt(__this.localDelay);
+	__ctx.addInt(__this.netplayDelay);
+};
+save_$data_InputSettings.doUnserialize = function(__ctx,__this) {
+	var k0;
+	var v0;
+	var len = __ctx.getInt();
+	var tmp;
+	if(len == 0) {
+		tmp = null;
+	} else {
+		var m = new haxe_ds_StringMap();
+		while(--len > 0) {
+			var v1 = __ctx.getString();
+			k0 = v1;
+			var k = k0;
+			v0 = __ctx.getRef(input_InputMapping,input_InputMapping.__clid);
+			var v = v0;
+			m.h[k] = v;
+		}
+		tmp = m;
+	}
+	__this.mappings = tmp;
+	var v = __ctx.input.getFloat(__ctx.inPos);
+	__ctx.inPos += 4;
+	__this.deadzone = v;
+	var v0 = __ctx.getString();
+	__this.gamepadBrand = v0;
+	__this.localDelay = __ctx.getInt();
+	__this.netplayDelay = __ctx.getInt();
+};
 save_$data_InputSettings.prototype = {
 	updateListeners: null
 	,mappings: null
@@ -51065,53 +51181,6 @@ save_$data_InputSettings.prototype = {
 	,gamepadBrand: null
 	,localDelay: null
 	,netplayDelay: null
-	,exportOverrides: function() {
-		var overrides = new haxe_ds_StringMap();
-		var wereOverrides = false;
-		var mappingOverrides = new haxe_ds_StringMap();
-		var wereMappingOverrides = false;
-		var h = this.mappings.h;
-		var _g_h = h;
-		var _g_keys = Object.keys(h);
-		var _g_length = _g_keys.length;
-		var _g_current = 0;
-		while(_g_current < _g_length) {
-			var key = _g_keys[_g_current++];
-			var _g = { key : key, value : _g_h[key]};
-			var k = _g.key;
-			var v = _g.value;
-			if(v.isNotEqual(save_$data_InputSettings.MAPPINGS_DEFAULTS.h[k])) {
-				var value = v.asString();
-				mappingOverrides.h[k] = value;
-				wereMappingOverrides = true;
-			}
-		}
-		if(wereMappingOverrides) {
-			overrides.h["MAPPINGS"] = mappingOverrides;
-			wereOverrides = true;
-		}
-		if(this.deadzone != 0.5) {
-			overrides.h["DEADZONE"] = this.deadzone;
-			wereOverrides = true;
-		}
-		if(this.gamepadBrand != "DS4") {
-			overrides.h["GAMEPAD_BRAND"] = this.gamepadBrand;
-			wereOverrides = true;
-		}
-		if(this.localDelay != 0) {
-			overrides.h["LOCAL_DELAY"] = this.localDelay;
-			wereOverrides = true;
-		}
-		if(this.netplayDelay != 2) {
-			overrides.h["NETPLAY_DELAY"] = this.netplayDelay;
-			wereOverrides = true;
-		}
-		if(wereOverrides) {
-			return overrides;
-		} else {
-			return null;
-		}
-	}
 	,addUpdateListener: function(callback) {
 		this.updateListeners.push(callback);
 		callback();
@@ -51129,7 +51198,7 @@ save_$data_InputSettings.prototype = {
 		this.mappings = haxe_ds_StringMap.createCopy(save_$data_InputSettings.MAPPINGS_DEFAULTS.h);
 		this.deadzone = 0.5;
 		this.gamepadBrand = "DS4";
-		this.localDelay = 0;
+		this.localDelay = 2;
 		this.netplayDelay = 2;
 		this.notifyListeners();
 	}
@@ -51141,227 +51210,296 @@ save_$data_InputSettings.prototype = {
 		var key = this.mappings.h[action].gamepadAxis.hashCode();
 		return this1.h[key];
 	}
+	,__uid: null
+	,getCLID: function() {
+		return save_$data_InputSettings.__clid;
+	}
+	,serialize: function(__ctx) {
+		save_$data_InputSettings.doSerialize(__ctx,this);
+	}
+	,getSerializeSchema: function() {
+		var schema = new hxbit_Schema();
+		schema.fieldsNames.push("mappings");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PMap(hxbit_PropTypeDesc.PString,hxbit_PropTypeDesc.PSerializable("input.InputMapping")));
+		schema.fieldsNames.push("deadzone");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PFloat);
+		schema.fieldsNames.push("gamepadBrand");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PString);
+		schema.fieldsNames.push("localDelay");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("netplayDelay");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.isFinal = hxbit_Serializer.isClassFinal(save_$data_InputSettings.__clid);
+		return schema;
+	}
+	,unserializeInit: function() {
+		this.updateListeners = [];
+		this.mappings = haxe_ds_StringMap.createCopy(save_$data_InputSettings.MAPPINGS_DEFAULTS.h);
+		this.deadzone = 0.5;
+		this.gamepadBrand = "DS4";
+		this.localDelay = 2;
+		this.netplayDelay = 2;
+	}
+	,unserialize: function(__ctx) {
+		save_$data_InputSettings.doUnserialize(__ctx,this);
+	}
 	,__class__: save_$data_InputSettings
 };
-var save_$data_PrefsSettings = function(overrides) {
-	this.colorTints = save_$data_PrefsSettings.COLOR_TINTS_DEFAULT.copy();
-	this.primaryColors = save_$data_PrefsSettings.PRIMARY_COLORS_DEFAULT.copy();
-	this.boardBackground = save_$data_PrefsSettings.BOARD_BACKGROUND_DEFAULT;
-	this.menuRememberCursor = true;
-	this.capAtCrowns = true;
-	this.showGroupShadow = true;
-	this.shadowOpacity = 0.5;
-	this.shadowHighlightOthers = true;
+var save_$data_PrefsSettings = function(boardBackground,menuRememberCursor,capAtCrowns,showGroupShadow,shadowOpacity,shadowHighlightOthers,shadowWillTriggerChain,colorTints,primaryColors,__uid) {
+	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
+	var _g = new haxe_ds_IntMap();
+	var value = kha_Color._new(-65506);
+	_g.h[0] = value;
+	var value = kha_Color._new(-16711915);
+	_g.h[1] = value;
+	var value = kha_Color._new(-16749057);
+	_g.h[2] = value;
+	var value = kha_Color._new(-3328);
+	_g.h[3] = value;
+	var value = kha_Color._new(-4128513);
+	_g.h[4] = value;
+	_g.h[5] = 0;
+	_g.h[6] = 0;
+	this.primaryColors = _g;
+	var _g = new haxe_ds_IntMap();
+	_g.h[0] = -1;
+	_g.h[1] = -1;
+	_g.h[2] = -1;
+	_g.h[3] = -1;
+	_g.h[4] = -1;
+	_g.h[5] = -1;
+	_g.h[6] = -1;
+	this.colorTints = _g;
 	this.shadowWillTriggerChain = true;
-	try {
-		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
-		var _g_h = h;
-		var _g_keys = Object.keys(h);
-		var _g_length = _g_keys.length;
-		var _g_current = 0;
-		while(_g_current < _g_length) {
-			var key = _g_keys[_g_current++];
-			var _g = { key : key, value : _g_h[key]};
-			var k = _g.key;
-			var v = _g.value;
-			try {
-				switch(js_Boot.__cast(k , String)) {
-				case "BOARD_BACKGROUND":
-					this.boardBackground = js_Boot.__cast(v , Int);
-					break;
-				case "CAP_AT_CROWNS":
-					this.capAtCrowns = js_Boot.__cast(v , Bool);
-					break;
-				case "COLOR_TINTS":
-					var h = (js_Boot.__cast(v , haxe_ds_StringMap)).h;
-					var _g2_h = h;
-					var _g2_keys = Object.keys(h);
-					var _g2_length = _g2_keys.length;
-					var _g2_current = 0;
-					while(_g2_current < _g2_length) {
-						var key1 = _g2_keys[_g2_current++];
-						var _g1 = { key : key1, value : _g2_h[key1]};
-						var kk = _g1.key;
-						var vv = _g1.value;
-						var v1 = js_Boot.__cast(vv , Int);
-						this.colorTints.h[js_Boot.__cast(kk , Int)] = v1;
-					}
-					break;
-				case "MENU_REMEMBER_CURSOR":
-					this.menuRememberCursor = js_Boot.__cast(v , Bool);
-					break;
-				case "PRIMARY_COLORS":
-					var h1 = (js_Boot.__cast(v , haxe_ds_StringMap)).h;
-					var _g2_h1 = h1;
-					var _g2_keys1 = Object.keys(h1);
-					var _g2_length1 = _g2_keys1.length;
-					var _g2_current1 = 0;
-					while(_g2_current1 < _g2_length1) {
-						var key2 = _g2_keys1[_g2_current1++];
-						var _g2 = { key : key2, value : _g2_h1[key2]};
-						var kk1 = _g2.key;
-						var vv1 = _g2.value;
-						var v2 = js_Boot.__cast(vv1 , Int);
-						this.primaryColors.h[js_Boot.__cast(kk1 , Int)] = v2;
-					}
-					break;
-				case "SHADOW_HIGHLIGHT_OTHERS":
-					this.shadowHighlightOthers = js_Boot.__cast(v , Bool);
-					break;
-				case "SHADOW_OPACITY":
-					this.shadowOpacity = js_Boot.__cast(v , Float);
-					break;
-				case "SHADOW_WILL_TRIGGER_CHAIN":
-					this.shadowWillTriggerChain = js_Boot.__cast(v , Bool);
-					break;
-				case "SHOW_GROUP_SHADOW":
-					this.showGroupShadow = js_Boot.__cast(v , Bool);
-					break;
-				}
-			} catch( _g3 ) {
-				continue;
-			}
-		}
-	} catch( _g ) {
+	this.shadowHighlightOthers = true;
+	this.shadowOpacity = 0.5;
+	this.showGroupShadow = true;
+	this.capAtCrowns = true;
+	this.menuRememberCursor = true;
+	this.boardBackground = kha_Color.fromBytes(64,32,32);
+	if(boardBackground != null) {
+		this.boardBackground = boardBackground;
+	}
+	if(menuRememberCursor != null) {
+		this.menuRememberCursor = menuRememberCursor;
+	}
+	if(capAtCrowns != null) {
+		this.capAtCrowns = capAtCrowns;
+	}
+	if(showGroupShadow != null) {
+		this.showGroupShadow = showGroupShadow;
+	}
+	if(shadowOpacity != null) {
+		this.shadowOpacity = shadowOpacity;
+	}
+	if(shadowHighlightOthers != null) {
+		this.shadowHighlightOthers = shadowHighlightOthers;
+	}
+	if(shadowWillTriggerChain != null) {
+		this.shadowWillTriggerChain = shadowWillTriggerChain;
+	}
+	if(colorTints != null) {
+		this.colorTints = colorTints;
+	}
+	if(primaryColors != null) {
+		this.primaryColors = primaryColors;
+	}
+	if(__uid != null) {
+		this.__uid = __uid;
 	}
 };
 $hxClasses["save_data.PrefsSettings"] = save_$data_PrefsSettings;
 save_$data_PrefsSettings.__name__ = "save_data.PrefsSettings";
+save_$data_PrefsSettings.__interfaces__ = [hxbit_Serializable];
+save_$data_PrefsSettings.doSerialize = function(__ctx,__this) {
+	__ctx.addInt(__this.boardBackground);
+	__ctx.addBool(__this.menuRememberCursor);
+	__ctx.addBool(__this.capAtCrowns);
+	__ctx.addBool(__this.showGroupShadow);
+	__ctx.addFloat(__this.shadowOpacity);
+	__ctx.addBool(__this.shadowHighlightOthers);
+	__ctx.addBool(__this.shadowWillTriggerChain);
+	var a = __this.colorTints;
+	if(a == null) {
+		__ctx.addByte(0);
+	} else {
+		var _g = [];
+		var k = a.keys();
+		while(k.hasNext()) {
+			var k1 = k.next();
+			_g.push(k1);
+		}
+		var keys = _g;
+		__ctx.addInt(keys.length + 1);
+		var _g = 0;
+		while(_g < keys.length) {
+			var k = keys[_g];
+			++_g;
+			__ctx.addInt(k);
+			__ctx.addInt(a.h[k]);
+		}
+	}
+	var a = __this.primaryColors;
+	if(a == null) {
+		__ctx.addByte(0);
+	} else {
+		var _g = [];
+		var k = a.keys();
+		while(k.hasNext()) {
+			var k1 = k.next();
+			_g.push(k1);
+		}
+		var keys = _g;
+		__ctx.addInt(keys.length + 1);
+		var _g = 0;
+		while(_g < keys.length) {
+			var k = keys[_g];
+			++_g;
+			__ctx.addInt(k);
+			__ctx.addInt(a.h[k]);
+		}
+	}
+};
+save_$data_PrefsSettings.doUnserialize = function(__ctx,__this) {
+	var v0 = __ctx.getInt();
+	__this.boardBackground = v0;
+	__this.menuRememberCursor = __ctx.input.b[__ctx.inPos++] != 0;
+	__this.capAtCrowns = __ctx.input.b[__ctx.inPos++] != 0;
+	__this.showGroupShadow = __ctx.input.b[__ctx.inPos++] != 0;
+	var v = __ctx.input.getFloat(__ctx.inPos);
+	__ctx.inPos += 4;
+	__this.shadowOpacity = v;
+	__this.shadowHighlightOthers = __ctx.input.b[__ctx.inPos++] != 0;
+	__this.shadowWillTriggerChain = __ctx.input.b[__ctx.inPos++] != 0;
+	var k0;
+	var v0;
+	var len = __ctx.getInt();
+	var tmp;
+	if(len == 0) {
+		tmp = null;
+	} else {
+		var m = new haxe_ds_IntMap();
+		while(--len > 0) {
+			var v1 = __ctx.getInt();
+			k0 = v1;
+			var k = k0;
+			var v11 = __ctx.getInt();
+			v0 = v11;
+			var v = v0;
+			m.h[k] = v;
+		}
+		tmp = m;
+	}
+	__this.colorTints = tmp;
+	var k0;
+	var v0;
+	var len = __ctx.getInt();
+	var tmp;
+	if(len == 0) {
+		tmp = null;
+	} else {
+		var m = new haxe_ds_IntMap();
+		while(--len > 0) {
+			var v1 = __ctx.getInt();
+			k0 = v1;
+			var k = k0;
+			var v11 = __ctx.getInt();
+			v0 = v11;
+			var v = v0;
+			m.h[k] = v;
+		}
+		tmp = m;
+	}
+	__this.primaryColors = tmp;
+};
 save_$data_PrefsSettings.prototype = {
-	colorTints: null
-	,primaryColors: null
-	,boardBackground: null
+	boardBackground: null
 	,menuRememberCursor: null
 	,capAtCrowns: null
 	,showGroupShadow: null
 	,shadowOpacity: null
 	,shadowHighlightOthers: null
 	,shadowWillTriggerChain: null
-	,exportOverrides: function() {
-		var overrides = new haxe_ds_StringMap();
-		var wereOverrides = false;
-		var tintOverrides = new haxe_ds_IntMap();
-		var wereTintOverrides = false;
-		var map = this.colorTints;
-		var _g_map = map;
-		var _g_keys = map.keys();
-		while(_g_keys.hasNext()) {
-			var key = _g_keys.next();
-			var _g = { value : _g_map.get(key), key : key};
-			var k = _g.key;
-			var v = _g.value;
-			if(v != save_$data_PrefsSettings.COLOR_TINTS_DEFAULT.h[k]) {
-				tintOverrides.h[k] = v;
-				wereTintOverrides = true;
-			}
-		}
-		if(wereTintOverrides) {
-			overrides.h["COLOR_TINTS"] = tintOverrides;
-			wereOverrides = true;
-		}
-		var primaryOverrides = new haxe_ds_IntMap();
-		var werePrimaryOverrides = false;
-		var map = this.primaryColors;
-		var _g_map = map;
-		var _g_keys = map.keys();
-		while(_g_keys.hasNext()) {
-			var key = _g_keys.next();
-			var _g = { value : _g_map.get(key), key : key};
-			var k = _g.key;
-			var v = _g.value;
-			if(v != save_$data_PrefsSettings.PRIMARY_COLORS_DEFAULT.h[k]) {
-				primaryOverrides.h[k] = v;
-				werePrimaryOverrides = true;
-			}
-		}
-		if(werePrimaryOverrides) {
-			overrides.h["PRIMARY_COLORS"] = primaryOverrides;
-			wereOverrides = true;
-		}
-		if(this.boardBackground != save_$data_PrefsSettings.BOARD_BACKGROUND_DEFAULT) {
-			overrides.h["BOARD_BACKGROUND"] = this.boardBackground;
-			wereOverrides = true;
-		}
-		if(this.menuRememberCursor != true) {
-			overrides.h["MENU_REMEMBER_CURSOR"] = this.menuRememberCursor;
-			wereOverrides = true;
-		}
-		if(this.capAtCrowns != true) {
-			overrides.h["CAP_AT_CROWNS"] = this.capAtCrowns;
-			wereOverrides = true;
-		}
-		if(this.showGroupShadow != true) {
-			overrides.h["SHOW_GROUP_SHADOW"] = this.showGroupShadow;
-			wereOverrides = true;
-		}
-		if(this.shadowOpacity != 0.5) {
-			overrides.h["SHADOW_OPACITY"] = this.shadowOpacity;
-			wereOverrides = true;
-		}
-		if(this.shadowHighlightOthers != true) {
-			overrides.h["SHADOW_HIGHLIGHT_OTHERS"] = this.shadowHighlightOthers;
-			wereOverrides = true;
-		}
-		if(this.shadowWillTriggerChain != true) {
-			overrides.h["SHADOW_WILL_TRIGGER_CHAIN"] = this.shadowWillTriggerChain;
-			wereOverrides = true;
-		}
-		if(wereOverrides) {
-			return overrides;
-		} else {
-			return null;
-		}
+	,colorTints: null
+	,primaryColors: null
+	,__uid: null
+	,getCLID: function() {
+		return save_$data_PrefsSettings.__clid;
+	}
+	,serialize: function(__ctx) {
+		save_$data_PrefsSettings.doSerialize(__ctx,this);
+	}
+	,getSerializeSchema: function() {
+		var schema = new hxbit_Schema();
+		schema.fieldsNames.push("boardBackground");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("menuRememberCursor");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.fieldsNames.push("capAtCrowns");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.fieldsNames.push("showGroupShadow");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.fieldsNames.push("shadowOpacity");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PFloat);
+		schema.fieldsNames.push("shadowHighlightOthers");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.fieldsNames.push("shadowWillTriggerChain");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.fieldsNames.push("colorTints");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PMap(hxbit_PropTypeDesc.PInt,hxbit_PropTypeDesc.PInt));
+		schema.fieldsNames.push("primaryColors");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PMap(hxbit_PropTypeDesc.PInt,hxbit_PropTypeDesc.PInt));
+		schema.isFinal = hxbit_Serializer.isClassFinal(save_$data_PrefsSettings.__clid);
+		return schema;
+	}
+	,unserializeInit: function() {
+		this.boardBackground = kha_Color.fromBytes(64,32,32);
+		this.menuRememberCursor = true;
+		this.capAtCrowns = true;
+		this.showGroupShadow = true;
+		this.shadowOpacity = 0.5;
+		this.shadowHighlightOthers = true;
+		this.shadowWillTriggerChain = true;
+		var _g = new haxe_ds_IntMap();
+		_g.h[0] = -1;
+		_g.h[1] = -1;
+		_g.h[2] = -1;
+		_g.h[3] = -1;
+		_g.h[4] = -1;
+		_g.h[5] = -1;
+		_g.h[6] = -1;
+		this.colorTints = _g;
+		var _g = new haxe_ds_IntMap();
+		var value = kha_Color._new(-65506);
+		_g.h[0] = value;
+		var value = kha_Color._new(-16711915);
+		_g.h[1] = value;
+		var value = kha_Color._new(-16749057);
+		_g.h[2] = value;
+		var value = kha_Color._new(-3328);
+		_g.h[3] = value;
+		var value = kha_Color._new(-4128513);
+		_g.h[4] = value;
+		_g.h[5] = 0;
+		_g.h[6] = 0;
+		this.primaryColors = _g;
+	}
+	,unserialize: function(__ctx) {
+		save_$data_PrefsSettings.doUnserialize(__ctx,this);
 	}
 	,__class__: save_$data_PrefsSettings
 };
-var save_$data_Profile = function(overrides) {
-	this.name = "GUGU";
-	var inputOverrides = new haxe_ds_StringMap();
-	var prefsOverrides = new haxe_ds_StringMap();
-	var trainingOverrides = new haxe_ds_StringMap();
-	var endlessOverrides = new haxe_ds_StringMap();
-	try {
-		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
-		var _g_h = h;
-		var _g_keys = Object.keys(h);
-		var _g_length = _g_keys.length;
-		var _g_current = 0;
-		while(_g_current < _g_length) {
-			var key = _g_keys[_g_current++];
-			var _g = { key : key, value : _g_h[key]};
-			var k = _g.key;
-			var v = _g.value;
-			try {
-				switch(js_Boot.__cast(k , String)) {
-				case "ENDLESS_SETTINGS":
-					endlessOverrides = v;
-					break;
-				case "INPUT":
-					inputOverrides = v;
-					break;
-				case "NAME":
-					this.name = js_Boot.__cast(v , String);
-					break;
-				case "PREFS":
-					prefsOverrides = v;
-					break;
-				case "TRAINING_SETTINGS":
-					trainingOverrides = v;
-					break;
-				}
-			} catch( _g1 ) {
-				continue;
-			}
-		}
-	} catch( _g ) {
-	}
-	this.input = new save_$data_InputSettings(inputOverrides);
-	this.prefs = new save_$data_PrefsSettings(prefsOverrides);
-	this.trainingSettings = new save_$data_TrainingSettings(trainingOverrides);
-	this.endlessSettings = new save_$data_EndlessSettings(endlessOverrides);
+var save_$data_Profile = function(name) {
+	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
+	this.endlessSettings = new save_$data_EndlessSettings(null,null,null);
+	this.trainingSettings = new save_$data_TrainingSettings(null,null,null,null,null,null,null,null,null,null,null,null,null,null);
+	this.prefs = new save_$data_PrefsSettings(null,null,null,null,null,null,null,null,null,null);
+	this.input = new save_$data_InputSettings();
+	this.name = name;
 };
 $hxClasses["save_data.Profile"] = save_$data_Profile;
 save_$data_Profile.__name__ = "save_data.Profile";
+save_$data_Profile.__interfaces__ = [hxbit_Serializable];
 save_$data_Profile.addOnChangePrimaryCallback = function(callback) {
 	save_$data_Profile.onChangePrimary.push(callback);
 	callback();
@@ -51376,6 +51514,20 @@ save_$data_Profile.changePrimary = function(p) {
 		f();
 	}
 };
+save_$data_Profile.doSerialize = function(__ctx,__this) {
+	__ctx.addString(__this.name);
+	__ctx.addKnownRef(__this.input);
+	__ctx.addKnownRef(__this.prefs);
+	__ctx.addKnownRef(__this.trainingSettings);
+	__ctx.addKnownRef(__this.endlessSettings);
+};
+save_$data_Profile.doUnserialize = function(__ctx,__this) {
+	__this.name = __ctx.getString();
+	__this.input = __ctx.getRef(save_$data_InputSettings,save_$data_InputSettings.__clid);
+	__this.prefs = __ctx.getRef(save_$data_PrefsSettings,save_$data_PrefsSettings.__clid);
+	__this.trainingSettings = __ctx.getRef(save_$data_TrainingSettings,save_$data_TrainingSettings.__clid);
+	__this.endlessSettings = __ctx.getRef(save_$data_EndlessSettings,save_$data_EndlessSettings.__clid);
+};
 save_$data_Profile.prototype = {
 	name: null
 	,input: null
@@ -51383,43 +51535,53 @@ save_$data_Profile.prototype = {
 	,trainingSettings: null
 	,endlessSettings: null
 	,setInputDefaults: function() {
-		this.input.setDefaults();
+		this.input = new save_$data_InputSettings();
 	}
 	,setPrefsDefaults: function() {
-		this.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
+		this.prefs = new save_$data_PrefsSettings(null,null,null,null,null,null,null,null,null,null);
 	}
 	,setTrainingDefaults: function() {
-		this.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
+		this.trainingSettings = new save_$data_TrainingSettings(null,null,null,null,null,null,null,null,null,null,null,null,null,null);
 	}
 	,setEndlessDefaults: function() {
-		this.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+		this.endlessSettings = new save_$data_EndlessSettings(null,null,null);
 	}
 	,setDefaults: function() {
-		this.input.setDefaults();
-		this.prefs = new save_$data_PrefsSettings(new haxe_ds_StringMap());
-		this.trainingSettings = new save_$data_TrainingSettings(new haxe_ds_StringMap());
-		this.endlessSettings = new save_$data_EndlessSettings(new haxe_ds_StringMap());
+		this.input = new save_$data_InputSettings();
+		this.prefs = new save_$data_PrefsSettings(null,null,null,null,null,null,null,null,null,null);
+		this.trainingSettings = new save_$data_TrainingSettings(null,null,null,null,null,null,null,null,null,null,null,null,null,null);
+		this.endlessSettings = new save_$data_EndlessSettings(null,null,null);
 	}
-	,exportOverrides: function() {
-		var overrides = new haxe_ds_StringMap();
-		overrides.h["NAME"] = this.name;
-		var inputOverrides = this.input.exportOverrides();
-		if(inputOverrides != null) {
-			overrides.h["INPUT"] = inputOverrides;
-		}
-		var prefsOverrides = this.prefs.exportOverrides();
-		if(prefsOverrides != null) {
-			overrides.h["PREFS"] = prefsOverrides;
-		}
-		var trainingOverrides = this.trainingSettings.exportOverrides();
-		if(trainingOverrides != null) {
-			overrides.h["TRAINING_SETTINGS"] = trainingOverrides;
-		}
-		var endlessOverrides = this.endlessSettings.exportOverrides();
-		if(endlessOverrides != null) {
-			overrides.h["ENDLESS_SETTINGS"] = endlessOverrides;
-		}
-		return overrides;
+	,__uid: null
+	,getCLID: function() {
+		return save_$data_Profile.__clid;
+	}
+	,serialize: function(__ctx) {
+		save_$data_Profile.doSerialize(__ctx,this);
+	}
+	,getSerializeSchema: function() {
+		var schema = new hxbit_Schema();
+		schema.fieldsNames.push("name");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PString);
+		schema.fieldsNames.push("input");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PSerializable("save_data.InputSettings"));
+		schema.fieldsNames.push("prefs");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PSerializable("save_data.PrefsSettings"));
+		schema.fieldsNames.push("trainingSettings");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PSerializable("save_data.TrainingSettings"));
+		schema.fieldsNames.push("endlessSettings");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PSerializable("save_data.EndlessSettings"));
+		schema.isFinal = hxbit_Serializer.isClassFinal(save_$data_Profile.__clid);
+		return schema;
+	}
+	,unserializeInit: function() {
+		this.input = new save_$data_InputSettings();
+		this.prefs = new save_$data_PrefsSettings(null,null,null,null,null,null,null,null,null,null);
+		this.trainingSettings = new save_$data_TrainingSettings(null,null,null,null,null,null,null,null,null,null,null,null,null,null);
+		this.endlessSettings = new save_$data_EndlessSettings(null,null,null);
+	}
+	,unserialize: function(__ctx) {
+		save_$data_Profile.doUnserialize(__ctx,this);
 	}
 	,__class__: save_$data_Profile
 };
@@ -51427,39 +51589,56 @@ var save_$data_SaveManager = function() { };
 $hxClasses["save_data.SaveManager"] = save_$data_SaveManager;
 save_$data_SaveManager.__name__ = "save_data.SaveManager";
 save_$data_SaveManager.saveProfiles = function() {
-	var ser = new haxe_Serializer();
-	var _g = 0;
-	var _g1 = save_$data_SaveManager.profiles;
-	while(_g < _g1.length) {
-		var p = _g1[_g];
-		++_g;
-		ser.serialize(p.exportOverrides());
+	var ser = new hxbit_Serializer();
+	ser.beginSave();
+	var a = save_$data_SaveManager.profiles;
+	if(a == null) {
+		ser.addByte(0);
+	} else {
+		ser.addInt(a.length + 1);
+		var _g = 0;
+		while(_g < a.length) {
+			var v = a[_g];
+			++_g;
+			ser.addKnownRef(v);
+		}
 	}
-	kha_Storage.namedFile(save_$data_SaveManager.PROFILES_FILENAME).writeString(ser.toString());
+	var data = kha_internal_BytesBlob.fromBytes(ser.endSave());
+	kha_Storage.namedFile("profiles").write(data);
 };
 save_$data_SaveManager.loadProfiles = function() {
-	var serialized = kha_Storage.namedFile(save_$data_SaveManager.PROFILES_FILENAME).readString();
-	if(serialized == null) {
-		save_$data_SaveManager.newProfile();
-		return;
-	}
-	var unser = new haxe_Unserializer(serialized);
+	var blob = kha_Storage.namedFile("profiles").read();
+	var ser = new hxbit_Serializer();
 	try {
-		while(true) {
-			var overrides = unser.unserialize();
-			save_$data_SaveManager.profiles.push(new save_$data_Profile(overrides));
+		ser.beginLoad(blob.bytes);
+		var len = ser.getInt();
+		var tmp;
+		if(len == 0) {
+			tmp = null;
+		} else {
+			--len;
+			var a = [];
+			var _g = 0;
+			var _g1 = len;
+			while(_g < _g1) {
+				var i = _g++;
+				var c = save_$data_Profile;
+				a[i] = ser.getRef(c,c.__clid);
+			}
+			tmp = a;
+		}
+		save_$data_SaveManager.profiles = tmp;
+		ser.endLoad();
+		if(save_$data_SaveManager.profiles.length == 0) {
+			throw haxe_Exception.thrown(null);
 		}
 	} catch( _g ) {
-	}
-	if(save_$data_SaveManager.profiles.length == 0) {
+		save_$data_SaveManager.profiles = [];
 		save_$data_SaveManager.newProfile();
-		return;
 	}
 };
 save_$data_SaveManager.newProfile = function() {
-	var _g = new haxe_ds_StringMap();
-	_g.h["NAME"] = "P" + (save_$data_SaveManager.profiles.length + 1);
-	save_$data_SaveManager.profiles.push(new save_$data_Profile(_g));
+	save_$data_SaveManager.profiles.push(new save_$data_Profile("P" + (save_$data_SaveManager.profiles.length + 1)));
 	save_$data_SaveManager.saveProfiles();
 };
 save_$data_SaveManager.deleteProfile = function(p) {
@@ -51473,106 +51652,122 @@ save_$data_SaveManager.getProfileCount = function() {
 	return save_$data_SaveManager.profiles.length;
 };
 save_$data_SaveManager.saveGraphics = function() {
-	var overrides = save_$data_SaveManager.graphics.exportOverrides();
-	if(overrides == null) {
-		return;
-	}
-	kha_Storage.namedFile(save_$data_SaveManager.GRAPHICS_FIELNAME).writeString(haxe_Serializer.run(overrides));
+	var ser = new hxbit_Serializer();
+	ser.beginSave();
+	ser.addKnownRef(save_$data_SaveManager.graphics);
+	var data = kha_internal_BytesBlob.fromBytes(ser.endSave());
+	kha_Storage.namedFile("graphics").write(data);
 };
 save_$data_SaveManager.loadGraphics = function() {
-	var serialized = kha_Storage.namedFile(save_$data_SaveManager.GRAPHICS_FIELNAME).readString();
-	if(serialized == null) {
-		save_$data_SaveManager.graphics = new save_$data_GraphicsSettings(new haxe_ds_StringMap());
+	var blob = kha_Storage.namedFile("graphics").read();
+	var ser = new hxbit_Serializer();
+	try {
+		ser.beginLoad(blob.bytes);
+		var c = save_$data_GraphicsSettings;
+		save_$data_SaveManager.graphics = ser.getRef(c,c.__clid);
+		ser.endLoad();
+	} catch( _g ) {
+		save_$data_SaveManager.graphics = new save_$data_GraphicsSettings(null,null);
+		save_$data_SaveManager.saveGraphics();
 		return;
 	}
-	var overrides = new haxe_ds_StringMap();
-	try {
-		overrides = haxe_Unserializer.run(serialized);
-	} catch( _g ) {
-	}
-	save_$data_SaveManager.graphics = new save_$data_GraphicsSettings(overrides);
 };
 save_$data_SaveManager.loadEverything = function() {
 	save_$data_SaveManager.loadProfiles();
 	save_$data_SaveManager.loadGraphics();
 };
-var save_$data_TrainingSettings = function(overrides) {
-	this.showControlHints = true;
-	this.clearOnXMode = "RESTART";
-	this.autoClear = true;
-	this.minAttackTime = 10;
-	this.maxAttackTime = 10;
-	this.minAttackChain = 3;
-	this.maxAttackChain = 3;
-	this.minAttackGroupDiff = 0;
-	this.maxAttackGroupDiff = 0;
-	this.minAttackColors = 1;
-	this.maxAttackColors = 1;
-	this.groupBlindMode = false;
+var save_$data_TrainingSettings = function(showControlHints,clearOnXMode,autoClear,minAttackTime,maxAttackTime,minAttackChain,maxAttackChain,minAttackGroupDiff,maxAttackGroupDiff,minAttackColors,maxAttackColors,groupBlindMode,keepGroupCount,__uid) {
+	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
 	this.keepGroupCount = 0;
-	try {
-		var h = (js_Boot.__cast(overrides , haxe_ds_StringMap)).h;
-		var _g_h = h;
-		var _g_keys = Object.keys(h);
-		var _g_length = _g_keys.length;
-		var _g_current = 0;
-		while(_g_current < _g_length) {
-			var key = _g_keys[_g_current++];
-			var _g = { key : key, value : _g_h[key]};
-			var k = _g.key;
-			var v = _g.value;
-			try {
-				switch(js_Boot.__cast(k , String)) {
-				case "AUTO_CLEAR":
-					this.autoClear = js_Boot.__cast(v , Bool);
-					break;
-				case "CLEAR_ON_X_MODE":
-					this.clearOnXMode = js_Boot.__cast(v , String);
-					break;
-				case "GROUP_BLIND_MODE":
-					this.groupBlindMode = js_Boot.__cast(v , Bool);
-					break;
-				case "KEEP_GROUP_COUNT":
-					this.keepGroupCount = js_Boot.__cast(v , Int);
-					break;
-				case "MAX_ATTACK_CHAIN":
-					this.maxAttackChain = js_Boot.__cast(v , Int);
-					break;
-				case "MAX_ATTACK_COLORS":
-					this.maxAttackColors = js_Boot.__cast(v , Int);
-					break;
-				case "MAX_ATTACK_GROUP_DIFF":
-					this.maxAttackGroupDiff = js_Boot.__cast(v , Int);
-					break;
-				case "MAX_ATTACK_TIME":
-					this.maxAttackTime = js_Boot.__cast(v , Int);
-					break;
-				case "MIN_ATTACK_CHAIN":
-					this.minAttackChain = js_Boot.__cast(v , Int);
-					break;
-				case "MIN_ATTACK_COLORS":
-					this.minAttackColors = js_Boot.__cast(v , Int);
-					break;
-				case "MIN_ATTACK_GROUP_DIFF":
-					this.minAttackGroupDiff = js_Boot.__cast(v , Int);
-					break;
-				case "MIN_ATTACK_TIME":
-					this.minAttackTime = js_Boot.__cast(v , Int);
-					break;
-				case "SHOW_CONTROL_HINTS":
-					this.showControlHints = js_Boot.__cast(v , Bool);
-					break;
-				}
-			} catch( _g1 ) {
-				continue;
-			}
-		}
-	} catch( _g ) {
+	this.groupBlindMode = false;
+	this.maxAttackColors = 1;
+	this.minAttackColors = 1;
+	this.maxAttackGroupDiff = 0;
+	this.minAttackGroupDiff = 0;
+	this.maxAttackChain = 3;
+	this.minAttackChain = 3;
+	this.maxAttackTime = 10;
+	this.minAttackTime = 10;
+	this.autoClear = true;
+	this.clearOnXMode = "RESTART";
+	this.showControlHints = true;
+	if(showControlHints != null) {
+		this.showControlHints = showControlHints;
+	}
+	if(clearOnXMode != null) {
+		this.clearOnXMode = clearOnXMode;
+	}
+	if(autoClear != null) {
+		this.autoClear = autoClear;
+	}
+	if(minAttackTime != null) {
+		this.minAttackTime = minAttackTime;
+	}
+	if(maxAttackTime != null) {
+		this.maxAttackTime = maxAttackTime;
+	}
+	if(minAttackChain != null) {
+		this.minAttackChain = minAttackChain;
+	}
+	if(maxAttackChain != null) {
+		this.maxAttackChain = maxAttackChain;
+	}
+	if(minAttackGroupDiff != null) {
+		this.minAttackGroupDiff = minAttackGroupDiff;
+	}
+	if(maxAttackGroupDiff != null) {
+		this.maxAttackGroupDiff = maxAttackGroupDiff;
+	}
+	if(minAttackColors != null) {
+		this.minAttackColors = minAttackColors;
+	}
+	if(maxAttackColors != null) {
+		this.maxAttackColors = maxAttackColors;
+	}
+	if(groupBlindMode != null) {
+		this.groupBlindMode = groupBlindMode;
+	}
+	if(keepGroupCount != null) {
+		this.keepGroupCount = keepGroupCount;
+	}
+	if(__uid != null) {
+		this.__uid = __uid;
 	}
 };
 $hxClasses["save_data.TrainingSettings"] = save_$data_TrainingSettings;
 save_$data_TrainingSettings.__name__ = "save_data.TrainingSettings";
-save_$data_TrainingSettings.__interfaces__ = [save_$data_IClearOnXModeContainer];
+save_$data_TrainingSettings.__interfaces__ = [save_$data_IClearOnXModeContainer,hxbit_Serializable];
+save_$data_TrainingSettings.doSerialize = function(__ctx,__this) {
+	__ctx.addBool(__this.showControlHints);
+	__ctx.addString(__this.clearOnXMode);
+	__ctx.addBool(__this.autoClear);
+	__ctx.addInt(__this.minAttackTime);
+	__ctx.addInt(__this.maxAttackTime);
+	__ctx.addInt(__this.minAttackChain);
+	__ctx.addInt(__this.maxAttackChain);
+	__ctx.addInt(__this.minAttackGroupDiff);
+	__ctx.addInt(__this.maxAttackGroupDiff);
+	__ctx.addInt(__this.minAttackColors);
+	__ctx.addInt(__this.maxAttackColors);
+	__ctx.addBool(__this.groupBlindMode);
+	__ctx.addInt(__this.keepGroupCount);
+};
+save_$data_TrainingSettings.doUnserialize = function(__ctx,__this) {
+	__this.showControlHints = __ctx.input.b[__ctx.inPos++] != 0;
+	var v0 = __ctx.getString();
+	__this.clearOnXMode = v0;
+	__this.autoClear = __ctx.input.b[__ctx.inPos++] != 0;
+	__this.minAttackTime = __ctx.getInt();
+	__this.maxAttackTime = __ctx.getInt();
+	__this.minAttackChain = __ctx.getInt();
+	__this.maxAttackChain = __ctx.getInt();
+	__this.minAttackGroupDiff = __ctx.getInt();
+	__this.maxAttackGroupDiff = __ctx.getInt();
+	__this.minAttackColors = __ctx.getInt();
+	__this.maxAttackColors = __ctx.getInt();
+	__this.groupBlindMode = __ctx.input.b[__ctx.inPos++] != 0;
+	__this.keepGroupCount = __ctx.getInt();
+};
 save_$data_TrainingSettings.prototype = {
 	showControlHints: null
 	,clearOnXMode: null
@@ -51587,256 +51782,64 @@ save_$data_TrainingSettings.prototype = {
 	,maxAttackColors: null
 	,groupBlindMode: null
 	,keepGroupCount: null
-	,exportOverrides: function() {
-		var overrides = new haxe_ds_StringMap();
-		var wereOverrides = false;
-		if(this.showControlHints != true) {
-			overrides.h["SHOW_CONTROL_HINTS"] = this.showControlHints;
-			wereOverrides = true;
-		}
-		if(this.clearOnXMode != "RESTART") {
-			overrides.h["CLEAR_ON_X_MODE"] = this.clearOnXMode;
-			wereOverrides = true;
-		}
-		if(this.autoClear != true) {
-			overrides.h["AUTO_CLEAR"] = this.autoClear;
-			wereOverrides = true;
-		}
-		if(this.minAttackTime != 10) {
-			overrides.h["MIN_ATTACK_TIME"] = this.minAttackTime;
-			wereOverrides = true;
-		}
-		if(this.maxAttackTime != 10) {
-			overrides.h["MAX_ATTACK_TIME"] = this.maxAttackTime;
-			wereOverrides = true;
-		}
-		if(this.minAttackChain != 3) {
-			overrides.h["MIN_ATTACK_CHAIN"] = this.minAttackChain;
-			wereOverrides = true;
-		}
-		if(this.maxAttackChain != 3) {
-			overrides.h["MAX_ATTACK_CHAIN"] = this.maxAttackChain;
-			wereOverrides = true;
-		}
-		if(this.minAttackGroupDiff != 0) {
-			overrides.h["MIN_ATTACK_GROUP_DIFF"] = this.minAttackGroupDiff;
-			wereOverrides = true;
-		}
-		if(this.maxAttackGroupDiff != 0) {
-			overrides.h["MAX_ATTACK_GROUP_DIFF"] = this.maxAttackGroupDiff;
-			wereOverrides = true;
-		}
-		if(this.minAttackColors != 1) {
-			overrides.h["MIN_ATTACK_COLORS"] = this.minAttackColors;
-			wereOverrides = true;
-		}
-		if(this.maxAttackColors != 1) {
-			overrides.h["MAX_ATTACK_COLORS"] = this.maxAttackColors;
-			wereOverrides = true;
-		}
-		if(this.groupBlindMode != false) {
-			overrides.h["GROUP_BLIND_MODE"] = this.groupBlindMode;
-			wereOverrides = true;
-		}
-		if(this.keepGroupCount != 0) {
-			overrides.h["KEEP_GROUP_COUNT"] = this.keepGroupCount;
-			wereOverrides = true;
-		}
-		if(wereOverrides) {
-			return overrides;
-		} else {
-			return null;
-		}
+	,__uid: null
+	,getCLID: function() {
+		return save_$data_TrainingSettings.__clid;
+	}
+	,serialize: function(__ctx) {
+		save_$data_TrainingSettings.doSerialize(__ctx,this);
+	}
+	,getSerializeSchema: function() {
+		var schema = new hxbit_Schema();
+		schema.fieldsNames.push("showControlHints");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.fieldsNames.push("clearOnXMode");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PString);
+		schema.fieldsNames.push("autoClear");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.fieldsNames.push("minAttackTime");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("maxAttackTime");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("minAttackChain");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("maxAttackChain");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("minAttackGroupDiff");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("maxAttackGroupDiff");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("minAttackColors");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("maxAttackColors");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.fieldsNames.push("groupBlindMode");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PBool);
+		schema.fieldsNames.push("keepGroupCount");
+		schema.fieldsTypes.push(hxbit_PropTypeDesc.PInt);
+		schema.isFinal = hxbit_Serializer.isClassFinal(save_$data_TrainingSettings.__clid);
+		return schema;
+	}
+	,unserializeInit: function() {
+		this.showControlHints = true;
+		this.clearOnXMode = "RESTART";
+		this.autoClear = true;
+		this.minAttackTime = 10;
+		this.maxAttackTime = 10;
+		this.minAttackChain = 3;
+		this.maxAttackChain = 3;
+		this.minAttackGroupDiff = 0;
+		this.maxAttackGroupDiff = 0;
+		this.minAttackColors = 1;
+		this.maxAttackColors = 1;
+		this.groupBlindMode = false;
+		this.keepGroupCount = 0;
+	}
+	,unserialize: function(__ctx) {
+		save_$data_TrainingSettings.doUnserialize(__ctx,this);
 	}
 	,__class__: save_$data_TrainingSettings
 };
-var side_$setup_InputDeviceIcon = function(name,device) {
-	this.font = kha_Assets.fonts.Pixellari;
-	this.name = name;
-	this.device = device;
-	this.slot = 2;
-};
-$hxClasses["side_setup.InputDeviceIcon"] = side_$setup_InputDeviceIcon;
-side_$setup_InputDeviceIcon.__name__ = "side_setup.InputDeviceIcon";
-side_$setup_InputDeviceIcon.prototype = {
-	font: null
-	,fontSize: null
-	,nameTextHalfWidth: null
-	,name: null
-	,device: null
-	,height: null
-	,slot: null
-	,getLeftAction: function() {
-		return this.device.getAction("MENU_LEFT");
-	}
-	,getRightAction: function() {
-		return this.device.getAction("MENU_RIGHT");
-	}
-	,getControlsAction: function() {
-		return this.device.getAction("MENU_UP");
-	}
-	,getReadyAction: function() {
-		return this.device.getAction("CONFIRM");
-	}
-	,onResize: function() {
-		this.fontSize = 56 * ScaleManager.screen.smallerScale | 0;
-		this.nameTextHalfWidth = this.font.width(this.fontSize,this.name) / 2;
-		this.height = this.font.height(this.fontSize);
-	}
-	,render: function(g,y) {
-		g.set_font(this.font);
-		g.set_fontSize(this.fontSize);
-		g.drawString(this.name,ScaleManager.screen.width / 4 * this.slot - this.nameTextHalfWidth,y);
-	}
-	,__class__: side_$setup_InputDeviceIcon
-};
-var side_$setup_SideSetupScreen = function(onReady) {
-	this.font = kha_Assets.fonts.DigitalDisco;
-	this.onReady = onReady;
-	ScaleManager.addOnResizeCallback($bind(this,this.onResize));
-};
-$hxClasses["side_setup.SideSetupScreen"] = side_$setup_SideSetupScreen;
-side_$setup_SideSetupScreen.__name__ = "side_setup.SideSetupScreen";
-side_$setup_SideSetupScreen.__interfaces__ = [IScreen];
-side_$setup_SideSetupScreen.prototype = {
-	font: null
-	,onReady: null
-	,fontSize: null
-	,leftBoardTextCenter: null
-	,rightBoardTextCenter: null
-	,leftSlot: null
-	,rightSlot: null
-	,devices: null
-	,onResize: function() {
-		this.fontSize = 80 * ScaleManager.screen.smallerScale | 0;
-		this.leftBoardTextCenter = this.font.width(this.fontSize,"Left Board") / 2;
-		this.rightBoardTextCenter = this.font.width(this.fontSize,"Right Board") / 2;
-		var _g = 0;
-		var _g1 = this.devices;
-		while(_g < _g1.length) {
-			var d = _g1[_g];
-			++_g;
-			d.onResize();
-		}
-	}
-	,onLeft: function(d) {
-		if(d.slot == 2 && this.leftSlot == null) {
-			d.slot = 1;
-			this.leftSlot = d;
-			return;
-		}
-		if(d.slot == 3) {
-			d.slot = 2;
-			this.rightSlot = null;
-		}
-	}
-	,onRight: function(d) {
-		if(d.slot == 2 && this.rightSlot == null) {
-			d.slot = 3;
-			this.rightSlot = d;
-			return;
-		}
-		if(d.slot == 1) {
-			d.slot = 2;
-			this.leftSlot = null;
-		}
-	}
-	,dispose: function() {
-	}
-	,update: function() {
-		var _g = 0;
-		var _g1 = this.devices;
-		while(_g < _g1.length) {
-			var d = _g1[_g];
-			++_g;
-			if(d.device.getAction("MENU_LEFT")) {
-				if(d.slot == 2 && this.leftSlot == null) {
-					d.slot = 1;
-					this.leftSlot = d;
-				} else if(d.slot == 3) {
-					d.slot = 2;
-					this.rightSlot = null;
-				}
-			} else if(d.device.getAction("MENU_RIGHT")) {
-				if(d.slot == 2 && this.rightSlot == null) {
-					d.slot = 3;
-					this.rightSlot = d;
-				} else if(d.slot == 1) {
-					d.slot = 2;
-					this.leftSlot = null;
-				}
-			}
-		}
-	}
-	,render: function(g,g4,alpha) {
-		g.set_font(this.font);
-		g.set_fontSize(this.fontSize);
-		var quarterW = ScaleManager.screen.width / 4;
-		var eightH = ScaleManager.screen.height / 8;
-		g.drawString("Left Board",quarterW - this.leftBoardTextCenter,eightH);
-		g.drawString("Right Board",quarterW * 3 - this.rightBoardTextCenter,eightH);
-		var _g = 0;
-		var _g1 = this.devices.length;
-		while(_g < _g1) {
-			var i = _g++;
-			var d = this.devices[i];
-			if(d.slot == 2) {
-				d.render(g,eightH + (i + 2) * d.height);
-			}
-		}
-		if(this.leftSlot != null) {
-			this.leftSlot.render(g,eightH + this.leftSlot.height * 2);
-		}
-		if(this.rightSlot != null) {
-			this.rightSlot.render(g,eightH + this.rightSlot.height * 2);
-		}
-	}
-	,__class__: side_$setup_SideSetupScreen
-};
-var side_$setup_VersusSideSetupScreen = function(onReady) {
-	this.isLeftReady = false;
-	this.isRightReady = false;
-	var tmp = new side_$setup_InputDeviceIcon("Keyboard (Arrows)",new input_KeyboardInputDevice(new save_$data_InputSettings(new haxe_ds_StringMap())));
-	var _g = new haxe_ds_StringMap();
-	var _g1 = new haxe_ds_StringMap();
-	var value = new input_InputMapping(65,14,new input_AxisMapping(0,-1)).asString();
-	_g1.h["MENU_LEFT"] = value;
-	var value = new input_InputMapping(68,15,new input_AxisMapping(0,1)).asString();
-	_g1.h["MENU_RIGHT"] = value;
-	var value = new input_InputMapping(83,13,new input_AxisMapping(1,1)).asString();
-	_g1.h["MENU_DOWN"] = value;
-	var value = new input_InputMapping(87,12,new input_AxisMapping(1,-1)).asString();
-	_g1.h["MENU_UP"] = value;
-	var value = new input_InputMapping(9,1,new input_AxisMapping(null,null)).asString();
-	_g1.h["CONFIRM"] = value;
-	_g.h["MAPPINGS"] = _g1;
-	this.devices = [tmp,new side_$setup_InputDeviceIcon("Keyboard (WASD)",new input_KeyboardInputDevice(new save_$data_InputSettings(_g)))];
-	side_$setup_SideSetupScreen.call(this,onReady);
-};
-$hxClasses["side_setup.VersusSideSetupScreen"] = side_$setup_VersusSideSetupScreen;
-side_$setup_VersusSideSetupScreen.__name__ = "side_setup.VersusSideSetupScreen";
-side_$setup_VersusSideSetupScreen.__super__ = side_$setup_SideSetupScreen;
-side_$setup_VersusSideSetupScreen.prototype = $extend(side_$setup_SideSetupScreen.prototype,{
-	isLeftReady: null
-	,isRightReady: null
-	,update: function() {
-		side_$setup_SideSetupScreen.prototype.update.call(this);
-		if(this.leftSlot != null) {
-			if(this.leftSlot.device.getAction("CONFIRM")) {
-				this.isLeftReady = !this.isLeftReady;
-			}
-		}
-		if(this.rightSlot != null) {
-			if(this.rightSlot.device.getAction("CONFIRM")) {
-				this.isRightReady = !this.isRightReady;
-			}
-		}
-		if(this.isLeftReady && this.isRightReady) {
-			this.onReady(this.leftSlot.device,this.rightSlot.device);
-		}
-	}
-	,__class__: side_$setup_VersusSideSetupScreen
-});
 var ui_AnyGamepadDetectWrapperOptions = function(keyboardDevice,pageBuilder) {
 	this.keyboardDevice = keyboardDevice;
 	this.pageBuilder = pageBuilder;
@@ -53101,6 +53104,7 @@ input_AnyInputDevice.FONT_SIZE = 48;
 input_AnyInputDevice.KEYBOARD_ID = -1;
 input_AnyInputDevice.rebindCounter = 0;
 input_AnyInputDevice.lastDeviceID = -1;
+input_AxisMapping.__clid = hxbit_Serializer.registerClass(input_AxisMapping);
 var input_AxisSpriteCoordinates_AXIS_SPRITE_COORDINATES = (function($this) {
 	var $r;
 	var _g = new haxe_ds_StringMap();
@@ -53395,6 +53399,7 @@ var input_ButtonSpriteCoordinates_BUTTON_SPRITE_COORDINATES = (function($this) {
 }(this));
 input_InputDevice.instances = [];
 input_GamepadInputDevice.SEPARATOR = " / ";
+input_InputMapping.__clid = hxbit_Serializer.registerClass(input_InputMapping);
 var input_KeyCodeToString_KEY_CODE_TO_STRING = (function($this) {
 	var $r;
 	var _g = new haxe_ds_IntMap();
@@ -53900,130 +53905,129 @@ peerjs_PeerEventType.Open = "open";
 peerjs_PeerEventType.Connection = "connection";
 peerjs_PeerEventType.Close = "close";
 peerjs_PeerEventType.Error = "error";
-save_$data_EndlessSettings.SHOW_CONTROL_HINTS_DEFAULT = true;
-save_$data_EndlessSettings.CLEAR_ON_X_MODE_DEFAULT = "NEW";
-save_$data_GraphicsSettings.FULLSCREEN_DEFAULT = true;
+save_$data_EndlessSettings.__clid = hxbit_Serializer.registerClass(save_$data_EndlessSettings);
+save_$data_GraphicsSettings.__clid = hxbit_Serializer.registerClass(save_$data_GraphicsSettings);
 save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
 	var $r;
 	var _g = new haxe_ds_StringMap();
 	{
-		var value = new input_InputMapping(27,9,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(27,9,new input_AxisMapping(null,null,null),null);
 		_g.h["PAUSE"] = value;
 	}
 	{
-		var value = new input_InputMapping(37,14,new input_AxisMapping(0,-1));
+		var value = new input_InputMapping(37,14,new input_AxisMapping(0,-1,null),null);
 		_g.h["MENU_LEFT"] = value;
 	}
 	{
-		var value = new input_InputMapping(39,15,new input_AxisMapping(0,1));
+		var value = new input_InputMapping(39,15,new input_AxisMapping(0,1,null),null);
 		_g.h["MENU_RIGHT"] = value;
 	}
 	{
-		var value = new input_InputMapping(40,13,new input_AxisMapping(1,1));
+		var value = new input_InputMapping(40,13,new input_AxisMapping(1,1,null),null);
 		_g.h["MENU_DOWN"] = value;
 	}
 	{
-		var value = new input_InputMapping(38,12,new input_AxisMapping(1,-1));
+		var value = new input_InputMapping(38,12,new input_AxisMapping(1,-1,null),null);
 		_g.h["MENU_UP"] = value;
 	}
 	{
-		var value = new input_InputMapping(8,0,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(8,0,new input_AxisMapping(null,null,null),null);
 		_g.h["BACK"] = value;
 	}
 	{
-		var value = new input_InputMapping(13,1,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(13,1,new input_AxisMapping(null,null,null),null);
 		_g.h["CONFIRM"] = value;
 	}
 	{
-		var value = new input_InputMapping(37,14,new input_AxisMapping(0,-1));
+		var value = new input_InputMapping(37,14,new input_AxisMapping(0,-1,null),null);
 		_g.h["SHIFT_LEFT"] = value;
 	}
 	{
-		var value = new input_InputMapping(39,15,new input_AxisMapping(0,1));
+		var value = new input_InputMapping(39,15,new input_AxisMapping(0,1,null),null);
 		_g.h["SHIFT_RIGHT"] = value;
 	}
 	{
-		var value = new input_InputMapping(40,13,new input_AxisMapping(1,1));
+		var value = new input_InputMapping(40,13,new input_AxisMapping(1,1,null),null);
 		_g.h["SOFT_DROP"] = value;
 	}
 	{
-		var value = new input_InputMapping(38,12,new input_AxisMapping(1,-1));
+		var value = new input_InputMapping(38,12,new input_AxisMapping(1,-1,null),null);
 		_g.h["HARD_DROP"] = value;
 	}
 	{
-		var value = new input_InputMapping(68,0,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(68,0,new input_AxisMapping(null,null,null),null);
 		_g.h["ROTATE_LEFT"] = value;
 	}
 	{
-		var value = new input_InputMapping(70,1,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(70,1,new input_AxisMapping(null,null,null),null);
 		_g.h["ROTATE_RIGHT"] = value;
 	}
 	{
-		var value = new input_InputMapping(81,8,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(81,8,new input_AxisMapping(null,null,null),null);
 		_g.h["TOGGLE_EDIT_MODE"] = value;
 	}
 	{
-		var value = new input_InputMapping(37,14,new input_AxisMapping(0,-1));
+		var value = new input_InputMapping(37,14,new input_AxisMapping(0,-1,null),null);
 		_g.h["EDIT_LEFT"] = value;
 	}
 	{
-		var value = new input_InputMapping(39,15,new input_AxisMapping(0,1));
+		var value = new input_InputMapping(39,15,new input_AxisMapping(0,1,null),null);
 		_g.h["EDIT_RIGHT"] = value;
 	}
 	{
-		var value = new input_InputMapping(40,13,new input_AxisMapping(1,1));
+		var value = new input_InputMapping(40,13,new input_AxisMapping(1,1,null),null);
 		_g.h["EDIT_DOWN"] = value;
 	}
 	{
-		var value = new input_InputMapping(38,12,new input_AxisMapping(1,-1));
+		var value = new input_InputMapping(38,12,new input_AxisMapping(1,-1,null),null);
 		_g.h["EDIT_UP"] = value;
 	}
 	{
-		var value = new input_InputMapping(68,0,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(68,0,new input_AxisMapping(null,null,null),null);
 		_g.h["EDIT_CLEAR"] = value;
 	}
 	{
-		var value = new input_InputMapping(70,1,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(70,1,new input_AxisMapping(null,null,null),null);
 		_g.h["EDIT_SET"] = value;
 	}
 	{
-		var value = new input_InputMapping(89,2,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(89,2,new input_AxisMapping(null,null,null),null);
 		_g.h["PREVIOUS_STEP"] = value;
 	}
 	{
-		var value = new input_InputMapping(88,3,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(88,3,new input_AxisMapping(null,null,null),null);
 		_g.h["NEXT_STEP"] = value;
 	}
 	{
-		var value = new input_InputMapping(67,6,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(67,6,new input_AxisMapping(null,null,null),null);
 		_g.h["PREVIOUS_COLOR"] = value;
 	}
 	{
-		var value = new input_InputMapping(86,7,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(86,7,new input_AxisMapping(null,null,null),null);
 		_g.h["NEXT_COLOR"] = value;
 	}
 	{
-		var value = new input_InputMapping(89,2,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(89,2,new input_AxisMapping(null,null,null),null);
 		_g.h["PREVIOUS_GROUP"] = value;
 	}
 	{
-		var value = new input_InputMapping(88,3,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(88,3,new input_AxisMapping(null,null,null),null);
 		_g.h["NEXT_GROUP"] = value;
 	}
 	{
-		var value = new input_InputMapping(66,5,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(66,5,new input_AxisMapping(null,null,null),null);
 		_g.h["TOGGLE_MARKERS"] = value;
 	}
 	{
-		var value = new input_InputMapping(82,4,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(82,4,new input_AxisMapping(null,null,null),null);
 		_g.h["QUICK_RESTART"] = value;
 	}
 	{
-		var value = new input_InputMapping(79,5,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(79,5,new input_AxisMapping(null,null,null),null);
 		_g.h["SAVE_STATE"] = value;
 	}
 	{
-		var value = new input_InputMapping(80,7,new input_AxisMapping(null,null));
+		var value = new input_InputMapping(80,7,new input_AxisMapping(null,null,null),null);
 		_g.h["LOAD_STATE"] = value;
 	}
 	$r = _g;
@@ -54031,75 +54035,16 @@ save_$data_InputSettings.MAPPINGS_DEFAULTS = (function($this) {
 }(this));
 save_$data_InputSettings.DEADZONE_DEFAULT = 0.5;
 save_$data_InputSettings.GAMEPAD_BRAND_DEFAULT = "DS4";
-save_$data_InputSettings.LOCAL_DELAY_DEFAULT = 0;
+save_$data_InputSettings.LOCAL_DELAY_DEFAULT = 2;
 save_$data_InputSettings.NETPLAY_DELAY_DEFAULT = 2;
-save_$data_PrefsSettings.COLOR_TINTS_DEFAULT = (function($this) {
-	var $r;
-	var _g = new haxe_ds_IntMap();
-	_g.h[0] = -1;
-	_g.h[1] = -1;
-	_g.h[2] = -1;
-	_g.h[3] = -1;
-	_g.h[4] = -1;
-	_g.h[5] = -1;
-	_g.h[6] = -1;
-	$r = _g;
-	return $r;
-}(this));
-save_$data_PrefsSettings.PRIMARY_COLORS_DEFAULT = (function($this) {
-	var $r;
-	var _g = new haxe_ds_IntMap();
-	{
-		var value = kha_Color._new(-65506);
-		_g.h[0] = value;
-	}
-	{
-		var value = kha_Color._new(-16711915);
-		_g.h[1] = value;
-	}
-	{
-		var value = kha_Color._new(-16749057);
-		_g.h[2] = value;
-	}
-	{
-		var value = kha_Color._new(-3328);
-		_g.h[3] = value;
-	}
-	{
-		var value = kha_Color._new(-4128513);
-		_g.h[4] = value;
-	}
-	_g.h[5] = 0;
-	_g.h[6] = 0;
-	$r = _g;
-	return $r;
-}(this));
-save_$data_PrefsSettings.BOARD_BACKGROUND_DEFAULT = kha_Color.fromBytes(64,32,32);
-save_$data_PrefsSettings.MENU_REMEMBER_CURSOR_DEFAULT = true;
-save_$data_PrefsSettings.CAP_AT_CROWNS_DEFAULT = true;
-save_$data_PrefsSettings.SHOW_GROUP_SHADOW_DEFAULT = true;
-save_$data_PrefsSettings.SHADOW_OPACITY_DEFAULT = 0.5;
-save_$data_PrefsSettings.SHADOW_HIGHLIGHT_OTHERS_DEFAULT = true;
-save_$data_PrefsSettings.SHADOW_WILL_TRIGGER_CHAIN_DEFAULT = true;
-save_$data_Profile.NAME_DEFAULT = "GUGU";
+save_$data_InputSettings.__clid = hxbit_Serializer.registerClass(save_$data_InputSettings);
+save_$data_PrefsSettings.__clid = hxbit_Serializer.registerClass(save_$data_PrefsSettings);
 save_$data_Profile.onChangePrimary = [];
+save_$data_Profile.__clid = hxbit_Serializer.registerClass(save_$data_Profile);
 save_$data_SaveManager.PROFILES_FILENAME = "profiles";
 save_$data_SaveManager.GRAPHICS_FIELNAME = "graphics";
 save_$data_SaveManager.profiles = [];
-save_$data_TrainingSettings.SHOW_CONTROL_HINTS_DEFAULT = true;
-save_$data_TrainingSettings.CLEAR_ON_X_MODE_DEFAULT = "RESTART";
-save_$data_TrainingSettings.AUTO_CLEAR_DEFAULT = true;
-save_$data_TrainingSettings.AUTO_ATTACK_DEFAULT = false;
-save_$data_TrainingSettings.ATTACK_TIME_DEFAULT = 10;
-save_$data_TrainingSettings.ATTACK_CHAIN_DEFAULT = 3;
-save_$data_TrainingSettings.ATTACK_GROUP_DIFF_DEFAULT = 0;
-save_$data_TrainingSettings.ATTACK_COLORS_DEFAULT = 1;
-save_$data_TrainingSettings.GROUP_BLIND_MODE_DEFAULT = false;
-save_$data_TrainingSettings.KEEP_GROUP_COUNT_DEFAULT = 0;
-side_$setup_InputDeviceIcon.FONT_SIZE = 56;
-side_$setup_SideSetupScreen.FONT_SIZE = 80;
-side_$setup_SideSetupScreen.LEFT_BOARD_STR = "Left Board";
-side_$setup_SideSetupScreen.RIGHT_BOARD_STR = "Right Board";
+save_$data_TrainingSettings.__clid = hxbit_Serializer.registerClass(save_$data_TrainingSettings);
 ui_AnyGamepadDetectWrapper.__meta__ = { fields : { keyboardDevice : { inject : null}, pageBuilder : { inject : null}}};
 ui_AnyGamepadDetectWrapper.TEXT = ["Press any button on","the gamepad you wish","to use"];
 ui_ErrorPage.__meta__ = { fields : { message : { inject : null}, callback : { inject : null}}};
