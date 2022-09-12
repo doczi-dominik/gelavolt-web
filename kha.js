@@ -50134,7 +50134,7 @@ kha_vr_TimeWarpParms.prototype = {
 	,__class__: kha_vr_TimeWarpParms
 };
 var lobby_LobbyPage = function() {
-	ui_MenuPageBase.call(this,new ui_MenuPageBaseOptions(56,"Lobby",[new ui_ControlHint(["BACK"],"Leave")],null));
+	ui_MenuPageBase.call(this,new ui_MenuPageBaseOptions(56,"Lobby",[new ui_ControlHint(["BACK"],"Leave"),new ui_ControlHint(["CONFIRM"],"Copy Link To Clipboard")],null));
 };
 $hxClasses["lobby.LobbyPage"] = lobby_LobbyPage;
 lobby_LobbyPage.__name__ = "lobby.LobbyPage";
@@ -50180,12 +50180,15 @@ lobby_LobbyPage.handleURLJoin = function() {
 lobby_LobbyPage.__super__ = ui_MenuPageBase;
 lobby_LobbyPage.prototype = $extend(ui_MenuPageBase.prototype,{
 	room: null
+	,roomURL: null
+	,showCopied: null
 	,onShow: function(menu) {
 		var _gthis = this;
 		ui_MenuPageBase.prototype.onShow.call(this,menu);
-		if(this.room != null) {
+		if(this.roomURL != null) {
 			return;
 		}
+		this.showCopied = false;
 		var peer = new Peer();
 		peer.on(peerjs_PeerEventType.Error,function(err) {
 			ScreenManager.pushOverlay(ui_ErrorPage.mainMenuPage("PeerError: " + Std.string(err)));
@@ -50199,22 +50202,42 @@ lobby_LobbyPage.prototype = $extend(ui_MenuPageBase.prototype,{
 			_g.h["rule"] = value;
 			tmp.create_lobby_WaitingRoomState("waiting",_g,lobby_WaitingRoomState,function(err,room) {
 				if(err != null) {
-					ScreenManager.pushOverlay(ui_ErrorPage.mainMenuPage("Could Not Create Room: " + err.code + " - " + err.message));
+					ScreenManager.pushOverlay(ui_ErrorPage.mainMenuPage("Could Not Create Room: " + err.message));
 					return;
 				}
 				_gthis.room = room;
+				_gthis.roomURL = "https://gelavolt.io/#" + room.id;
+				$global.navigator.clipboard.writeText(_gthis.roomURL);
 				lobby_LobbyPage.addRoomHandler(peer,room);
 			});
 		});
 	}
+	,update: function() {
+		var _gthis = this;
+		var inputDevice = this.menu.inputDevice;
+		if(inputDevice.getAction("BACK")) {
+			if(this.room != null) {
+				this.room.leave(true);
+			}
+			this.menu.popPage();
+		}
+		if(this.roomURL != null && inputDevice.getAction("CONFIRM")) {
+			$global.navigator.clipboard.writeText(this.roomURL).then(function(_) {
+				return _gthis.showCopied = true;
+			});
+		}
+	}
 	,render: function(g,x,y) {
 		ui_MenuPageBase.prototype.render.call(this,g,x,y);
 		if(this.room == null) {
-			g.drawString("Connecting...",x,y);
+			g.drawString("Creating room...",x,y);
 			return;
 		}
 		g.drawString("Waiting For Opponent...",x,y);
-		g.drawString("Join Link: https://gelavolt.io/#" + this.room.id,x,y + this.fontHeight);
+		g.drawString("Join Link: " + this.roomURL,x,y + this.fontHeight);
+		if(this.showCopied) {
+			g.drawString("Copied To Clipboard!",x,y + this.fontHeight * 2);
+		}
 	}
 	,__class__: lobby_LobbyPage
 });
