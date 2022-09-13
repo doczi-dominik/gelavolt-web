@@ -9082,6 +9082,7 @@ game_net_SessionManager.prototype = {
 	,sendBeginTaskID: null
 	,sendChecksumTaskID: null
 	,syncTimeoutTaskID: null
+	,checksumPackageTimeoutTaskID: null
 	,localID: null
 	,remoteID: null
 	,onInput: null
@@ -9110,7 +9111,7 @@ game_net_SessionManager.prototype = {
 			return;
 		}
 		if(this.lastLocalChecksum != this.lastRemoteChecksum) {
-			if(++this.desyncCounter > 5) {
+			if(++this.desyncCounter >= 3) {
 				this.error("Desync Detected");
 			}
 		} else {
@@ -9197,7 +9198,11 @@ game_net_SessionManager.prototype = {
 		this.dc.send("" + "1" + ";" + ping + ";" + prediction + ";" + (this.state == 3 ? "R" : "O"));
 	}
 	,onSyncRequest: function(parts) {
-		this.resetSyncTimeoutTimer();
+		var _gthis = this;
+		kha_Scheduler.removeTimeTask(this.syncPackageTimeoutTaskID);
+		this.syncPackageTimeoutTaskID = kha_Scheduler.addTimeTask(function() {
+			_gthis.error("Peer Disconnected (Sync Package Timeout)");
+		},2);
 		var pong = parts[1];
 		var prediction = Std.parseInt(parts[2]);
 		var adv = null;
@@ -9217,7 +9222,7 @@ game_net_SessionManager.prototype = {
 		var adv = Std.parseInt(parts[2]);
 		if(adv != null) {
 			this.averageRemoteAdvantage = Math.round(0.5 * adv + 0.5 * this.averageRemoteAdvantage);
-			if(this.sleepFrames == 0 && ++this.remoteAdvantageCounter % 5 == 0) {
+			if(this.sleepFrames == 0 && ++this.remoteAdvantageCounter % 3 == 0) {
 				var diff = this.averageLocalAdvantage - this.averageRemoteAdvantage;
 				if(this.state == 1 && Math.abs(diff) < 4) {
 					if(++this.successfulSleepChecks > 5) {
@@ -9236,7 +9241,7 @@ game_net_SessionManager.prototype = {
 					return;
 				}
 				var diff = this.averageLocalAdvantage - this.averageRemoteAdvantage;
-				var s = Math.round(diff / 2);
+				var s = Math.ceil(diff / 2);
 				if(s < 2) {
 					this.sleepFrames = 0;
 					return;
@@ -9317,6 +9322,7 @@ game_net_SessionManager.prototype = {
 		this.latestChecksumFrame = this.nextChecksumFrame;
 	}
 	,onChecksumUpdate: function(parts) {
+		this.resetChecksumTimeoutTimer();
 		this.lastRemoteChecksum = parts[1];
 		this.compareChecksums();
 	}
@@ -9335,7 +9341,9 @@ game_net_SessionManager.prototype = {
 		this.latestChecksumFrame = -1;
 		this.sendChecksumTaskID = kha_Scheduler.addTimeTask(function() {
 			_gthis.dc.send("" + "6");
-		},0,1);
+		},0,0.5);
+		this.resetSyncTimeoutTimer();
+		this.resetChecksumTimeoutTimer();
 		this.state = 3;
 	}
 	,updateBeginningState: function() {
@@ -9364,6 +9372,13 @@ game_net_SessionManager.prototype = {
 			_gthis.error("Peer Disconnected (Sync Package Timeout)");
 		},2);
 	}
+	,resetChecksumTimeoutTimer: function() {
+		var _gthis = this;
+		kha_Scheduler.removeTimeTask(this.checksumPackageTimeoutTaskID);
+		this.checksumPackageTimeoutTaskID = kha_Scheduler.addTimeTask(function() {
+			_gthis.error("Peer Disconnected (Checksum Package Timeout)");
+		},3);
+	}
 	,setSyncInterval: function(interval) {
 		kha_Scheduler.removeTimeTask(this.syncPackageTimeTaskID);
 		this.syncPackageTimeTaskID = kha_Scheduler.addTimeTask($bind(this,this.sendSyncRequest),0,interval / 1000);
@@ -9385,6 +9400,7 @@ game_net_SessionManager.prototype = {
 		kha_Scheduler.removeTimeTask(this.syncPackageTimeoutTaskID);
 		kha_Scheduler.removeTimeTask(this.sendChecksumTaskID);
 		kha_Scheduler.removeTimeTask(this.syncTimeoutTaskID);
+		kha_Scheduler.removeTimeTask(this.checksumPackageTimeoutTaskID);
 		this.peer.destroy();
 	}
 	,update: function() {
