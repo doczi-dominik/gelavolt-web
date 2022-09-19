@@ -51649,6 +51649,9 @@ save_$data_SaveManager.loadProfiles = function() {
 	var blob = kha_Storage.namedFile("profiles").read();
 	var ser = new hxbit_Serializer();
 	try {
+		if(blob == null) {
+			throw haxe_Exception.thrown(null);
+		}
 		ser.beginLoad(blob.bytes);
 		var len = ser.getInt();
 		var tmp;
@@ -51701,6 +51704,9 @@ save_$data_SaveManager.loadGraphics = function() {
 	var blob = kha_Storage.namedFile("graphics").read();
 	var ser = new hxbit_Serializer();
 	try {
+		if(blob == null) {
+			throw haxe_Exception.thrown(null);
+		}
 		ser.beginLoad(blob.bytes);
 		var c = save_$data_GraphicsSettings;
 		save_$data_SaveManager.graphics = ser.getRef(c,c.__clid);
