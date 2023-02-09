@@ -1877,7 +1877,7 @@ game_auto_$attack_AutoAttackManager.prototype = {
 	,onSendingEnd: function() {
 		var link = this.links.data[this.linkIndex];
 		this.linkIndex++;
-		this.garbageManager.sendGarbage(link.garbage,[new game_gelos_ScreenGeloPoint(1,0,800)]);
+		this.garbageManager.sendGarbage(link.garbage,[new game_gelos_ScreenGeloPoint(1,0,800)],link.sendsAllClearBonus);
 		var coords = new utils_Point(112,800);
 		this.chainCounter.startAnimation(link.chain,coords,link.isPowerful);
 		var absCoords = this.geometries.absolutePosition.add(coords);
@@ -3004,7 +3004,7 @@ game_boardstates_StandardBoardState.prototype = {
 		}
 		this.allClearManager.stopAnimation();
 		this.scoreManager.addScoreFromLink(linkInfo);
-		this.garbageManager.sendGarbage(linkInfo.garbage,beginnerScreenCoords);
+		this.garbageManager.sendGarbage(linkInfo.garbage,beginnerScreenCoords,linkInfo.sendsAllClearBonus);
 		this.scoreManager.resetDropBonus();
 		this.popPauseT = 0;
 		this.state = game_boardstates__$StandardBoardState_InnerState.POP_PAUSE;
@@ -7612,7 +7612,7 @@ game_garbage_GarbageManager.prototype = {
 			tmp.add(game_particles_ParticleLayer.FRONT,game_particles_PixelFloatParticle.create(new game_particles_PixelFloatParticleOptions(Math.cos(i / 4) * this.rng.data.GetIn(8,12),Math.sin(i / 4) * this.rng.data.GetIn(8,12),_g3,color,32 * this.rng.data.GetFloatIn(0.25,1.75),_g1,_g2)));
 		}
 	}
-	,sendAttackBullet: function(beginners) {
+	,sendAttackBullet: function(beginners,sendsAllClearBonus) {
 		var _gthis = this;
 		var absPos = this.geometries.absolutePosition;
 		var control;
@@ -7637,10 +7637,10 @@ game_garbage_GarbageManager.prototype = {
 					_gthis.target.startAnimation();
 					_gthis.addCollisionParticle(absTrayCenter[0],primaryColor[0]);
 				};
-			})(primaryColor,absTrayCenter))));
+			})(primaryColor,absTrayCenter),sendsAllClearBonus)));
 		}
 	}
-	,sendOffsetBullet: function(beginners) {
+	,sendOffsetBullet: function(beginners,sendsAllClearBonus) {
 		var _gthis = this;
 		var absPos = this.geometries.absolutePosition;
 		var scale = this.geometries.scale;
@@ -7658,10 +7658,10 @@ game_garbage_GarbageManager.prototype = {
 					_gthis.startAnimation();
 					_gthis.addCollisionParticle(absTrayCenter,primaryColor[0]);
 				};
-			})(primaryColor))));
+			})(primaryColor),sendsAllClearBonus)));
 		}
 	}
-	,sendCounterBullet: function(beginners) {
+	,sendCounterBullet: function(beginners,sendsAllClearBonus) {
 		var _gthis = this;
 		var absPos = this.geometries.absolutePosition;
 		var scale = this.geometries.scale;
@@ -7687,9 +7687,9 @@ game_garbage_GarbageManager.prototype = {
 							_gthis.target.startAnimation();
 							_gthis.addCollisionParticle(absTargetTrayCenter,primaryColor[0]);
 						};
-					})(primaryColor))));
+					})(primaryColor),false)));
 				};
-			})(primaryColor))));
+			})(primaryColor),sendsAllClearBonus)));
 		}
 	}
 	,receiveGarbage: function(amount) {
@@ -7705,23 +7705,23 @@ game_garbage_GarbageManager.prototype = {
 	,startAnimation: function() {
 		this.tray.startAnimation(this.currentGarbage);
 	}
-	,sendGarbage: function(amount,beginners) {
+	,sendGarbage: function(amount,beginners,sendsAllClearBonus) {
 		if(amount == 0) {
 			return;
 		}
 		var diff = amount - this.currentGarbage;
 		if(this.currentGarbage == 0) {
 			this.target.receiveGarbage(amount);
-			this.sendAttackBullet(beginners);
+			this.sendAttackBullet(beginners,sendsAllClearBonus);
 		} else if(diff >= 0) {
 			this.reduceGarbage(this.currentGarbage);
 			if(diff > 0) {
 				this.target.receiveGarbage(diff);
-				this.sendCounterBullet(beginners);
+				this.sendCounterBullet(beginners,sendsAllClearBonus);
 			}
 		} else if(diff < 0) {
 			this.reduceGarbage(amount);
-			this.sendOffsetBullet(beginners);
+			this.sendOffsetBullet(beginners,sendsAllClearBonus);
 		}
 	}
 	,dropGarbage: function(amount) {
@@ -7801,7 +7801,7 @@ game_garbage_NullGarbageManager.prototype = {
 	}
 	,init: function() {
 	}
-	,sendGarbage: function(amount,beginners) {
+	,sendGarbage: function(amount,beginners,sendsAllClearBonus) {
 	}
 	,dropGarbage: function(amount) {
 	}
@@ -9522,7 +9522,7 @@ game_net_SessionManager.prototype = {
 	}
 	,__class__: game_net_SessionManager
 };
-var game_particles_GarbageBulletParticleOptions = function(begin,control,target,beginScale,targetScale,duration,color,onFinish) {
+var game_particles_GarbageBulletParticleOptions = function(begin,control,target,beginScale,targetScale,duration,color,onFinish,sendsAllClearBonus) {
 	this.begin = begin;
 	this.control = control;
 	this.target = target;
@@ -9531,6 +9531,7 @@ var game_particles_GarbageBulletParticleOptions = function(begin,control,target,
 	this.duration = duration;
 	this.color = color;
 	this.onFinish = onFinish;
+	this.sendsAllClearBonus = sendsAllClearBonus;
 };
 $hxClasses["game.particles.GarbageBulletParticleOptions"] = game_particles_GarbageBulletParticleOptions;
 game_particles_GarbageBulletParticleOptions.__name__ = "game.particles.GarbageBulletParticleOptions";
@@ -9543,6 +9544,7 @@ game_particles_GarbageBulletParticleOptions.prototype = {
 	,duration: null
 	,color: null
 	,onFinish: null
+	,sendsAllClearBonus: null
 	,__class__: game_particles_GarbageBulletParticleOptions
 };
 var game_particles_IParticle = function() { };
@@ -9566,7 +9568,12 @@ var game_particles_GarbageBulletParticle = function(opts) {
 	this.duration = opts.duration;
 	this.color = opts.color;
 	this.onFinish = opts.onFinish;
+	this.sendsAllClearBonus = opts.sendsAllClearBonus;
+	if(this.sendsAllClearBonus) {
+		this.color = -23296;
+	}
 	this.trailParts = new game_copying_CopyableArray([]);
+	this.onFinishCalled = false;
 };
 $hxClasses["game.particles.GarbageBulletParticle"] = game_particles_GarbageBulletParticle;
 game_particles_GarbageBulletParticle.__name__ = "game.particles.GarbageBulletParticle";
@@ -9579,6 +9586,9 @@ game_particles_GarbageBulletParticle.create = function(opts) {
 	p.currentX = begin.x;
 	p.currentY = begin.y;
 	p.t = 0;
+	p.font = kha_Assets.fonts.ka1;
+	p.halfWidth = p.font.width(48,"AC!") / 2;
+	p.halfHeight = p.font.height(48) / 2;
 	p.isAnimationFinished = false;
 	return p;
 };
@@ -9591,45 +9601,53 @@ game_particles_GarbageBulletParticle.prototype = {
 	,duration: null
 	,color: null
 	,onFinish: null
+	,sendsAllClearBonus: null
 	,trailParts: null
 	,prevX: null
 	,prevY: null
 	,currentX: null
 	,currentY: null
 	,t: null
+	,onFinishCalled: null
+	,font: null
+	,halfWidth: null
+	,halfHeight: null
 	,isAnimationFinished: null
 	,copy: function() {
-		return new game_particles_GarbageBulletParticle(new game_particles_GarbageBulletParticleOptions(this.begin,this.control,this.target,this.beginScale,this.targetScale,this.duration,this.color,this.onFinish)).copyFrom(this);
+		return new game_particles_GarbageBulletParticle(new game_particles_GarbageBulletParticleOptions(this.begin,this.control,this.target,this.beginScale,this.targetScale,this.duration,this.color,this.onFinish,this.sendsAllClearBonus)).copyFrom(this);
 	}
 	,update: function() {
 		this.prevX = this.currentX;
 		this.prevY = this.currentY;
-		var m1 = utils_Utils.pointLerp(this.begin,this.control,this.t);
-		var m2 = utils_Utils.pointLerp(this.control,this.target,this.t);
-		var current = utils_Utils.pointLerp(m1,m2,this.t);
-		this.currentX = current.x;
-		this.currentY = current.y;
-		this.trailParts.data.push(game_particles_GarbageBulletTrailParticle.create(new game_particles_GarbageBulletTrailParticleOptions(this.currentX,this.currentY,this.color)));
+		if(this.t < 1) {
+			var m1 = utils_Utils.pointLerp(this.begin,this.control,this.t);
+			var m2 = utils_Utils.pointLerp(this.control,this.target,this.t);
+			var current = utils_Utils.pointLerp(m1,m2,this.t);
+			this.currentX = current.x;
+			this.currentY = current.y;
+			this.trailParts.data.push(game_particles_GarbageBulletTrailParticle.create(new game_particles_GarbageBulletTrailParticleOptions(this.currentX,this.currentY,this.color)));
+			this.t += 1 / this.duration;
+		} else {
+			if(!this.onFinishCalled) {
+				this.onFinish();
+				this.onFinishCalled = true;
+			}
+			if(this.trailParts.data.length == 0) {
+				this.isAnimationFinished = true;
+			}
+		}
 		var _g = 0;
 		var _g1 = this.trailParts.data;
 		while(_g < _g1.length) {
 			var p = _g1[_g];
 			++_g;
 			p.update();
-		}
-		this.t += 1 / this.duration;
-		if(this.t >= 1) {
-			this.onFinish();
-			this.isAnimationFinished = true;
+			if(p.isAnimationFinished) {
+				HxOverrides.remove(this.trailParts.data,p);
+			}
 		}
 	}
 	,render: function(g,alpha) {
-		var min = this.beginScale;
-		var scale = min + (this.targetScale - min) * this.t;
-		var min = this.prevX;
-		var lerpX = min + (this.currentX - min) * alpha;
-		var min = this.prevY;
-		var lerpY = min + (this.currentY - min) * alpha;
 		var _g = 0;
 		var _g1 = this.trailParts.data;
 		while(_g < _g1.length) {
@@ -9637,9 +9655,24 @@ game_particles_GarbageBulletParticle.prototype = {
 			++_g;
 			p.render(g,alpha);
 		}
+		if(this.t >= 1) {
+			return;
+		}
+		var min = this.beginScale;
+		var scale = min + (this.targetScale - min) * this.t;
+		var min = this.prevX;
+		var lerpX = min + (this.currentX - min) * alpha;
+		var min = this.prevY;
+		var lerpY = min + (this.currentY - min) * alpha;
 		g.set_color(this.color);
 		utils_GraphicsExtension.fillCircle(g,lerpX,lerpY,32 * scale);
 		g.set_color(-1);
+		if(this.sendsAllClearBonus) {
+			g.set_font(this.font);
+			g.set_fontSize(48);
+			g.set_color(-1);
+			g.drawString("AC!",lerpX - this.halfWidth,lerpY - this.halfHeight);
+		}
 	}
 	,copyFrom: function(other) {
 		this.trailParts.copyFrom(other.trailParts);
@@ -9648,6 +9681,9 @@ game_particles_GarbageBulletParticle.prototype = {
 		this.currentX = other.currentX;
 		this.currentY = other.currentY;
 		this.t = other.t;
+		this.onFinishCalled = other.onFinishCalled;
+		this.halfWidth = other.halfWidth;
+		this.halfHeight = other.halfHeight;
 		this.isAnimationFinished = other.isAnimationFinished;
 		return this;
 	}
@@ -23350,19 +23386,6 @@ kha_SystemImpl.initAnimate = function(callback) {
 		}
 		kha_Scheduler.executeFrame();
 		if(canvas.getContext != null) {
-			if(kha_SystemImpl.lastCanvasClientWidth != canvas.clientWidth || kha_SystemImpl.lastCanvasClientHeight != canvas.clientHeight) {
-				var scale = window.devicePixelRatio;
-				var clientWidth = canvas.clientWidth;
-				var clientHeight = canvas.clientHeight;
-				canvas.width = clientWidth;
-				canvas.height = clientHeight;
-				if(scale != 1) {
-					canvas.style.width = (clientWidth / scale | 0) + "px";
-					canvas.style.height = (clientHeight / scale | 0) + "px";
-				}
-				kha_SystemImpl.lastCanvasClientWidth = canvas.clientWidth;
-				kha_SystemImpl.lastCanvasClientHeight = canvas.clientHeight;
-			}
 			kha_System.render([kha_SystemImpl.frame]);
 			if(kha_SystemImpl.ie && kha_SystemImpl.gl != null) {
 				kha_SystemImpl.gl.clearColor(1,1,1,1);
@@ -50517,19 +50540,29 @@ main_Main.setFullHTML5Canvas = function() {
 	window.document.body.style.overflow = "hidden";
 	var canvas = window.document.getElementById("khanvas");
 	canvas.style.display = "block";
-	main_ScaleManager.addOnResizeCallback(function() {
-		var tmp = window.innerWidth | 0;
-		canvas.width = tmp;
-		var tmp = window.innerHeight | 0;
-		canvas.height = tmp;
-		canvas.style.width = window.document.documentElement.clientWidth + "px";
-		canvas.style.height = window.document.documentElement.clientHeight + "px";
-	});
+	var resize = function() {
+		var w = window.document.documentElement.clientWidth;
+		var h = window.document.documentElement.clientHeight;
+		if(w == 0 || h == 0) {
+			w = window.innerWidth;
+			h = window.innerHeight;
+		}
+		var resize = w * window.devicePixelRatio | 0;
+		canvas.width = resize;
+		var resize = h * window.devicePixelRatio | 0;
+		canvas.height = resize;
+		if(canvas.style.width == "") {
+			canvas.style.width = "100%";
+			canvas.style.height = "100%";
+		}
+	};
+	resize();
+	window.onresize = function() {
+		resize();
+		main_ScaleManager.screen.resize(canvas.width,canvas.height);
+	};
 };
 main_Main.main = function() {
-	window.onresize = function() {
-		main_ScaleManager.screen.resize(window.innerWidth,window.innerHeight);
-	};
 	main_Main.setFullHTML5Canvas();
 	kha_System.start(new kha_SystemOptions("Project GelaVolt",1920,1080,null,new kha_FramebufferOptions(60,false,32,16,8,1)),function(_) {
 		kha_Assets.loadEverything(function() {
@@ -54040,7 +54073,9 @@ game_geometries_BoardGeometries.CENTERED = new game_geometries_BoardGeometries(n
 game_geometries_BoardGeometries.INFO = new game_geometries_BoardGeometries(new utils_Point(888,160),1,game_geometries_BoardOrientation.RIGHT,new utils_Point(-48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(-64,-77),new utils_Point(-48,game_geometries_BoardGeometries.HEIGHT - 64));
 game_mediators_ControlHintContainer.__meta__ = { fields : { value : { copy : null}, isVisible : { copy : null}}};
 game_mediators_FrameCounter.__meta__ = { fields : { value : { copy : null}}};
-game_particles_GarbageBulletParticle.__meta__ = { fields : { begin : { inject : null}, control : { inject : null}, target : { inject : null}, beginScale : { inject : null}, targetScale : { inject : null}, duration : { inject : null}, color : { inject : null}, onFinish : { inject : null}, trailParts : { copy : null}, prevX : { copy : null}, prevY : { copy : null}, currentX : { copy : null}, currentY : { copy : null}, t : { copy : null}, isAnimationFinished : { copy : null}}};
+game_particles_GarbageBulletParticle.__meta__ = { fields : { begin : { inject : null}, control : { inject : null}, target : { inject : null}, beginScale : { inject : null}, targetScale : { inject : null}, duration : { inject : null}, color : { inject : null}, onFinish : { inject : null}, sendsAllClearBonus : { inject : null}, trailParts : { copy : null}, prevX : { copy : null}, prevY : { copy : null}, currentX : { copy : null}, currentY : { copy : null}, t : { copy : null}, onFinishCalled : { copy : null}, font : { copy : null}, halfWidth : { copy : null}, halfHeight : { copy : null}, isAnimationFinished : { copy : null}}};
+game_particles_GarbageBulletParticle.TEXT = "AC!";
+game_particles_GarbageBulletParticle.FONT_SIZE = 48;
 game_particles_GarbageBulletTrailParticle.__meta__ = { fields : { x : { inject : null}, y : { inject : null}, color : { inject : null}, lastT : { copy : null}, t : { copy : null}, isAnimationFinished : { copy : null}}};
 game_particles_GeloPopParticle.__meta__ = { fields : { dx : { inject : null}, dyIncrement : { inject : null}, color : { inject : null}, maxT : { inject : null}, x : { inject : null, copy : null}, y : { inject : null, copy : null}, dy : { inject : null, copy : null}, lastX : { copy : null}, lastY : { copy : null}, t : { copy : null}, isAnimationFinished : { copy : null}}};
 game_particles_ParticleManager.__meta__ = { fields : { backParticles : { copy : null}, frontParticles : { copy : null}}};
