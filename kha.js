@@ -1396,6 +1396,7 @@ game_ScoreManager.prototype = {
 	}
 	,copyFrom: function(other) {
 		this.actionTextColor = other.actionTextColor;
+		this.scoreScaleY = other.scoreScaleY;
 		this.formulaText = other.formulaText;
 		this.formulaTextWidth = other.formulaTextWidth;
 		this.lastFormulaT = other.lastFormulaT;
@@ -4390,6 +4391,13 @@ hxbit_Serializer.prototype = {
 			return this.getBytes();
 		case 9:
 			return this.getAnyRef();
+		case 10:
+			var ename = this.getString();
+			var ser = hxbit_Serializer.getEnumClass(ename);
+			if(ser == null) {
+				throw haxe_Exception.thrown("Unsupported enum " + ename);
+			}
+			return ser.doUnserialize(this);
 		default:
 			var x = _g;
 			throw haxe_Exception.thrown("Invalid dynamic prefix " + x);
@@ -4455,6 +4463,17 @@ hxbit_Serializer.prototype = {
 					throw haxe_Exception.thrown("Unsupported dynamic " + Std.string(c));
 				}
 			}
+			break;
+		case 7:
+			var e = _g.e;
+			var ename = e.__ename__;
+			var ser = hxbit_Serializer.getEnumClass(ename);
+			if(ser == null) {
+				throw haxe_Exception.thrown("Unsupported enum " + ename);
+			}
+			this.addByte(10);
+			this.addString(ename);
+			ser.doSerialize(this,v);
 			break;
 		default:
 			var t = _g;
@@ -4526,7 +4545,7 @@ hxbit_Serializer.prototype = {
 	,getObjRef: function() {
 		return this.getInt();
 	}
-	,addAnyRef: function(s) {
+	,addRef: function(s,forceCLID) {
 		if(s == null) {
 			this.addInt(0);
 			return;
@@ -4542,46 +4561,62 @@ hxbit_Serializer.prototype = {
 		this.refs.h[s.__uid] = s;
 		var index = s.getCLID();
 		this.usedClasses[index] = true;
-		this.addCLID(index);
+		if(forceCLID) {
+			this.addCLID(index);
+		} else {
+			var clid = hxbit_Serializer.CLIDS[index];
+			if(clid != 0) {
+				this.addCLID(clid);
+			}
+		}
 		s.serialize(this);
+		this.onAddNewObject(s);
+	}
+	,addAnyRef: function(s) {
+		if(s == null) {
+			this.addInt(0);
+		} else {
+			if(this.remapObjs != null) {
+				this.remap(s);
+			}
+			this.addObjRef(s);
+			var r = this.refs.h[s.__uid];
+			if(r == null) {
+				this.refs.h[s.__uid] = s;
+				var index = s.getCLID();
+				this.usedClasses[index] = true;
+				this.addCLID(index);
+				s.serialize(this);
+				this.onAddNewObject(s);
+			}
+		}
 	}
 	,addKnownRef: function(s) {
 		if(s == null) {
 			this.addInt(0);
-			return;
+		} else {
+			if(this.remapObjs != null) {
+				this.remap(s);
+			}
+			this.addObjRef(s);
+			var r = this.refs.h[s.__uid];
+			if(r == null) {
+				this.refs.h[s.__uid] = s;
+				var index = s.getCLID();
+				this.usedClasses[index] = true;
+				var clid = hxbit_Serializer.CLIDS[index];
+				if(clid != 0) {
+					this.addCLID(clid);
+				}
+				s.serialize(this);
+				this.onAddNewObject(s);
+			}
 		}
-		if(this.remapObjs != null) {
-			this.remap(s);
-		}
-		this.addObjRef(s);
-		var r = this.refs.h[s.__uid];
-		if(r != null) {
-			return;
-		}
-		this.refs.h[s.__uid] = s;
-		var index = s.getCLID();
-		this.usedClasses[index] = true;
-		var clid = hxbit_Serializer.CLIDS[index];
-		if(clid != 0) {
-			this.addCLID(clid);
-		}
-		s.serialize(this);
 	}
-	,getAnyRef: function() {
-		var id = this.getObjRef();
-		if(id == 0) {
-			return null;
-		}
-		if(this.refs.h[id] != null) {
-			return this.refs.h[id];
-		}
+	,makeRef: function(id,clidx) {
 		var rid = id & 16777215;
 		if(hxbit_Serializer.UID < rid && this.remapObjs == null) {
 			hxbit_Serializer.UID = rid;
-		}
-		var clidx = this.getCLID();
-		if(this.mapIndexes != null) {
-			clidx = this.mapIndexes[clidx];
 		}
 		var i = Object.create(hxbit_Serializer.CLASSES[clidx].prototype);
 		if(this.newObjects != null) {
@@ -4598,9 +4633,14 @@ hxbit_Serializer.prototype = {
 		} else {
 			i.unserialize(this);
 		}
+		this.onNewObject(i);
 		return i;
 	}
-	,getRef: function(c,clidx) {
+	,onNewObject: function(i) {
+	}
+	,onAddNewObject: function(i) {
+	}
+	,getAnyRef: function() {
 		var id = this.getObjRef();
 		if(id == 0) {
 			return null;
@@ -4608,27 +4648,15 @@ hxbit_Serializer.prototype = {
 		if(this.refs.h[id] != null) {
 			return this.refs.h[id];
 		}
+		var clidx = this.getCLID();
+		if(this.mapIndexes != null) {
+			clidx = this.mapIndexes[clidx];
+		}
 		var rid = id & 16777215;
 		if(hxbit_Serializer.UID < rid && this.remapObjs == null) {
 			hxbit_Serializer.UID = rid;
 		}
-		if(this.convert != null && this.convert[clidx] != null) {
-			var conv = this.convert[clidx];
-			if(conv.hadCID) {
-				var realIdx = this.getCLID();
-				if(conv.hasCID) {
-					c = hxbit_Serializer.CL_BYID[realIdx];
-					clidx = c.__clid;
-				}
-			}
-		} else if(hxbit_Serializer.CLIDS[clidx] != 0) {
-			var realIdx = this.getCLID();
-			c = hxbit_Serializer.CL_BYID[realIdx];
-			if(this.convert != null) {
-				clidx = c.__clid;
-			}
-		}
-		var i = Object.create(c.prototype);
+		var i = Object.create(hxbit_Serializer.CLASSES[clidx].prototype);
 		if(this.newObjects != null) {
 			this.newObjects.push(i);
 		}
@@ -4643,6 +4671,51 @@ hxbit_Serializer.prototype = {
 		} else {
 			i.unserialize(this);
 		}
+		this.onNewObject(i);
+		return i;
+	}
+	,getRef: function(c,clidx) {
+		var id = this.getObjRef();
+		if(id == 0) {
+			return null;
+		}
+		if(this.refs.h[id] != null) {
+			return this.refs.h[id];
+		}
+		if(this.convert != null && this.convert[clidx] != null) {
+			var conv = this.convert[clidx];
+			if(conv.hadCID) {
+				var realIdx = this.getCLID();
+				if(conv.hasCID) {
+					c = hxbit_Serializer.CL_BYID[realIdx];
+					clidx = c.__clid;
+				}
+			}
+		} else if(hxbit_Serializer.CLIDS[clidx] != 0) {
+			var realIdx = this.getCLID();
+			c = hxbit_Serializer.CL_BYID[realIdx];
+			clidx = c.__clid;
+		}
+		var rid = id & 16777215;
+		if(hxbit_Serializer.UID < rid && this.remapObjs == null) {
+			hxbit_Serializer.UID = rid;
+		}
+		var i = Object.create(hxbit_Serializer.CLASSES[clidx].prototype);
+		if(this.newObjects != null) {
+			this.newObjects.push(i);
+		}
+		i.__uid = id;
+		i.unserializeInit();
+		this.refs.h[id] = i;
+		if(this.remapObjs != null) {
+			this.remap(i);
+		}
+		if(this.convert != null && this.convert[clidx] != null) {
+			this.convertRef(i,this.convert[clidx]);
+		} else {
+			i.unserialize(this);
+		}
+		this.onNewObject(i);
 		return i;
 	}
 	,getKnownRef: function(c) {
@@ -6988,11 +7061,11 @@ game_gamestatebuilders_NetplayEndlessGameStateBuilder.prototype = {
 		this.leftTargetMediator = other.leftTargetMediator;
 		this.rightBorderColorMediator = other.rightBorderColorMediator;
 		this.rightTargetMediator = other.rightTargetMediator;
-		this.leftGarbageTray = other.leftGarbageTray.copy();
+		this.leftGarbageTray.copyFrom(other.leftGarbageTray);
 		this.leftGarbageManager.copyFrom(other.leftGarbageManager);
 		this.leftScoreManager.copyFrom(other.leftScoreManager);
-		this.leftChainSimDisplay = other.leftChainSimDisplay.copy();
-		this.leftChainSimAccumDisplay = other.leftChainSimAccumDisplay.copy();
+		this.leftChainSimDisplay.copyFrom(other.leftChainSimDisplay);
+		this.leftChainSimAccumDisplay.copyFrom(other.leftChainSimAccumDisplay);
 		this.leftChainSim.copyFrom(other.leftChainSim);
 		this.leftChainCounter.copyFrom(other.leftChainCounter);
 		this.leftField.copyFrom(other.leftField);
@@ -7000,11 +7073,11 @@ game_gamestatebuilders_NetplayEndlessGameStateBuilder.prototype = {
 		this.leftGeloGroup.copyFrom(other.leftGeloGroup);
 		this.leftAllClearManager.copyFrom(other.leftAllClearManager);
 		this.leftPreview.copyFrom(other.leftPreview);
-		this.rightGarbageTray = other.rightGarbageTray.copy();
+		this.rightGarbageTray.copyFrom(other.rightGarbageTray);
 		this.rightGarbageManager.copyFrom(other.rightGarbageManager);
 		this.rightScoreManager.copyFrom(other.rightScoreManager);
-		this.rightChainSimDisplay = other.rightChainSimDisplay.copy();
-		this.rightChainSimAccumDisplay = other.rightChainSimAccumDisplay.copy();
+		this.rightChainSimDisplay.copyFrom(other.rightChainSimDisplay);
+		this.rightChainSimAccumDisplay.copyFrom(other.rightChainSimAccumDisplay);
 		this.rightChainSim.copyFrom(other.rightChainSim);
 		this.rightChainCounter.copyFrom(other.rightChainCounter);
 		this.rightField.copyFrom(other.rightField);
@@ -7359,11 +7432,11 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.particleManager.copyFrom(other.particleManager);
 		this.marginManager.copyFrom(other.marginManager);
 		this.frameCounter.copyFrom(other.frameCounter);
-		this.playerGarbageTray = other.playerGarbageTray.copy();
+		this.playerGarbageTray.copyFrom(other.playerGarbageTray);
 		this.playerGarbageManager.copyFrom(other.playerGarbageManager);
 		this.playerScoreManager.copyFrom(other.playerScoreManager);
-		this.playerChainSimDisplay = other.playerChainSimDisplay.copy();
-		this.playerChainSimAccumDisplay = other.playerChainSimAccumDisplay.copy();
+		this.playerChainSimDisplay.copyFrom(other.playerChainSimDisplay);
+		this.playerChainSimAccumDisplay.copyFrom(other.playerChainSimAccumDisplay);
 		this.playerChainSim.copyFrom(other.playerChainSim);
 		this.playerChainCounter.copyFrom(other.playerChainCounter);
 		this.playerField.copyFrom(other.playerField);
@@ -7373,12 +7446,12 @@ game_gamestatebuilders_TrainingGameStateBuilder.prototype = {
 		this.playerGeloGroupChainSim.copyFrom(other.playerGeloGroupChainSim);
 		this.playerGeloGroup.copyFrom(other.playerGeloGroup);
 		this.playerAllClearManager.copyFrom(other.playerAllClearManager);
-		this.infoGarbageTray = other.infoGarbageTray.copy();
+		this.infoGarbageTray.copyFrom(other.infoGarbageTray);
 		this.infoGarbageManager.copyFrom(other.infoGarbageManager);
 		this.autoAttackChainCounter.copyFrom(other.autoAttackChainCounter);
 		this.autoAttackManager.copyFrom(other.autoAttackManager);
-		this.infoChainAdvantageDisplay = other.infoChainAdvantageDisplay.copy();
-		this.infoAfterCounterDisplay = other.infoAfterCounterDisplay.copy();
+		this.infoChainAdvantageDisplay.copyFrom(other.infoChainAdvantageDisplay);
+		this.infoAfterCounterDisplay.copyFrom(other.infoAfterCounterDisplay);
 		this.editField.copyFrom(other.editField);
 		this.infoState.copyFrom(other.infoState);
 		this.playState.copyFrom(other.playState);
@@ -16241,6 +16314,42 @@ hxbit_Macros.makeEnumPath = function(name) {
 	name = name.split(".").join("_");
 	name = name.charAt(0).toUpperCase() + HxOverrides.substr(name,1,null);
 	return "hxbit.enumSer." + name;
+};
+hxbit_Macros.iterType = function(t,f) {
+	switch(t._hx_index) {
+	case 7:
+		var k = t.k;
+		var v = t.v;
+		f(k);
+		f(v);
+		break;
+	case 8:
+		var t1 = t.k;
+		f(t1);
+		break;
+	case 9:
+		var fields = t.fields;
+		var _g = 0;
+		while(_g < fields.length) {
+			var tf = fields[_g];
+			++_g;
+			f(tf.type);
+		}
+		break;
+	case 10:
+		var t1 = t.k;
+		f(t1);
+		break;
+	case 11:
+		var t1 = t.k;
+		f(t1);
+		break;
+	case 12:
+		var t1 = t.t;
+		f(t1);
+		break;
+	default:
+	}
 };
 var hxbit_Schema = function() {
 	this.__uid = hxbit_Serializer.SEQ << 24 | ++hxbit_Serializer.UID;
@@ -53627,7 +53736,7 @@ game_ChainCounter.TEXT_FONTSIZE = 48;
 game_ChainCounter.POWERED_COLOR = kha_Color._new(-59580);
 game_Dropsets.CLASSICAL = [game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR,game_gelogroups_GeloGroupType.PAIR];
 game_Queue.__meta__ = { fields : { groups : { copy : null}, currentIndex : { copy : null}}};
-game_ScoreManager.__meta__ = { fields : { softDropBonus : { inject : null}, orientation : { inject : null}, actionTextColor : { copy : null}, formulaText : { copy : null}, formulaTextWidth : { copy : null}, lastFormulaT : { copy : null}, formulaT : { copy : null}, showChainFormula : { copy : null}, actionText : { copy : null}, actionTextT : { copy : null}, actionTextCharacters : { copy : null}, showActionText : { copy : null}, score : { copy : null}, dropBonus : { copy : null}}};
+game_ScoreManager.__meta__ = { fields : { softDropBonus : { inject : null}, orientation : { inject : null}, actionTextColor : { copy : null}, scoreScaleY : { copy : null}, formulaText : { copy : null}, formulaTextWidth : { copy : null}, lastFormulaT : { copy : null}, formulaT : { copy : null}, showChainFormula : { copy : null}, actionText : { copy : null}, actionTextT : { copy : null}, actionTextCharacters : { copy : null}, showActionText : { copy : null}, score : { copy : null}, dropBonus : { copy : null}}};
 game_actionbuffers_LocalActionBuffer.__meta__ = { fields : { frameCounter : { inject : null}, inputDevice : { inject : null}, frameDelay : { inject : null}}};
 game_actionbuffers_NullActionBuffer.instance = new game_actionbuffers_NullActionBuffer();
 game_actionbuffers_ReceiveActionBuffer.__meta__ = { fields : { frameCounter : { inject : null}, rollbackMediator : { inject : null}}};
@@ -53828,8 +53937,8 @@ game_fields_MultiColorFieldMarker.__clid = hxbit_Serializer.registerClass(game_f
 game_fields_NullFieldMarker.instance = new game_fields_NullFieldMarker();
 game_fields_NullFieldMarker.__clid = hxbit_Serializer.registerClass(game_fields_NullFieldMarker);
 game_gamestatebuilders_EndlessGameStateBuilder.__meta__ = { fields : { rule : { inject : null}, inputDevice : { inject : null}, replayData : { inject : null}, rng : { copy : null}, randomizer : { copy : null}, particleManager : { copy : null}, marginManager : { copy : null}, frameCounter : { copy : null}, scoreManager : { copy : null}, chainSim : { copy : null}, chainCounter : { copy : null}, field : { copy : null}, queue : { copy : null}, geloGroup : { copy : null}, allClearManager : { copy : null}, boardState : { copy : null}, board : { copy : null}, controlHintContainer : { copy : null}}};
-game_gamestatebuilders_NetplayEndlessGameStateBuilder.__meta__ = { fields : { rule : { inject : null}, isLocalOnLeft : { inject : null}, session : { inject : null}, frameCounter : { inject : null, copy : null}, rng : { copy : null}, randomizer : { copy : null}, particleManager : { copy : null}, marginManager : { copy : null}, leftBorderColorMediator : { copy : null}, leftTargetMediator : { copy : null}, rightBorderColorMediator : { copy : null}, rightTargetMediator : { copy : null}, leftGarbageTray : { copy : null}, leftGarbageManager : { copy : null}, leftScoreManager : { copy : null}, leftChainSimDisplay : { copy : null}, leftChainSimAccumDisplay : { copy : null}, leftChainSim : { copy : null}, leftChainCounter : { copy : null}, leftField : { copy : null}, leftQueue : { copy : null}, leftGeloGroup : { copy : null}, leftAllClearManager : { copy : null}, leftPreview : { copy : null}, rightGarbageTray : { copy : null}, rightGarbageManager : { copy : null}, rightScoreManager : { copy : null}, rightChainSimDisplay : { copy : null}, rightChainSimAccumDisplay : { copy : null}, rightChainSim : { copy : null}, rightChainCounter : { copy : null}, rightField : { copy : null}, rightQueue : { copy : null}, rightGeloGroup : { copy : null}, rightAllClearManager : { copy : null}, rightPreview : { copy : null}, leftState : { copy : null}, rightState : { copy : null}, controlHintContainer : { nullCopyFrom : null}}};
-game_gamestatebuilders_TrainingGameStateBuilder.__meta__ = { fields : { rng : { copy : null}, randomizer : { copy : null}, particleManager : { copy : null}, marginManager : { copy : null}, frameCounter : { copy : null}, playerGarbageTray : { copy : null}, playerGarbageManager : { copy : null}, playerScoreManager : { copy : null}, playerChainSimDisplay : { copy : null}, playerChainSimAccumDisplay : { copy : null}, playerChainSim : { copy : null}, playerChainCounter : { copy : null}, playerField : { copy : null}, playerQueue : { copy : null}, playerPreview : { copy : null}, playerInputDevice : { copy : null}, playerGeloGroupChainSim : { copy : null}, playerGeloGroup : { copy : null}, playerAllClearManager : { copy : null}, infoGarbageTray : { copy : null}, infoGarbageManager : { copy : null}, autoAttackChainCounter : { copy : null}, autoAttackManager : { copy : null}, infoChainAdvantageDisplay : { copy : null}, infoAfterCounterDisplay : { copy : null}, editField : { copy : null}, infoState : { copy : null}, playState : { copy : null}, editState : { copy : null}, playerBoard : { copy : null}, infoBoard : { copy : null}, controlHintContainer : { nullCopyFrom : null}}};
+game_gamestatebuilders_NetplayEndlessGameStateBuilder.__meta__ = { fields : { rule : { inject : null}, isLocalOnLeft : { inject : null}, session : { inject : null}, frameCounter : { inject : null, copy : null}, rng : { copy : null}, randomizer : { copy : null}, particleManager : { copy : null}, marginManager : { copy : null}, leftBorderColorMediator : { copy : null}, leftTargetMediator : { copy : null}, rightBorderColorMediator : { copy : null}, rightTargetMediator : { copy : null}, leftGarbageTray : { copyFrom : null}, leftGarbageManager : { copy : null}, leftScoreManager : { copy : null}, leftChainSimDisplay : { copyFrom : null}, leftChainSimAccumDisplay : { copyFrom : null}, leftChainSim : { copy : null}, leftChainCounter : { copy : null}, leftField : { copy : null}, leftQueue : { copy : null}, leftGeloGroup : { copy : null}, leftAllClearManager : { copy : null}, leftPreview : { copy : null}, rightGarbageTray : { copyFrom : null}, rightGarbageManager : { copy : null}, rightScoreManager : { copy : null}, rightChainSimDisplay : { copyFrom : null}, rightChainSimAccumDisplay : { copyFrom : null}, rightChainSim : { copy : null}, rightChainCounter : { copy : null}, rightField : { copy : null}, rightQueue : { copy : null}, rightGeloGroup : { copy : null}, rightAllClearManager : { copy : null}, rightPreview : { copy : null}, leftState : { copy : null}, rightState : { copy : null}, controlHintContainer : { nullCopyFrom : null}}};
+game_gamestatebuilders_TrainingGameStateBuilder.__meta__ = { fields : { rng : { copy : null}, randomizer : { copy : null}, particleManager : { copy : null}, marginManager : { copy : null}, frameCounter : { copy : null}, playerGarbageTray : { copyFrom : null}, playerGarbageManager : { copy : null}, playerScoreManager : { copy : null}, playerChainSimDisplay : { copyFrom : null}, playerChainSimAccumDisplay : { copyFrom : null}, playerChainSim : { copy : null}, playerChainCounter : { copy : null}, playerField : { copy : null}, playerQueue : { copy : null}, playerPreview : { copy : null}, playerInputDevice : { copy : null}, playerGeloGroupChainSim : { copy : null}, playerGeloGroup : { copy : null}, playerAllClearManager : { copy : null}, infoGarbageTray : { copyFrom : null}, infoGarbageManager : { copy : null}, autoAttackChainCounter : { copy : null}, autoAttackManager : { copy : null}, infoChainAdvantageDisplay : { copyFrom : null}, infoAfterCounterDisplay : { copyFrom : null}, editField : { copy : null}, infoState : { copy : null}, playState : { copy : null}, editState : { copy : null}, playerBoard : { copy : null}, infoBoard : { copy : null}, controlHintContainer : { nullCopyFrom : null}}};
 var game_garbage_GarbageIcon_GARBAGE_ICON_GEOMETRIES = (function($this) {
 	var $r;
 	var _g = new haxe_ds_EnumValueMap();
@@ -54172,6 +54281,8 @@ haxe_io_FPHelper.i64tmp = (function($this) {
 haxe_io_FPHelper.helper = new DataView(new ArrayBuffer(8));
 hxbit_Convert.convFuns = new haxe_ds_StringMap();
 hxbit_Macros.IN_ENUM_SER = false;
+hxbit_Macros.IGNORED_META = new haxe_ds_StringMap();
+hxbit_Macros.VISIBILITY_VALUES = [];
 hxbit_Macros.NW_BUILD_STACK = [];
 hxbit_Schema.__clid = hxbit_Serializer.registerClass(hxbit_Schema);
 input_AnyInputDevice.FONT_SIZE = 48;
