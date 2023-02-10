@@ -8,6 +8,101 @@ function $extend(from, fields) {
 	if( fields.toString !== Object.prototype.toString ) proto.toString = fields.toString;
 	return proto;
 }
+var DateTools = function() { };
+$hxClasses["DateTools"] = DateTools;
+DateTools.__name__ = "DateTools";
+DateTools.__format_get = function(d,e) {
+	switch(e) {
+	case "%":
+		return "%";
+	case "A":
+		return DateTools.DAY_NAMES[d.getDay()];
+	case "B":
+		return DateTools.MONTH_NAMES[d.getMonth()];
+	case "C":
+		return StringTools.lpad(Std.string(d.getFullYear() / 100 | 0),"0",2);
+	case "D":
+		return DateTools.__format(d,"%m/%d/%y");
+	case "F":
+		return DateTools.__format(d,"%Y-%m-%d");
+	case "I":case "l":
+		var hour = d.getHours() % 12;
+		return StringTools.lpad(Std.string(hour == 0 ? 12 : hour),e == "I" ? "0" : " ",2);
+	case "M":
+		return StringTools.lpad(Std.string(d.getMinutes()),"0",2);
+	case "R":
+		return DateTools.__format(d,"%H:%M");
+	case "S":
+		return StringTools.lpad(Std.string(d.getSeconds()),"0",2);
+	case "T":
+		return DateTools.__format(d,"%H:%M:%S");
+	case "Y":
+		return Std.string(d.getFullYear());
+	case "a":
+		return DateTools.DAY_SHORT_NAMES[d.getDay()];
+	case "b":case "h":
+		return DateTools.MONTH_SHORT_NAMES[d.getMonth()];
+	case "d":
+		return StringTools.lpad(Std.string(d.getDate()),"0",2);
+	case "e":
+		return Std.string(d.getDate());
+	case "H":case "k":
+		return StringTools.lpad(Std.string(d.getHours()),e == "H" ? "0" : " ",2);
+	case "m":
+		return StringTools.lpad(Std.string(d.getMonth() + 1),"0",2);
+	case "n":
+		return "\n";
+	case "p":
+		if(d.getHours() > 11) {
+			return "PM";
+		} else {
+			return "AM";
+		}
+		break;
+	case "r":
+		return DateTools.__format(d,"%I:%M:%S %p");
+	case "s":
+		return Std.string(d.getTime() / 1000 | 0);
+	case "t":
+		return "\t";
+	case "u":
+		var t = d.getDay();
+		if(t == 0) {
+			return "7";
+		} else if(t == null) {
+			return "null";
+		} else {
+			return "" + t;
+		}
+		break;
+	case "w":
+		return Std.string(d.getDay());
+	case "y":
+		return StringTools.lpad(Std.string(d.getFullYear() % 100),"0",2);
+	default:
+		throw new haxe_exceptions_NotImplementedException("Date.format %" + e + "- not implemented yet.",null,{ fileName : "DateTools.hx", lineNumber : 101, className : "DateTools", methodName : "__format_get"});
+	}
+};
+DateTools.__format = function(d,f) {
+	var r_b = "";
+	var p = 0;
+	while(true) {
+		var np = f.indexOf("%",p);
+		if(np < 0) {
+			break;
+		}
+		var len = np - p;
+		r_b += len == null ? HxOverrides.substr(f,p,null) : HxOverrides.substr(f,p,len);
+		r_b += Std.string(DateTools.__format_get(d,HxOverrides.substr(f,np + 1,1)));
+		p = np + 2;
+	}
+	var len = f.length - p;
+	r_b += len == null ? HxOverrides.substr(f,p,null) : HxOverrides.substr(f,p,len);
+	return r_b;
+};
+DateTools.format = function(d,f) {
+	return DateTools.__format(d,f);
+};
 var EReg = function(r,opt) {
 	this.r = new RegExp(r,opt.split("u").join(""));
 };
@@ -1606,7 +1701,7 @@ game_actionbuffers_ReceiveActionBuffer.prototype = {
 		}
 	}
 	,onInput: function(history) {
-		var rollbackTo = null;
+		var shouldRollback = false;
 		var _g = 0;
 		while(_g < history.length) {
 			var e = history[_g];
@@ -1615,18 +1710,19 @@ game_actionbuffers_ReceiveActionBuffer.prototype = {
 			var frameDiff = this.frameCounter.value - frame;
 			var snapshot = game_actionbuffers_ActionSnapshot.fromBitField(e.actions);
 			this.actions.h[frame] = snapshot;
+			if(shouldRollback) {
+				continue;
+			}
 			if(frameDiff < 1) {
 				continue;
 			}
-			if(rollbackTo != null) {
-				continue;
-			}
 			if(this.getAction(frame).isNotEqual(snapshot)) {
-				rollbackTo = frame;
+				this.rollbackMediator.logger.push("ROLLBACK SCHEDULED -- FROM: " + frame + " -- LEN: " + frameDiff);
+				shouldRollback = true;
 			}
 		}
-		if(rollbackTo != null) {
-			this.rollbackMediator.rollback(rollbackTo);
+		if(shouldRollback) {
+			this.rollbackMediator.rollback();
 		}
 	}
 	,update: function() {
@@ -1711,6 +1807,7 @@ game_actionbuffers_SenderActionBuffer.__name__ = "game.actionbuffers.SenderActio
 game_actionbuffers_SenderActionBuffer.__super__ = game_actionbuffers_LocalActionBuffer;
 game_actionbuffers_SenderActionBuffer.prototype = $extend(game_actionbuffers_LocalActionBuffer.prototype,{
 	session: null
+	,lastSentAction: null
 	,update: function() {
 		var latestAction = game_actionbuffers_LocalActionBuffer.prototype.update.call(this);
 		var bf = latestAction.toBitField();
@@ -1719,7 +1816,10 @@ game_actionbuffers_SenderActionBuffer.prototype = $extend(game_actionbuffers_Loc
 		} else {
 			this.session.isInputIdle = true;
 		}
-		this.session.sendInput(this.frameCounter.value + this.frameDelay,bf);
+		if(this.lastSentAction == null || latestAction.isNotEqual(this.lastSentAction)) {
+			this.session.sendInput(this.frameCounter.value + this.frameDelay,bf);
+			this.lastSentAction = latestAction;
+		}
 		return latestAction;
 	}
 	,__class__: game_actionbuffers_SenderActionBuffer
@@ -6886,7 +6986,7 @@ game_gamestatebuilders_NetplayEndlessGameStateBuilder.prototype = {
 	,initRollbackMediator: function() {
 		if(this.rollbackMediator == null) {
 			this.rollbackMediator = new game_mediators_RollbackMediator(function() {
-			},function(_) {
+			},game_net_logger_NullSessionLogger.instance,function() {
 			});
 		}
 	}
@@ -7127,7 +7227,7 @@ game_gamestatebuilders_NetplayEndlessGameStateBuilder.prototype = {
 		this.controlHintContainer.isVisible = save_$data_Profile.primary.trainingSettings.showControlHints;
 		if(this.rollbackMediator == null) {
 			this.rollbackMediator = new game_mediators_RollbackMediator(function() {
-			},function(_) {
+			},game_net_logger_NullSessionLogger.instance,function() {
 			});
 		}
 		this.rng = new game_copying_CopyableRNG(this.rule.rngSeed);
@@ -9192,14 +9292,16 @@ game_mediators_PauseMediator.prototype = {
 	,resume: null
 	,__class__: game_mediators_PauseMediator
 };
-var game_mediators_RollbackMediator = function(confirmFrame,rollback) {
+var game_mediators_RollbackMediator = function(confirmFrame,logger,rollback) {
 	this.confirmFrame = confirmFrame;
+	this.logger = logger;
 	this.rollback = rollback;
 };
 $hxClasses["game.mediators.RollbackMediator"] = game_mediators_RollbackMediator;
 game_mediators_RollbackMediator.__name__ = "game.mediators.RollbackMediator";
 game_mediators_RollbackMediator.prototype = {
 	confirmFrame: null
+	,logger: null
 	,rollback: null
 	,__class__: game_mediators_RollbackMediator
 };
@@ -9225,24 +9327,43 @@ game_net_InputHistoryEntry.prototype = {
 	,actions: null
 	,__class__: game_net_InputHistoryEntry
 };
-var game_net_SessionManager = function(peer,isHost,remoteID) {
+var game_net_SessionManagerOptions = function(peer,isHost,frameCounter,logger,remoteID) {
 	this.peer = peer;
-	this.frameCounter = new game_mediators_FrameCounter();
-	if(isHost) {
-		peer.on(peerjs_PeerEventType.Connection,$bind(this,this.initDataConnection));
+	this.isHost = isHost;
+	this.frameCounter = frameCounter;
+	this.logger = logger;
+	this.remoteID = remoteID;
+};
+$hxClasses["game.net.SessionManagerOptions"] = game_net_SessionManagerOptions;
+game_net_SessionManagerOptions.__name__ = "game.net.SessionManagerOptions";
+game_net_SessionManagerOptions.prototype = {
+	peer: null
+	,isHost: null
+	,frameCounter: null
+	,logger: null
+	,remoteID: null
+	,__class__: game_net_SessionManagerOptions
+};
+var game_net_SessionManager = function(opts) {
+	this.frameCounter = opts.frameCounter;
+	this.logger = opts.logger;
+	this.peer = opts.peer;
+	this.remoteID = opts.remoteID;
+	if(opts.isHost) {
+		this.peer.on(peerjs_PeerEventType.Connection,$bind(this,this.initDataConnection));
 	} else {
-		this.initDataConnection(peer.connect(remoteID,{ serialization : peerjs_PeerDataSerialization.None}));
+		this.initDataConnection(this.peer.connect(this.remoteID,{ serialization : peerjs_PeerDataSerialization.None}));
 	}
 	this.localInputHistory = [];
-	this.localID = peer.id;
-	this.remoteID = remoteID;
+	this.localID = this.peer.id;
 	this.state = 0;
 };
 $hxClasses["game.net.SessionManager"] = game_net_SessionManager;
 game_net_SessionManager.__name__ = "game.net.SessionManager";
 game_net_SessionManager.prototype = {
-	peer: null
-	,frameCounter: null
+	frameCounter: null
+	,logger: null
+	,peer: null
 	,dc: null
 	,roundTripCounter: null
 	,localAdvantageCounter: null
@@ -9250,12 +9371,10 @@ game_net_SessionManager.prototype = {
 	,lastLocalChecksum: null
 	,lastRemoteChecksum: null
 	,desyncCounter: null
-	,lastConfirmedFrame: null
 	,beginFrame: null
 	,nextChecksumFrame: null
 	,latestChecksumFrame: null
 	,localInputHistory: null
-	,lastInputFrame: null
 	,syncPackageTimeTaskID: null
 	,syncPackageTimeoutTaskID: null
 	,sendBeginTaskID: null
@@ -9273,6 +9392,7 @@ game_net_SessionManager.prototype = {
 	,successfulSleepChecks: null
 	,state: null
 	,sleepFrames: null
+	,lastConfirmedFrame: null
 	,isInputIdle: null
 	,advantageSign: function(x) {
 		if(x < 0) {
@@ -9282,6 +9402,10 @@ game_net_SessionManager.prototype = {
 		}
 	}
 	,error: function(message) {
+		this.logger.disableRingBuffer();
+		this.logger.push("=== ERROR ===");
+		this.logger.push(message);
+		this.logger.download();
 		this.dispose();
 		main_ScreenManager.pushOverlay(ui_ErrorPage.mainMenuPage(message));
 	}
@@ -9290,6 +9414,7 @@ game_net_SessionManager.prototype = {
 			return;
 		}
 		if(this.lastLocalChecksum != this.lastRemoteChecksum) {
+			this.logger.push("CHECKSUM MISMATCH -- Counter: " + this.desyncCounter);
 			if(++this.desyncCounter >= 3) {
 				this.error("Desync Detected");
 			}
@@ -9356,6 +9481,7 @@ game_net_SessionManager.prototype = {
 	}
 	,initSyncingState: function() {
 		var _gthis = this;
+		this.logger.push("=== SYNCING STATE ===");
 		this.roundTripCounter = 0;
 		this.localAdvantageCounter = 0;
 		this.remoteAdvantageCounter = 0;
@@ -9374,7 +9500,9 @@ game_net_SessionManager.prototype = {
 		if(this.averageRTT != null) {
 			prediction = this.frameCounter.value + (this.averageRTT / 2 * 60 / 1000 | 0);
 		}
-		this.dc.send("" + "1" + ";" + ping + ";" + prediction + ";" + (this.state == 3 ? "R" : "O"));
+		var state = this.state == 3 ? "R" : "O";
+		this.logger.push("SEND SYNC_REQ -- Ping: " + ping + ", Prediction: " + prediction + ", State: " + state);
+		this.dc.send("" + "1" + ";" + ping + ";" + prediction + ";" + state);
 	}
 	,onSyncRequest: function(parts) {
 		var _gthis = this;
@@ -9384,14 +9512,18 @@ game_net_SessionManager.prototype = {
 		},2);
 		var pong = parts[1];
 		var prediction = Std.parseInt(parts[2]);
+		var st = parts[3];
 		var adv = null;
 		if(prediction != null) {
 			adv = this.frameCounter.value - prediction;
 			this.averageLocalAdvantage = Math.round(0.5 * adv + 0.5 * this.averageLocalAdvantage);
 		}
-		if(this.state == 1 && parts[3] == "R") {
+		this.logger.push("RECV SYNC_REQ -- Pong: " + pong + ", Prediction: " + prediction + ", State: " + st + " -- Average local adv: " + this.averageLocalAdvantage);
+		if(this.state == 1 && st == "R") {
+			this.logger.push("SKIPPING SYNCING STATE");
 			this.initRunningState();
 		}
+		this.logger.push("SEND SYNC_RESP -- Pong: " + pong + ", Advantage: " + adv);
 		this.dc.send("" + "2" + ";" + pong + ";" + adv);
 	}
 	,onSyncResponse: function(parts) {
@@ -9399,23 +9531,31 @@ game_net_SessionManager.prototype = {
 		var rtt = (kha_Scheduler.realTime() * 1000 | 0) - pong;
 		this.averageRTT = Math.round(0.5 * rtt + 0.5 * this.averageRTT);
 		var adv = Std.parseInt(parts[2]);
+		this.logger.push("RECV SYNC_RESP -- Pong: " + pong + ", Advantage: " + adv + " -- RTT: " + rtt + ", Average RTT: " + this.averageRTT);
 		if(adv != null) {
 			this.averageRemoteAdvantage = Math.round(0.5 * adv + 0.5 * this.averageRemoteAdvantage);
+			this.logger.push("Average remote adv: " + this.averageRemoteAdvantage);
 			if(this.sleepFrames == 0 && ++this.remoteAdvantageCounter % 3 == 0) {
 				var diff = this.averageLocalAdvantage - this.averageRemoteAdvantage;
-				if(this.state == 1 && Math.abs(diff) < 4) {
-					if(++this.successfulSleepChecks > 5) {
-						this.initBeginningState();
-						return;
+				if(this.state == 1) {
+					if(Math.abs(diff) < 4) {
+						this.logger.push("Succesful sleep check -- Counter: " + this.successfulSleepChecks);
+						if(++this.successfulSleepChecks > 5) {
+							this.initBeginningState();
+							return;
+						}
+					} else {
+						this.logger.push("Advantage diff too large (L: " + this.averageLocalAdvantage + ", R: " + this.averageRemoteAdvantage + ", D: " + diff + "), resetting sleep counter");
+						this.successfulSleepChecks = 0;
 					}
-				} else {
-					this.successfulSleepChecks = 0;
 				}
 				if(!this.isInputIdle) {
+					this.logger.push("Input not idle, skipping sleep");
 					this.sleepFrames = 0;
 					return;
 				}
 				if(this.averageLocalAdvantage < this.averageRemoteAdvantage) {
+					this.logger.push("Local adv. (" + this.averageLocalAdvantage + ") < Remote adv. (" + this.averageRemoteAdvantage + "), skipping sleep");
 					this.sleepFrames = 0;
 					return;
 				}
@@ -9426,22 +9566,28 @@ game_net_SessionManager.prototype = {
 					return;
 				}
 				this.sleepFrames = Math.min(s,9) | 0;
+				this.logger.push("Sleeping for " + this.sleepFrames + " frames");
 			}
 		}
 	}
 	,initBeginningState: function() {
 		var _gthis = this;
+		this.logger.push("=== BEGINNING STATE ===");
 		kha_Scheduler.removeTimeTask(this.syncTimeoutTaskID);
 		this.sendBeginTaskID = kha_Scheduler.addTimeTask(function() {
+			_gthis.logger.push("SEND BEGIN_REQ");
 			_gthis.dc.send("" + "4");
-		},0,0.001);
+		},0,0.016);
 		this.state = 2;
 	}
 	,onBeginRequest: function(parts) {
+		this.logger.push("RECV BEGIN_REQ");
+		this.logger.push("SEND BEGIN_RESP -- Begin frame: " + this.beginFrame);
 		this.dc.send("" + "5" + ";" + this.beginFrame);
 	}
 	,onBeginResponse: function(parts) {
 		this.beginFrame = Std.parseInt(parts[1]);
+		this.logger.push("RECV BEGIN_RESP -- Begin frame: " + this.beginFrame);
 		if(this.beginFrame == null) {
 			this.beginFrame = this.frameCounter.value + 60;
 			return;
@@ -9459,18 +9605,19 @@ game_net_SessionManager.prototype = {
 			i += 2;
 			lastFrame = frame;
 		}
-		if(lastFrame < this.lastInputFrame) {
+		this.logger.push("RECV INPUT -- History size: " + history.length);
+		this.logger.push("SEND INPUT_ACK -- Last frame: " + lastFrame);
+		this.dc.send("" + "3" + ";" + lastFrame);
+		if(lastFrame < this.lastConfirmedFrame) {
 			return;
 		}
-		this.dc.send("" + "3" + ";" + lastFrame);
 		this.onInput(history);
-		this.lastInputFrame = lastFrame;
+		this.lastConfirmedFrame = lastFrame;
+		this.onConfirmFrame();
 	}
 	,onInputAckPacket: function(parts) {
 		var frame = Std.parseInt(parts[1]);
-		if(frame <= this.lastConfirmedFrame) {
-			return;
-		}
+		this.logger.push("RECV INPUT_ACK -- Frame: " + frame);
 		var _g = [];
 		var _g1 = 0;
 		var _g2 = this.localInputHistory;
@@ -9482,14 +9629,20 @@ game_net_SessionManager.prototype = {
 			}
 		}
 		this.localInputHistory = _g;
+		if(frame <= this.lastConfirmedFrame) {
+			return;
+		}
 		this.lastConfirmedFrame = frame;
 		this.onConfirmFrame();
 	}
 	,onChecksumRequest: function(parts) {
+		this.logger.push("RECV CHECKSUM_REQ");
+		this.logger.push("SEND CHECKSUM_RESP -- Next frame: " + this.nextChecksumFrame);
 		this.dc.send("" + "7" + ";" + this.nextChecksumFrame);
 	}
 	,onChecksumResponse: function(parts) {
 		this.nextChecksumFrame = Std.parseInt(parts[1]);
+		this.logger.push("RECV CHECKSUM_RESP -- Next frame: " + this.nextChecksumFrame);
 		if(this.nextChecksumFrame != null && this.nextChecksumFrame <= this.frameCounter.value) {
 			this.nextChecksumFrame = null;
 			return;
@@ -9503,6 +9656,7 @@ game_net_SessionManager.prototype = {
 	,onChecksumUpdate: function(parts) {
 		this.resetChecksumTimeoutTimer();
 		this.lastRemoteChecksum = parts[1];
+		this.logger.push("RECV CHECKSUM_UPDATE -- Last remote: " + this.lastRemoteChecksum);
 		this.compareChecksums();
 	}
 	,updateSleepCounter: function() {
@@ -9513,12 +9667,14 @@ game_net_SessionManager.prototype = {
 	}
 	,initRunningState: function() {
 		var _gthis = this;
+		this.logger.push("=== RUNNING STATE ===");
+		this.logger.enableRingBuffer();
 		this.setSyncInterval(500);
-		this.lastInputFrame = -1;
 		this.lastConfirmedFrame = -1;
 		this.desyncCounter = 0;
 		this.latestChecksumFrame = -1;
 		this.sendChecksumTaskID = kha_Scheduler.addTimeTask(function() {
+			_gthis.logger.push("SEND CHECKSUM_REQ");
 			_gthis.dc.send("" + "6");
 		},0,0.5);
 		this.resetSyncTimeoutTimer();
@@ -9538,6 +9694,7 @@ game_net_SessionManager.prototype = {
 		}
 		if(this.frameCounter.value == this.latestChecksumFrame) {
 			this.lastLocalChecksum = this.onCalculateChecksum();
+			this.logger.push("SEND CHECKSUM_UPDATE -- Last local: " + this.lastLocalChecksum);
 			this.dc.send("" + "8" + ";" + this.lastLocalChecksum);
 			this.nextChecksumFrame = null;
 			this.compareChecksums();
@@ -9572,6 +9729,7 @@ game_net_SessionManager.prototype = {
 			++_g;
 			msg += ";" + e.frame + ";" + e.actions;
 		}
+		this.logger.push("SEND INPUT -- Frame: " + frame + ", History size: " + this.localInputHistory.length);
 		this.dc.send(msg);
 	}
 	,dispose: function() {
@@ -9594,6 +9752,78 @@ game_net_SessionManager.prototype = {
 		}
 	}
 	,__class__: game_net_SessionManager
+};
+var game_net_logger_ISessionLogger = function() { };
+$hxClasses["game.net.logger.ISessionLogger"] = game_net_logger_ISessionLogger;
+game_net_logger_ISessionLogger.__name__ = "game.net.logger.ISessionLogger";
+game_net_logger_ISessionLogger.__isInterface__ = true;
+game_net_logger_ISessionLogger.prototype = {
+	enableRingBuffer: null
+	,disableRingBuffer: null
+	,push: null
+	,download: null
+	,__class__: game_net_logger_ISessionLogger
+};
+var game_net_logger_NullSessionLogger = function() {
+};
+$hxClasses["game.net.logger.NullSessionLogger"] = game_net_logger_NullSessionLogger;
+game_net_logger_NullSessionLogger.__name__ = "game.net.logger.NullSessionLogger";
+game_net_logger_NullSessionLogger.__interfaces__ = [game_net_logger_ISessionLogger];
+game_net_logger_NullSessionLogger.prototype = {
+	enableRingBuffer: function() {
+	}
+	,disableRingBuffer: function() {
+	}
+	,push: function(message) {
+	}
+	,download: function() {
+	}
+	,__class__: game_net_logger_NullSessionLogger
+};
+var game_net_logger_SessionLogger = function(frameCounter) {
+	this.frameCounter = frameCounter;
+	this.log = [];
+	this.index = 0;
+	this.indexMin = 0;
+	this.indexLimitEnabled = false;
+};
+$hxClasses["game.net.logger.SessionLogger"] = game_net_logger_SessionLogger;
+game_net_logger_SessionLogger.__name__ = "game.net.logger.SessionLogger";
+game_net_logger_SessionLogger.__interfaces__ = [game_net_logger_ISessionLogger];
+game_net_logger_SessionLogger.prototype = {
+	frameCounter: null
+	,log: null
+	,index: null
+	,indexMin: null
+	,indexLimitEnabled: null
+	,enableRingBuffer: function() {
+		this.indexLimitEnabled = true;
+		this.indexMin = this.index;
+		this.index = 0;
+	}
+	,disableRingBuffer: function() {
+		this.indexLimitEnabled = false;
+	}
+	,push: function(message) {
+		var str = "" + this.frameCounter.value + ": " + message + "\n";
+		if(this.indexLimitEnabled) {
+			this.log[this.indexMin + this.index] = str;
+			this.index = (this.index + 1) % 256;
+			return;
+		}
+		this.log.push(str);
+		this.index++;
+	}
+	,download: function() {
+		var filename = "netplay-" + DateTools.format(new Date(),"%Y-%m-%d_%H-%M") + ".gvl";
+		var file = new File(this.log,filename);
+		var uri = URL.createObjectURL(file);
+		var el = window.document.createElement("a");
+		el.href = uri;
+		el.setAttribute("download",filename);
+		el.click();
+	}
+	,__class__: game_net_logger_SessionLogger
 };
 var game_particles_GarbageBulletParticleOptions = function(begin,control,target,beginScale,targetScale,duration,color,onFinish,sendsAllClearBonus) {
 	this.begin = begin;
@@ -10837,7 +11067,8 @@ game_screens_GameScreen.__super__ = game_screens_GameScreenBase;
 game_screens_GameScreen.prototype = $extend(game_screens_GameScreenBase.prototype,{
 	__class__: game_screens_GameScreen
 });
-var game_screens_NetplayGameScreenOptions = function(session,frameCounter,gameStateBuilder) {
+var game_screens_NetplayGameScreenOptions = function(logger,session,frameCounter,gameStateBuilder) {
+	this.logger = logger;
 	this.session = session;
 	this.frameCounter = frameCounter;
 	this.gameStateBuilder = gameStateBuilder;
@@ -10845,13 +11076,15 @@ var game_screens_NetplayGameScreenOptions = function(session,frameCounter,gameSt
 $hxClasses["game.screens.NetplayGameScreenOptions"] = game_screens_NetplayGameScreenOptions;
 game_screens_NetplayGameScreenOptions.__name__ = "game.screens.NetplayGameScreenOptions";
 game_screens_NetplayGameScreenOptions.prototype = {
-	session: null
+	logger: null
+	,session: null
 	,frameCounter: null
 	,gameStateBuilder: null
 	,__class__: game_screens_NetplayGameScreenOptions
 };
 var game_screens_NetplayGameScreen = function(opts) {
 	game_screens_GameScreenBase.call(this);
+	this.logger = opts.logger;
 	this.session = opts.session;
 	this.frameCounter = opts.frameCounter;
 	this.gameStateBuilder = opts.gameStateBuilder;
@@ -10859,7 +11092,7 @@ var game_screens_NetplayGameScreen = function(opts) {
 	this.session.onConfirmFrame = $bind(this,this.confirmFrame);
 	this.gameStateBuilder.controlHintContainer = this.controlHintContainer;
 	this.gameStateBuilder.pauseMediator = new game_mediators_PauseMediator($bind(this,this.pause),$bind(this,this.resume));
-	this.gameStateBuilder.rollbackMediator = new game_mediators_RollbackMediator($bind(this,this.confirmFrame),$bind(this,this.rollback));
+	this.gameStateBuilder.rollbackMediator = new game_mediators_RollbackMediator($bind(this,this.confirmFrame),this.logger,$bind(this,this.rollback));
 	this.gameStateBuilder.build();
 	this.gameState = this.gameStateBuilder.gameState;
 	this.pauseMenu = this.gameStateBuilder.pauseMenu;
@@ -10871,7 +11104,8 @@ $hxClasses["game.screens.NetplayGameScreen"] = game_screens_NetplayGameScreen;
 game_screens_NetplayGameScreen.__name__ = "game.screens.NetplayGameScreen";
 game_screens_NetplayGameScreen.__super__ = game_screens_GameScreenBase;
 game_screens_NetplayGameScreen.prototype = $extend(game_screens_GameScreenBase.prototype,{
-	session: null
+	logger: null
+	,session: null
 	,frameCounter: null
 	,gameStateBuilder: null
 	,serializer: null
@@ -10902,9 +11136,15 @@ game_screens_NetplayGameScreen.prototype = $extend(game_screens_GameScreenBase.p
 	,confirmFrame: function() {
 		this.lastConfirmedFrame.copyFrom(this.gameStateBuilder);
 	}
-	,rollback: function(resimulate) {
+	,rollback: function() {
+		var frameDiff = this.frameCounter.value - this.session.lastConfirmedFrame;
+		this.logger.push("STARTING ROLLBACK: " + this.session.lastConfirmedFrame + " ---> " + this.frameCounter.value);
 		this.gameStateBuilder.copyFrom(this.lastConfirmedFrame);
-		while(--resimulate >= 0) this.gameState.update();
+		while(--frameDiff >= 0) {
+			this.logger.push("IN ROLLBACK: " + frameDiff);
+			this.gameState.update();
+		}
+		this.logger.push("ROLLBACK FINISHED");
 	}
 	,dispose: function() {
 		this.session.dispose();
@@ -50508,10 +50748,12 @@ $hxClasses["lobby.LobbyPage"] = lobby_LobbyPage;
 lobby_LobbyPage.__name__ = "lobby.LobbyPage";
 lobby_LobbyPage.startGame = function(peer,isHost,message) {
 	var parts = message.split(";");
-	var s = new game_net_SessionManager(peer,isHost,parts[0]);
+	var sF = new game_mediators_FrameCounter();
+	var l = new game_net_logger_SessionLogger(sF);
+	var s = new game_net_SessionManager(new game_net_SessionManagerOptions(peer,isHost,sF,l,parts[0]));
 	var rule = hxbit_Serializer.load(haxe_io_Bytes.ofHex(parts[1]),game_rules_VersusRule);
 	var f = new game_mediators_FrameCounter();
-	main_ScreenManager.switchScreen(new game_screens_NetplayGameScreen(new game_screens_NetplayGameScreenOptions(s,f,new game_gamestatebuilders_NetplayEndlessGameStateBuilder(new game_gamestatebuilders_NetplayEndlessGameStateBuilderOptions(rule,true,s,f)))));
+	main_ScreenManager.switchScreen(new game_screens_NetplayGameScreen(new game_screens_NetplayGameScreenOptions(l,s,f,new game_gamestatebuilders_NetplayEndlessGameStateBuilder(new game_gamestatebuilders_NetplayEndlessGameStateBuilderOptions(rule,true,s,f)))));
 };
 lobby_LobbyPage.addRoomHandler = function(peer,room) {
 	room.onMessage(1,function(msg) {
@@ -53714,6 +53956,10 @@ js_Boot.__toStr = ({ }).toString;
 if(ArrayBuffer.prototype.slice == null) {
 	ArrayBuffer.prototype.slice = js_lib__$ArrayBuffer_ArrayBufferCompat.sliceImpl;
 }
+DateTools.DAY_SHORT_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+DateTools.DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+DateTools.MONTH_SHORT_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+DateTools.MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 game_AllClearManager.__meta__ = { fields : { rng : { inject : null}, geometries : { inject : null}, particleManager : { inject : null}, borderColorMediator : { inject : null}, targetY : { copy : null}, boardCenterX : { copy : null}, line1 : { copy : null}, line2 : { copy : null}, line1HalfWidth : { copy : null}, line2HalfWidth : { copy : null}, shortStrHalfWidth : { copy : null}, t : { copy : null}, y : { copy : null}, scaleX : { copy : null}, showAnimation : { copy : null}, acCounter : { copy : null}}};
 game_AllClearManager.SHORT_STR = "AC!";
 kha_Color.Black = -16777216;
@@ -54182,6 +54428,8 @@ game_geometries_BoardGeometries.CENTERED = new game_geometries_BoardGeometries(n
 game_geometries_BoardGeometries.INFO = new game_geometries_BoardGeometries(new utils_Point(888,160),1,game_geometries_BoardOrientation.RIGHT,new utils_Point(-48,32),new utils_Point(game_geometries_BoardGeometries.CENTER.x,game_geometries_BoardGeometries.HEIGHT / 5),game_geometries_BoardGeometries.HEIGHT + 33,new utils_Point(-64,-77),new utils_Point(-48,game_geometries_BoardGeometries.HEIGHT - 64));
 game_mediators_ControlHintContainer.__meta__ = { fields : { value : { copy : null}, isVisible : { copy : null}}};
 game_mediators_FrameCounter.__meta__ = { fields : { value : { copy : null}}};
+game_net_SessionManager.__meta__ = { fields : { frameCounter : { inject : null}, logger : { inject : null}, remoteID : { inject : null}}};
+game_net_logger_NullSessionLogger.instance = new game_net_logger_NullSessionLogger();
 game_particles_GarbageBulletParticle.__meta__ = { fields : { begin : { inject : null}, control : { inject : null}, target : { inject : null}, beginScale : { inject : null}, targetScale : { inject : null}, duration : { inject : null}, color : { inject : null}, onFinish : { inject : null}, sendsAllClearBonus : { inject : null}, trailParts : { copy : null}, prevX : { copy : null}, prevY : { copy : null}, currentX : { copy : null}, currentY : { copy : null}, t : { copy : null}, onFinishCalled : { copy : null}, font : { copy : null}, halfWidth : { copy : null}, halfHeight : { copy : null}, isAnimationFinished : { copy : null}}};
 game_particles_GarbageBulletParticle.TEXT = "AC!";
 game_particles_GarbageBulletParticle.FONT_SIZE = 48;
@@ -54233,7 +54481,7 @@ game_rules_VersusRule.__clid = hxbit_Serializer.registerClass(game_rules_VersusR
 game_screens_GameScreenBase.CONTROLS_FONT_SIZE = 32;
 game_screens_GameScreenBase.PLAY_AREA_DESIGN_WIDTH = 1440;
 game_screens_GameScreenBase.PLAY_AREA_DESIGN_HEIGHT = 1080;
-game_screens_NetplayGameScreen.__meta__ = { fields : { session : { inject : null}, frameCounter : { inject : null}, gameStateBuilder : { inject : null}}};
+game_screens_NetplayGameScreen.__meta__ = { fields : { logger : { inject : null}, session : { inject : null}, frameCounter : { inject : null}, gameStateBuilder : { inject : null}}};
 game_simulation_SimulationStep.__meta__ = { fields : { chain : { inject : null}, fieldSnapshot : { inject : null}}};
 game_simulation_SimulationStep.LABEL_SIZE = 64;
 game_simulation_SimulationStep.CARD_SIZE = 512;
