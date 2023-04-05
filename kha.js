@@ -1701,6 +1701,7 @@ game_actionbuffers_ReceiveActionBuffer.prototype = {
 		}
 	}
 	,onInput: function(history) {
+		this.rollbackMediator.logger.push("Received " + history.length + " inputs, last frame: " + history[history.length - 1].frame);
 		var shouldRollback = false;
 		var _g = 0;
 		while(_g < history.length) {
@@ -9371,6 +9372,7 @@ game_net_SessionManager.prototype = {
 	,lastLocalChecksum: null
 	,lastRemoteChecksum: null
 	,desyncCounter: null
+	,nextScheduledSleep: null
 	,beginFrame: null
 	,nextChecksumFrame: null
 	,latestChecksumFrame: null
@@ -9402,7 +9404,6 @@ game_net_SessionManager.prototype = {
 		}
 	}
 	,error: function(message) {
-		this.logger.disableRingBuffer();
 		this.logger.push("=== ERROR ===");
 		this.logger.push(message);
 		this.logger.download();
@@ -9486,6 +9487,7 @@ game_net_SessionManager.prototype = {
 		this.localAdvantageCounter = 0;
 		this.remoteAdvantageCounter = 0;
 		this.successfulSleepChecks = 0;
+		this.nextScheduledSleep = 0;
 		this.sleepFrames = 0;
 		this.setSyncInterval(100);
 		this.syncTimeoutTaskID = kha_Scheduler.addTimeTask(function() {
@@ -9549,24 +9551,19 @@ game_net_SessionManager.prototype = {
 						this.successfulSleepChecks = 0;
 					}
 				}
-				if(!this.isInputIdle) {
-					this.logger.push("Input not idle, skipping sleep");
-					this.sleepFrames = 0;
-					return;
-				}
 				if(this.averageLocalAdvantage < this.averageRemoteAdvantage) {
 					this.logger.push("Local adv. (" + this.averageLocalAdvantage + ") < Remote adv. (" + this.averageRemoteAdvantage + "), skipping sleep");
-					this.sleepFrames = 0;
+					this.nextScheduledSleep = 0;
 					return;
 				}
 				var diff = this.averageLocalAdvantage - this.averageRemoteAdvantage;
 				var s = Math.ceil(diff / 2);
 				if(s < 2) {
-					this.sleepFrames = 0;
+					this.nextScheduledSleep = 0;
 					return;
 				}
-				this.sleepFrames = Math.min(s,9) | 0;
-				this.logger.push("Sleeping for " + this.sleepFrames + " frames");
+				this.nextScheduledSleep = Math.min(s,9) | 0;
+				this.logger.push("Scheduled sleep for " + this.nextScheduledSleep + " frames");
 			}
 		}
 	}
@@ -9609,6 +9606,7 @@ game_net_SessionManager.prototype = {
 		this.logger.push("SEND INPUT_ACK -- Last frame: " + lastFrame);
 		this.dc.send("" + "3" + ";" + lastFrame);
 		if(lastFrame < this.lastConfirmedFrame) {
+			this.logger.push("Received INPUT is old: " + lastFrame + " < " + this.lastConfirmedFrame);
 			return;
 		}
 		this.onInput(history);
@@ -9660,7 +9658,12 @@ game_net_SessionManager.prototype = {
 		this.compareChecksums();
 	}
 	,updateSleepCounter: function() {
+		if(this.isInputIdle && this.nextScheduledSleep > 0) {
+			this.sleepFrames = this.nextScheduledSleep;
+			this.nextScheduledSleep = 0;
+		}
 		if(this.sleepFrames > 0) {
+			this.logger.push("SLEEPING -- Frame " + this.sleepFrames);
 			this.sleepFrames--;
 		}
 		return this.sleepFrames;
@@ -9668,7 +9671,7 @@ game_net_SessionManager.prototype = {
 	,initRunningState: function() {
 		var _gthis = this;
 		this.logger.push("=== RUNNING STATE ===");
-		this.logger.enableRingBuffer();
+		this.logger.useGameLog = true;
 		this.setSyncInterval(500);
 		this.lastConfirmedFrame = -1;
 		this.desyncCounter = 0;
@@ -9758,22 +9761,19 @@ $hxClasses["game.net.logger.ISessionLogger"] = game_net_logger_ISessionLogger;
 game_net_logger_ISessionLogger.__name__ = "game.net.logger.ISessionLogger";
 game_net_logger_ISessionLogger.__isInterface__ = true;
 game_net_logger_ISessionLogger.prototype = {
-	enableRingBuffer: null
-	,disableRingBuffer: null
+	useGameLog: null
 	,push: null
 	,download: null
 	,__class__: game_net_logger_ISessionLogger
 };
 var game_net_logger_NullSessionLogger = function() {
+	this.useGameLog = false;
 };
 $hxClasses["game.net.logger.NullSessionLogger"] = game_net_logger_NullSessionLogger;
 game_net_logger_NullSessionLogger.__name__ = "game.net.logger.NullSessionLogger";
 game_net_logger_NullSessionLogger.__interfaces__ = [game_net_logger_ISessionLogger];
 game_net_logger_NullSessionLogger.prototype = {
-	enableRingBuffer: function() {
-	}
-	,disableRingBuffer: function() {
-	}
+	useGameLog: null
 	,push: function(message) {
 	}
 	,download: function() {
@@ -9782,41 +9782,40 @@ game_net_logger_NullSessionLogger.prototype = {
 };
 var game_net_logger_SessionLogger = function(frameCounter) {
 	this.frameCounter = frameCounter;
-	this.log = [];
-	this.index = 0;
-	this.indexMin = 0;
-	this.indexLimitEnabled = false;
+	this.setupLog = [];
+	this.gameLog = [];
+	this.useGameLog = false;
 };
 $hxClasses["game.net.logger.SessionLogger"] = game_net_logger_SessionLogger;
 game_net_logger_SessionLogger.__name__ = "game.net.logger.SessionLogger";
 game_net_logger_SessionLogger.__interfaces__ = [game_net_logger_ISessionLogger];
 game_net_logger_SessionLogger.prototype = {
 	frameCounter: null
-	,log: null
-	,index: null
-	,indexMin: null
-	,indexLimitEnabled: null
-	,enableRingBuffer: function() {
-		this.indexLimitEnabled = true;
-		this.indexMin = this.index;
-		this.index = 0;
+	,setupLog: null
+	,gameLog: null
+	,useGameLog: null
+	,pushSetup: function(message) {
+		this.setupLog.push(message);
 	}
-	,disableRingBuffer: function() {
-		this.indexLimitEnabled = false;
+	,pushGame: function(message) {
+		this.gameLog.push(message);
+		if(this.gameLog.length > 256) {
+			this.gameLog.shift();
+		}
 	}
 	,push: function(message) {
-		var str = "" + this.frameCounter.value + ": " + message + "\n";
-		if(this.indexLimitEnabled) {
-			this.log[this.indexMin + this.index] = str;
-			this.index = (this.index + 1) % 256;
+		if(this.useGameLog) {
+			this.gameLog.push(message);
+			if(this.gameLog.length > 256) {
+				this.gameLog.shift();
+			}
 			return;
 		}
-		this.log.push(str);
-		this.index++;
+		this.setupLog.push(message);
 	}
 	,download: function() {
 		var filename = "netplay-" + DateTools.format(new Date(),"%Y-%m-%d_%H-%M") + ".gvl";
-		var file = new File(this.log,filename);
+		var file = new File(this.setupLog.concat(this.gameLog),filename);
 		var uri = URL.createObjectURL(file);
 		var el = window.document.createElement("a");
 		el.href = uri;
@@ -20757,7 +20756,7 @@ kha__$Assets_ImageList.prototype = {
 	,ArrowsLoad: function(done,failure) {
 		kha_Assets.loadImage("Arrows",function(image) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 143, className : "kha._Assets.ImageList", methodName : "ArrowsLoad"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 142, className : "kha._Assets.ImageList", methodName : "ArrowsLoad"});
 	}
 	,ArrowsUnload: function() {
 		this.Arrows.unload();
@@ -20770,7 +20769,7 @@ kha__$Assets_ImageList.prototype = {
 	,BorderLoad: function(done,failure) {
 		kha_Assets.loadImage("Border",function(image) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 143, className : "kha._Assets.ImageList", methodName : "BorderLoad"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 142, className : "kha._Assets.ImageList", methodName : "BorderLoad"});
 	}
 	,BorderUnload: function() {
 		this.Border.unload();
@@ -20783,7 +20782,7 @@ kha__$Assets_ImageList.prototype = {
 	,ButtonsLoad: function(done,failure) {
 		kha_Assets.loadImage("Buttons",function(image) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 143, className : "kha._Assets.ImageList", methodName : "ButtonsLoad"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 142, className : "kha._Assets.ImageList", methodName : "ButtonsLoad"});
 	}
 	,ButtonsUnload: function() {
 		this.Buttons.unload();
@@ -20796,7 +20795,7 @@ kha__$Assets_ImageList.prototype = {
 	,ParticlesLoad: function(done,failure) {
 		kha_Assets.loadImage("Particles",function(image) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 143, className : "kha._Assets.ImageList", methodName : "ParticlesLoad"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 142, className : "kha._Assets.ImageList", methodName : "ParticlesLoad"});
 	}
 	,ParticlesUnload: function() {
 		this.Particles.unload();
@@ -20809,7 +20808,7 @@ kha__$Assets_ImageList.prototype = {
 	,candyLoad: function(done,failure) {
 		kha_Assets.loadImage("candy",function(image) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 143, className : "kha._Assets.ImageList", methodName : "candyLoad"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 142, className : "kha._Assets.ImageList", methodName : "candyLoad"});
 	}
 	,candyUnload: function() {
 		this.candy.unload();
@@ -20822,7 +20821,7 @@ kha__$Assets_ImageList.prototype = {
 	,pixelLoad: function(done,failure) {
 		kha_Assets.loadImage("pixel",function(image) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 143, className : "kha._Assets.ImageList", methodName : "pixelLoad"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 142, className : "kha._Assets.ImageList", methodName : "pixelLoad"});
 	}
 	,pixelUnload: function() {
 		this.pixel.unload();
@@ -20863,7 +20862,7 @@ kha__$Assets_BlobList.prototype = {
 	,index_htmlLoad: function(done,failure) {
 		kha_Assets.loadBlob("index_html",function(blob) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 151, className : "kha._Assets.BlobList", methodName : "index_htmlLoad"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 150, className : "kha._Assets.BlobList", methodName : "index_htmlLoad"});
 	}
 	,index_htmlUnload: function() {
 		this.index_html.unload();
@@ -20904,7 +20903,7 @@ kha__$Assets_FontList.prototype = {
 	,DigitalDiscoLoad: function(done,failure) {
 		kha_Assets.loadFont("DigitalDisco",function(font) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 155, className : "kha._Assets.FontList", methodName : "DigitalDiscoLoad"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 154, className : "kha._Assets.FontList", methodName : "DigitalDiscoLoad"});
 	}
 	,DigitalDiscoUnload: function() {
 		this.DigitalDisco.unload();
@@ -20917,7 +20916,7 @@ kha__$Assets_FontList.prototype = {
 	,PixellariLoad: function(done,failure) {
 		kha_Assets.loadFont("Pixellari",function(font) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 155, className : "kha._Assets.FontList", methodName : "PixellariLoad"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 154, className : "kha._Assets.FontList", methodName : "PixellariLoad"});
 	}
 	,PixellariUnload: function() {
 		this.Pixellari.unload();
@@ -20930,7 +20929,7 @@ kha__$Assets_FontList.prototype = {
 	,ka1Load: function(done,failure) {
 		kha_Assets.loadFont("ka1",function(font) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 155, className : "kha._Assets.FontList", methodName : "ka1Load"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 154, className : "kha._Assets.FontList", methodName : "ka1Load"});
 	}
 	,ka1Unload: function() {
 		this.ka1.unload();
@@ -20943,7 +20942,7 @@ kha__$Assets_FontList.prototype = {
 	,superstar_memesbruh03Load: function(done,failure) {
 		kha_Assets.loadFont("superstar_memesbruh03",function(font) {
 			done();
-		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 155, className : "kha._Assets.FontList", methodName : "superstar_memesbruh03Load"});
+		},failure,{ fileName : "kha/internal/AssetsBuilder.hx", lineNumber : 154, className : "kha._Assets.FontList", methodName : "superstar_memesbruh03Load"});
 	}
 	,superstar_memesbruh03Unload: function() {
 		this.superstar_memesbruh03.unload();
@@ -23250,7 +23249,7 @@ kha_System.windowHeight = function($window) {
 	if($window == null) {
 		$window = 0;
 	}
-	return kha_Window.get_all()[$window].get_height();
+	return kha_Window.get($window).get_height();
 };
 kha_System.get_screenRotation = function() {
 	return 0;
@@ -24763,7 +24762,7 @@ kha_WebGLImage.prototype = $extend(kha_Image.prototype,{
 			this.initDepthStencilBuffer(this.depthStencilFormat);
 			var e = kha_SystemImpl.gl.checkFramebufferStatus(36160);
 			if(e != 36053) {
-				haxe_Log.trace("checkframebufferStatus error " + e,{ fileName : "kha/WebGLImage.hx", lineNumber : 283, className : "kha.WebGLImage", methodName : "createTexture"});
+				haxe_Log.trace("checkframebufferStatus error " + e,{ fileName : "kha/WebGLImage.hx", lineNumber : 284, className : "kha.WebGLImage", methodName : "createTexture"});
 			}
 			kha_SystemImpl.gl.bindRenderbuffer(36161,null);
 			kha_SystemImpl.gl.bindFramebuffer(36160,null);
@@ -51139,7 +51138,7 @@ var main_$menu_ui_MainMenuPage = function(prefsSettings) {
 				tmp = value;
 			}
 			main_ScreenManager.switchScreen(new game_screens_GameScreen(new game_gamestatebuilders_EndlessGameStateBuilder(new game_gamestatebuilders_EndlessGameStateBuilderOptions(_g,tmp,null))));
-		},"Endless Mode",["Play For As Long As You","Can In Endless Mode And","Share Your Replays!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Host Netplay Test (WIP)",new lobby_LobbyPage(),[])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(prefsSettings),["Change Various Options and Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
+		},"Endless Mode",["Play For As Long As You","Can In Endless Mode And","Share Your Replays!"])),new ui_SubPageWidget(new ui_SubPageWidgetOptions("Options",new main_$menu_ui_OptionsPage(prefsSettings),["Change Various Options and Settings"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
 			window.open("https://github.com/doczi-dominik/gelavolt/releases");
 		},"Download Desktop Version",["Download GelaVolt's","Desktop Version For","Better Performance","And Offline Play"])),new ui_ButtonWidget(new ui_ButtonWidgetOptions(function() {
 			window.open("https://discord.gg/wsWArpAFJK");
